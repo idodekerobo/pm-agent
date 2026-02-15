@@ -1,0 +1,8 @@
+plans/
+.env.*
+__pycache__
+*.py[cod]
+
+# Dev workspaces
+local_state
+local_workspaces

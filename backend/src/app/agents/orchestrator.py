@@ -14,12 +14,18 @@ PM_AGENT = Agent(
     tools=[tool_fs_list, tool_fs_write, tool_fs_read, tool_bash]
 )
 
-async def run_orchestrator(prompt: str, tenant_id: str, agent_session_id: str, workspace_id: str) -> str:
+async def run_orchestrator(
+    *,
+    input_items: str | list[dict],
+    tenant_id: str,
+    agent_session_id: str,
+    workspace_id: str,
+) -> str:
     # TODO: build message thread management in
     context = AgentContext(tenant_id=tenant_id, workspace_id=workspace_id)
     result = Runner.run_streamed(
         PM_AGENT,
-        input=prompt,
+        input=input_items,
         context=context,
     )
     async for event in result.stream_events():

@@ -5,6 +5,8 @@ from app.api.routes.run import router as run_router
 
 class Settings(BaseSettings):
     openai_api_key: str
+    supabase_url: str
+    supabase_secret_key: str
     model_config = SettingsConfigDict(
         env_file=".env.local",
         env_file_encoding="utf-8",

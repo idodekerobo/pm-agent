@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from agents import RunContextWrapper, function_tool
-from app.workspace.workspace_runtime import bash as ws_bash
-from app.workspace.workspace_runtime import fs_read, fs_list, fs_write
+from app.workspace.local_workspace_runtime import bash as ws_bash
+from app.workspace.local_workspace_runtime import fs_read, fs_list, fs_write
 
 @dataclass
 class AgentContext:

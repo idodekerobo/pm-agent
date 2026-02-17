@@ -26,7 +26,6 @@ def get_or_create_agent_session(
     if agent_session_id:
         return agent_session_id, workspace_id
 
-    # 3. If no session ID, create a NEW session tied to this project
     new_session = (
         supabase.table("agent_sessions")
         .insert(

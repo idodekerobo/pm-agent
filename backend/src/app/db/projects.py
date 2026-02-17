@@ -1,5 +1,6 @@
 from uuid import uuid4
 from supabase import Client
+from app.db.workspaces import create_workspace
 
 
 def get_or_create_default_project(
@@ -20,11 +21,17 @@ def get_or_create_default_project(
         .execute()
     )
 
-    if result.data:
+    if result and result.data:
         return result.data["id"], result.data["workspace_id"]
 
     project_id = str(uuid4())
     workspace_id = str(uuid4())
+
+    create_workspace(
+        supabase,
+        workspace_id=workspace_id,
+        organization_id=organization_id,
+    )
 
     new_project = (
         supabase.table("projects")

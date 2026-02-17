@@ -12,19 +12,19 @@ class UnsafePathError(ValueError):
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
-def _workspace_root(workspace_id: str, tenant_id: str = "local") -> Path:
+def _workspace_root(workspace_id: str, organization_id: str = "local") -> Path:
     return (
         _repo_root()
         / "local_workspaces"
-        / "tenants"
-        / tenant_id
+        / "organizations"
+        / organization_id
         / "workspaces"
         / workspace_id
         / "workspace"
     )
 
-def ensure_workspace(workspace_id: str, tenant_id: str = "local") -> Path:
-    root = _workspace_root(workspace_id, tenant_id)
+def ensure_workspace(workspace_id: str, organization_id: str = "local") -> Path:
+    root = _workspace_root(workspace_id, organization_id)
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -39,19 +39,19 @@ def safe_path_join(workspace_root: Path, rel_path: str) -> Path:
 
     return normalized
 
-def fs_write(workspace_id: str, path: str, content: str, tenant_id: str = "local") -> None:
-    root = ensure_workspace(workspace_id, tenant_id)
+def fs_write(workspace_id: str, path: str, content: str, organization_id: str = "local") -> None:
+    root = ensure_workspace(workspace_id, organization_id)
     target = safe_path_join(root, path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
 
-def fs_read(workspace_id: str, path: str, tenant_id: str = "local") -> str:
-    root = ensure_workspace(workspace_id, tenant_id)
+def fs_read(workspace_id: str, path: str, organization_id: str = "local") -> str:
+    root = ensure_workspace(workspace_id, organization_id)
     target = safe_path_join(root, path)
     return target.read_text(encoding="utf-8")
 
-def fs_list(workspace_id: str, path: str = ".", tenant_id: str = "local") -> List[str]:
-    root = ensure_workspace(workspace_id, tenant_id)
+def fs_list(workspace_id: str, path: str = ".", organization_id: str = "local") -> List[str]:
+    root = ensure_workspace(workspace_id, organization_id)
     target = safe_path_join(root, path)
 
     if not target.exists():
@@ -73,9 +73,9 @@ def bash(
     command: str,
     cwd: str = ".",
     timeout_s: int = 60,
-    tenant_id: str = "local",
+    organization_id: str = "local",
 ) -> BashResult:
-    root = ensure_workspace(workspace_id, tenant_id)
+    root = ensure_workspace(workspace_id, organization_id)
     cwd_path = safe_path_join(root, cwd)
     proc = subprocess.run(
         ["bash", "-lc", command],

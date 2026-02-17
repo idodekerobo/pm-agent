@@ -4,7 +4,8 @@ from supabase import Client
 def get_or_create_agent_session(
     supabase: Client,
     *,
-    tenant_id: str,
+    organization_id: str,
+    user_id: str,
     agent_session_id: str | None,
 ) -> tuple[str, str]:
     if agent_session_id:
@@ -30,7 +31,7 @@ def get_or_create_agent_session(
     new_workspace_id = str(uuid4())
     new_session = (
         supabase.table("agent_sessions")
-        .insert({"tenant_id": tenant_id, "workspace_id": new_workspace_id})
+        .insert({"organization_id": organization_id, "user_id": user_id, "workspace_id": new_workspace_id})
         .execute()
     )
     created_session = new_session.data[0]

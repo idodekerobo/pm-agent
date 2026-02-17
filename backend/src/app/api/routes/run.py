@@ -11,7 +11,8 @@ from app.db.agent_sessions import get_or_create_agent_session
 from app.db.conversations import append_conversation_item, get_conversation_items
 
 router = APIRouter()
-TENANT_ID = "local"
+ORGANIZATION_ID = "local"
+DEFAULT_USER_ID = "default-user"
 
 MAX_HISTORY_ITEMS = 50
 
@@ -28,11 +29,12 @@ class RunResponse(BaseModel):
 @router.post("/run", response_model=RunResponse)
 async def run(req: RunRequest) -> RunResponse:
     run_id = str(uuid4())
-    supabase = get_supabase()  # TODO: when auth is implemented, validate tenant/user here
+    supabase = get_supabase()  # TODO: when auth is implemented, extract organization_id and user_id from token
 
     agent_session_id, workspace_id = get_or_create_agent_session(
         supabase,
-        tenant_id=TENANT_ID,
+        organization_id=ORGANIZATION_ID,
+        user_id=DEFAULT_USER_ID,
         agent_session_id=req.agent_session_id,
     )
 
@@ -55,7 +57,8 @@ async def run(req: RunRequest) -> RunResponse:
     try:
         output = await run_orchestrator(
             input_items=history_items + [user_item],
-            tenant_id=TENANT_ID,
+            organization_id=ORGANIZATION_ID,
+            user_id=DEFAULT_USER_ID,
             agent_session_id=agent_session_id,
             workspace_id=workspace_id,
         )

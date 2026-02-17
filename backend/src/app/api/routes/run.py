@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.agents.orchestrator import run_orchestrator
 from app.db.supabase_client import get_supabase
+from app.db.projects import get_or_create_default_project
 from app.db.agent_sessions import get_or_create_agent_session
 from app.db.conversations import append_conversation_item, get_conversation_items
 
@@ -31,10 +32,16 @@ async def run(req: RunRequest) -> RunResponse:
     run_id = str(uuid4())
     supabase = get_supabase()  # TODO: when auth is implemented, extract organization_id and user_id from token
 
+    project_id, _ = get_or_create_default_project(
+        supabase,
+        organization_id=ORGANIZATION_ID,
+    )
+
     agent_session_id, workspace_id = get_or_create_agent_session(
         supabase,
         organization_id=ORGANIZATION_ID,
         user_id=DEFAULT_USER_ID,
+        project_id=project_id,
         agent_session_id=req.agent_session_id,
     )
 

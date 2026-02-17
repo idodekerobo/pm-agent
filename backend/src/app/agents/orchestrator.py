@@ -21,9 +21,15 @@ async def run_orchestrator(
     user_id: str,
     agent_session_id: str,
     workspace_id: str,
+    sandbox_id: str | None = None,
 ) -> str:
     # TODO: build message thread management in
-    context = AgentContext(organization_id=organization_id, user_id=user_id, workspace_id=workspace_id)
+    context = AgentContext(
+        organization_id=organization_id,
+        user_id=user_id,
+        workspace_id=workspace_id,
+        sandbox_id=sandbox_id,
+    )
     result = Runner.run_streamed(
         PM_AGENT,
         input=input_items,

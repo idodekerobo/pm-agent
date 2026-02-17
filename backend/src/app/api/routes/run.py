@@ -10,6 +10,7 @@ from app.db.supabase_client import get_supabase
 from app.db.projects import get_or_create_default_project
 from app.db.agent_sessions import get_or_create_agent_session
 from app.db.conversations import append_conversation_item, get_conversation_items
+from app.db.workspaces import get_workspace
 
 router = APIRouter()
 ORGANIZATION_ID = "local"
@@ -62,12 +63,15 @@ async def run(req: RunRequest) -> RunResponse:
         item=user_item,
     )
     try:
+        workspace_row = get_workspace(supabase, workspace_id=workspace_id)
+        last_sandbox_id = workspace_row.get("last_sandbox_id")
         output = await run_orchestrator(
             input_items=history_items + [user_item],
             organization_id=ORGANIZATION_ID,
             user_id=DEFAULT_USER_ID,
             agent_session_id=agent_session_id,
             workspace_id=workspace_id,
+            sandbox_id=last_sandbox_id,
         )
         assistant_item: dict = {
             "type": "message",

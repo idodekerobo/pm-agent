@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
 from uuid import uuid4
@@ -11,6 +11,7 @@ from app.db.projects import get_or_create_default_project
 from app.db.agent_sessions import get_or_create_agent_session
 from app.db.conversations import append_conversation_item, get_conversation_items
 from app.db.workspaces import get_workspace
+from app.api.deps import auth_protect_route
 
 router = APIRouter()
 ORGANIZATION_ID = "local"
@@ -29,9 +30,9 @@ class RunResponse(BaseModel):
     output: str
 
 @router.post("/run", response_model=RunResponse)
-async def run(req: RunRequest) -> RunResponse:
+async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)) -> RunResponse:
     run_id = str(uuid4())
-    supabase = get_supabase()  # TODO: when auth is implemented, extract organization_id and user_id from token
+    supabase = get_supabase()
 
     project_id, _ = get_or_create_default_project(
         supabase,
@@ -41,7 +42,7 @@ async def run(req: RunRequest) -> RunResponse:
     agent_session_id, workspace_id = get_or_create_agent_session(
         supabase,
         organization_id=ORGANIZATION_ID,
-        user_id=DEFAULT_USER_ID,
+        user_id=user_id,
         project_id=project_id,
         agent_session_id=req.agent_session_id,
     )
@@ -68,7 +69,7 @@ async def run(req: RunRequest) -> RunResponse:
         output = await run_orchestrator(
             input_items=history_items + [user_item],
             organization_id=ORGANIZATION_ID,
-            user_id=DEFAULT_USER_ID,
+            user_id=user_id,
             agent_session_id=agent_session_id,
             workspace_id=workspace_id,
             sandbox_id=last_sandbox_id,

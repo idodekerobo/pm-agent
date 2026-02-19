@@ -2,6 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_environment: str
+    allowed_origins: list[str] = ["http://localhost:3000"]
 
     supabase_url: str
     supabase_secret_key: str

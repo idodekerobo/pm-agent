@@ -7,6 +7,7 @@ def get_or_create_default_project(
     supabase: Client,
     *,
     organization_id: str,
+    user_id: str,
 ) -> tuple[str, str]:
     """
     Gets or creates a "default project" for the organization.
@@ -31,6 +32,7 @@ def get_or_create_default_project(
         supabase,
         workspace_id=workspace_id,
         organization_id=organization_id,
+        user_id=user_id,
     )
 
     new_project = (
@@ -41,6 +43,7 @@ def get_or_create_default_project(
                 "organization_id": organization_id,
                 "name": "default project",
                 "workspace_id": workspace_id,
+                "user_id": user_id,
             }
         )
         .execute()

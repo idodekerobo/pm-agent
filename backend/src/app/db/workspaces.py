@@ -30,6 +30,7 @@ def create_workspace(
     *,
     workspace_id: str,
     organization_id: str,
+    user_id: str,
 ) -> dict:
     """
     Create a new workspace record.
@@ -40,6 +41,7 @@ def create_workspace(
             {
                 "id": workspace_id,
                 "organization_id": organization_id,
+                "user_id": user_id,
             }
         )
         .execute()

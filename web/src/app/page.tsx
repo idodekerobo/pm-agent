@@ -1,65 +1,224 @@
-import Image from "next/image";
+"use client";
+
+import { useRef, useEffect, useState } from "react";
+
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
 
 export default function Home() {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      const response = await fetch(`${apiBaseUrl}/run`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: input,
+          agent_session_id: null,
+          user_id: "06ba609a-2954-499e-90dc-9416c3b4d362",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from server");
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "",
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      const decoder = new TextDecoder();
+      let assistantContent = "";
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine || !trimmedLine.startsWith("data: ")) continue;
+
+          try {
+            const eventData = JSON.parse(trimmedLine.slice(6));
+            
+            if (["message", "tool_call", "tool_output", "error"].includes(eventData.type)) {
+              const content = eventData.content;
+              if (content) {
+                if (assistantContent && !assistantContent.endsWith("\n")) {
+                  assistantContent += "\n";
+                }
+                
+                if (eventData.type === "tool_call") {
+                  assistantContent += `🛠️ ${content}`;
+                } else if (eventData.type === "tool_output") {
+                  assistantContent += `📋 Output: ${content}`;
+                } else if (eventData.type === "error") {
+                  assistantContent += `❌ ${content}`;
+                } else {
+                  assistantContent += content;
+                }
+
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  const lastMsg = updated[updated.length - 1];
+                  if (lastMsg && lastMsg.role === "assistant") {
+                    lastMsg.content = assistantContent;
+                  }
+                  return updated;
+                });
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing SSE event:", e, trimmedLine);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        role: "assistant",
+        content: "Sorry, I encountered an error processing your request.",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="flex h-screen flex-col bg-white">
+      {/* Header */}
+      <div className="border-b border-zinc-200 bg-white px-6 py-4">
+        <h1 className="text-lg font-semibold text-zinc-900">Product Manager Agent</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          Chat with your AI-powered product strategy assistant
+        </p>
+      </div>
+
+      {/* Messages Container */}
+      <div
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto px-6 py-8"
+      >
+        <div className="mx-auto max-w-2xl space-y-6">
+          {messages.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-center">
+              <div>
+                <p className="text-lg text-zinc-600">
+                  Start a conversation with your Product Manager Agent
+                </p>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Ask questions about product strategy, market analysis, or feature prioritization
+                </p>
+              </div>
+            </div>
+          ) : (
+            messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${
+                  message.role === "user" ? "justify-end" : "justify-start"
+                }`}
+              >
+                <div
+                  className={`max-w-lg rounded-lg px-4 py-3 ${
+                    message.role === "user"
+                      ? "bg-zinc-900 text-white"
+                      : "bg-zinc-100 text-zinc-900"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                    {message.content}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-3">
+                <div className="flex gap-1">
+                  <div className="h-2 w-2 rounded-full bg-zinc-400 animate-bounce" />
+                  <div className="h-2 w-2 rounded-full bg-zinc-400 animate-bounce animation-delay-200" />
+                  <div className="h-2 w-2 rounded-full bg-zinc-400 animate-bounce animation-delay-400" />
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+      </div>
+
+      {/* Input Area */}
+      <div className="border-t border-zinc-200 bg-white px-6 py-4">
+        <form onSubmit={handleSendMessage} className="mx-auto max-w-2xl">
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={isLoading}
+              placeholder="Ask me anything..."
+              className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed"
+            >
+              Send
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

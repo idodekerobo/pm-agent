@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, AsyncGenerator
 from uuid import uuid4
 
 from app.agents.orchestrator import run_orchestrator
@@ -15,13 +17,14 @@ from app.api.deps import auth_protect_route
 
 router = APIRouter()
 ORGANIZATION_ID = "local"
-DEFAULT_USER_ID = "default-user"
+DEFAULT_USER_ID = "5bb70a4e-b13d-4b76-b243-f3965779140c"
 
 MAX_HISTORY_ITEMS = 50
 
 class RunRequest(BaseModel):
     prompt: str
     agent_session_id: Optional[str] = None
+    user_id: str
 
 class RunResponse(BaseModel):
     agent_session_id: str
@@ -29,20 +32,23 @@ class RunResponse(BaseModel):
     run_id: str
     output: str
 
-@router.post("/run", response_model=RunResponse)
-async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)) -> RunResponse:
+@router.post("/run")
+# TODO: build auth protection
+# async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)) -> RunResponse:
+async def run(req: RunRequest):
     run_id = str(uuid4())
     supabase = get_supabase()
 
     project_id, _ = get_or_create_default_project(
         supabase,
         organization_id=ORGANIZATION_ID,
+        user_id=req.user_id,
     )
 
     agent_session_id, workspace_id = get_or_create_agent_session(
         supabase,
         organization_id=ORGANIZATION_ID,
-        user_id=user_id,
+        user_id=req.user_id,
         project_id=project_id,
         agent_session_id=req.agent_session_id,
     )
@@ -63,40 +69,44 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)) -> Ru
         agent_session_id=agent_session_id,
         item=user_item,
     )
-    try:
-        workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-        last_sandbox_id = workspace_row.get("last_sandbox_id")
-        output = await run_orchestrator(
-            input_items=history_items + [user_item],
-            organization_id=ORGANIZATION_ID,
-            user_id=user_id,
-            agent_session_id=agent_session_id,
-            workspace_id=workspace_id,
-            sandbox_id=last_sandbox_id,
-        )
-        assistant_item: dict = {
-            "type": "message",
-            "role": "assistant",
-            "content": [{"type": "input_text", "text": output}],
-        }
-        append_conversation_item(
-            supabase,
-            agent_session_id=agent_session_id,
-            item=assistant_item,
-        )
-        return RunResponse(
-            agent_session_id=agent_session_id,
-            workspace_id=workspace_id,
-            run_id=run_id,
-            output=output,
-        )
-    except FileNotFoundError as file_not_found_err:
-        print(f"FileNotFoundError: {file_not_found_err}")
-    except Exception as e:
-        print(f"Error: {e}")
-        return RunResponse(
-            agent_session_id=agent_session_id,
-            workspace_id=workspace_id,
-            run_id=run_id,
-            output="ERROR",
-        )
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        final_output = ""
+        try:
+            workspace_row = get_workspace(supabase, workspace_id=workspace_id)
+            last_sandbox_id = workspace_row.get("last_sandbox_id")
+            
+            async for event in run_orchestrator(
+                input_items=history_items + [user_item],
+                organization_id=ORGANIZATION_ID,
+                user_id=req.user_id,
+                agent_session_id=agent_session_id,
+                workspace_id=workspace_id,
+                sandbox_id=last_sandbox_id,
+            ):
+                if event["type"] == "final_output":
+                    final_output = event["content"]
+                
+                yield f"data: {json.dumps(event)}\n\n"
+
+            # Save final output to database
+            if final_output:
+                assistant_item: dict = {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "input_text", "text": final_output}],
+                }
+                append_conversation_item(
+                    supabase,
+                    agent_session_id=agent_session_id,
+                    item=assistant_item,
+                )
+        except Exception as e:
+            print(f"Error in stream: {e}")
+            error_event = {
+                "type": "error",
+                "content": f"An error occurred: {str(e)}"
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

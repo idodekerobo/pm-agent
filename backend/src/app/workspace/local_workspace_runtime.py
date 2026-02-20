@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,6 +69,19 @@ class BashResult:
     stderr: str
     exit_code: int
 
+
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+DEFAULT_TERMINAL_ENV = {
+    "NO_COLOR": "1",
+    "CLICOLOR": "0",
+    "TERM": "dumb",
+}
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes so output is parser-friendly."""
+    return ANSI_ESCAPE_RE.sub("", text)
+
 def bash(
     workspace_id: str,
     command: str,
@@ -79,6 +93,8 @@ def bash(
     root = ensure_workspace(workspace_id, organization_id)
     cwd_path = safe_path_join(root, cwd)
     run_env = {**os.environ}
+    for key, value in DEFAULT_TERMINAL_ENV.items():
+        run_env.setdefault(key, value)
     if env:
         run_env.update(env)
 
@@ -92,7 +108,7 @@ def bash(
     )
 
     return BashResult(
-        stdout=proc.stdout,
-        stderr=proc.stderr,
+        stdout=_strip_ansi(proc.stdout),
+        stderr=_strip_ansi(proc.stderr),
         exit_code=proc.returncode,
     )

@@ -11,6 +11,7 @@ between backends via environment variable.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import List
 
 from .modal_sandbox import get_or_create_sandbox, WORKSPACE_MOUNT
@@ -21,6 +22,19 @@ class BashResult:
     stdout: str
     stderr: str
     exit_code: int
+
+
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+DEFAULT_TERMINAL_ENV = {
+    "NO_COLOR": "1",
+    "CLICOLOR": "0",
+    "TERM": "dumb",
+}
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes so output is parser-friendly."""
+    return ANSI_ESCAPE_RE.sub("", text)
 
 
 def _abs(path: str) -> str:
@@ -59,6 +73,7 @@ async def bash(
     if cwd and cwd != ".":
         command = f"cd {_abs(cwd)} && {command}"
     
+    run_env = dict(DEFAULT_TERMINAL_ENV)
     if env:
         run_env.update(env)
 
@@ -67,8 +82,8 @@ async def bash(
     stderr = await p.stderr.read.aio()
     await p.wait.aio()
     return BashResult(
-        stdout=stdout,
-        stderr=stderr,
+        stdout=_strip_ansi(stdout),
+        stderr=_strip_ansi(stderr),
         exit_code=p.returncode,
     )
 

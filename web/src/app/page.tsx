@@ -207,7 +207,7 @@ export default function Home() {
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
               placeholder="Ask me anything..."
-              className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
+              className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
             />
             <button
               type="submit"

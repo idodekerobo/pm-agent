@@ -30,7 +30,7 @@ def _abs(path: str) -> str:
     return f"{WORKSPACE_MOUNT}/{path.lstrip('/')}"
 
 
-def bash(
+async def bash(
     workspace_id: str,
     command: str,
     cwd: str = ".",
@@ -52,21 +52,24 @@ def bash(
     Returns:
         BashResult with stdout, stderr, exit_code
     """
-    sb = get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
     
     # If running in a subdirectory, prepend cd
     if cwd and cwd != ".":
         command = f"cd {_abs(cwd)} && {command}"
     
-    p = sb.exec("bash", "-lc", command, timeout=timeout_s)
+    p = await sb.exec.aio("bash", "-lc", command, timeout=timeout_s, env=env or {})
+    stdout = await p.stdout.read.aio()
+    stderr = await p.stderr.read.aio()
+    await p.wait.aio()
     return BashResult(
-        stdout=p.stdout.read(),
-        stderr=p.stderr.read(),
+        stdout=stdout,
+        stderr=stderr,
         exit_code=p.returncode,
     )
 
 
-def fs_write(
+async def fs_write(
     workspace_id: str,
     path: str,
     content: str,
@@ -83,12 +86,12 @@ def fs_write(
         organization_id: Organization identifier (default: "local")
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
     """
-    sb = get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
-    with sb.open(path, "w") as f:
-        f.write(content)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    async with sb.open.aio(path, "w") as f:
+        await f.write.aio(content)
 
 
-def fs_read(
+async def fs_read(
     workspace_id: str,
     path: str,
     organization_id: str = "local",
@@ -106,12 +109,12 @@ def fs_read(
     Returns:
         File contents as string
     """
-    sb = get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
     with sb.open(path, "r") as f:
         return f.read()
 
 
-def fs_list(
+async def fs_list(
     workspace_id: str,
     path: str = ".",
     organization_id: str = "local",
@@ -129,5 +132,5 @@ def fs_list(
     Returns:
         List of file/directory names in the specified path
     """
-    sb = get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
     return sb.ls(_abs(path))

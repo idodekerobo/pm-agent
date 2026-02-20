@@ -17,17 +17,17 @@ def get_or_create_volume(organization_id: str, workspace_id: str) -> modal.Volum
         create_if_missing=True,
     )
 
-def _try_reconnect(sandbox_id: str) -> modal.Sandbox | None:
+async def _try_reconnect(sandbox_id: str) -> modal.Sandbox | None:
     """Helper to check if a specific sandbox ID is still running."""
     try:
-        sb = modal.Sandbox.from_id(sandbox_id)
-        if sb.poll() is None:
+        sb = await modal.Sandbox.from_id.aio(sandbox_id)
+        if await sb.poll.aio() is None:
             return sb
     except Exception:
         pass
     return None
 
-def get_or_create_sandbox(
+async def get_or_create_sandbox(
     organization_id: str,
     workspace_id: str,
     last_sandbox_id: str | None = None,
@@ -38,7 +38,7 @@ def get_or_create_sandbox(
     mounting the same Volume — all files are preserved.
     """
     if last_sandbox_id:
-        sb = _try_reconnect(last_sandbox_id)
+        sb = await _try_reconnect(last_sandbox_id)
         if sb:
             return sb
 
@@ -47,14 +47,14 @@ def get_or_create_sandbox(
     db_sandbox_id = workspace_row.get("last_sandbox_id")
 
     if db_sandbox_id and db_sandbox_id != last_sandbox_id:
-        sb = _try_reconnect(db_sandbox_id)
+        sb = await _try_reconnect(db_sandbox_id)
         if sb:
             return sb
 
     vol = get_or_create_volume(organization_id, workspace_id)
-    app = get_modal_app()
+    app = await get_modal_app()
 
-    sb = modal.Sandbox.create(
+    sb = await modal.Sandbox.create.aio(
         image=modal.Image.debian_slim(),
         volumes={WORKSPACE_MOUNT: vol},
         workdir=WORKSPACE_MOUNT,

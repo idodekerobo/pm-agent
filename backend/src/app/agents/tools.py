@@ -19,14 +19,14 @@ class AgentContext:
     sandbox_id: str | None = None
 
 @function_tool
-def tool_fs_write(context: RunContextWrapper[AgentContext], path: str, content: str) -> str:
+async def tool_fs_write(context: RunContextWrapper[AgentContext], path: str, content: str) -> str:
     """
     Write a file inside the agent workspace.
     Args:
         path: Relaive path inside the workspace (no ..).
         content: File contents.
     """
-    fs_write(
+    await fs_write(
         context.context.workspace_id,
         path,
         content,
@@ -36,12 +36,12 @@ def tool_fs_write(context: RunContextWrapper[AgentContext], path: str, content: 
     return f"Wrote '{path}'."
 
 @function_tool
-def tool_fs_read(context: RunContextWrapper[AgentContext], path: str) -> str:
+async def tool_fs_read(context: RunContextWrapper[AgentContext], path: str) -> str:
     """Read a file inside the agent workspace.
     Args:
       path: Relative path inside the workspace (no ..).
     """
-    return fs_read(
+    return await fs_read(
         context.context.workspace_id,
         path,
         organization_id=context.context.organization_id,
@@ -49,12 +49,12 @@ def tool_fs_read(context: RunContextWrapper[AgentContext], path: str) -> str:
     )
 
 @function_tool
-def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = ".") -> list[str]:
+async def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = ".") -> list[str]:
     """List files inside the agent workspace.
     Args:
       path: Relative path inside the workspace.
     """
-    return fs_list(
+    return await fs_list(
         context.context.workspace_id,
         path=path,
         organization_id=context.context.organization_id,
@@ -62,14 +62,19 @@ def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = ".") -> l
     )
 
 @function_tool
-def tool_bash(context: RunContextWrapper[AgentContext], command: str, cwd: str = ".", timeout_s: int = 60) -> dict[str, Any]:
+async def tool_bash(
+    context: RunContextWrapper[AgentContext],
+    command: str,
+    cwd: str = ".",
+    timeout_s: int = 60,
+) -> dict[str, Any]:
     """Run a bash command inside the agent workspace.
     Args:
       command: Shell command to run.
       cwd: Relative working directory inside the workspace.
       timeout_s: Timeout in seconds.
     """
-    result = ws_bash(
+    result = await ws_bash(
         context.context.workspace_id,
         command=command,
         cwd=cwd,

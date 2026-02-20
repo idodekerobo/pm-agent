@@ -37,6 +37,7 @@ async def bash(
     timeout_s: int = 60,
     organization_id: str = "local",
     sandbox_id: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> BashResult:
     """
     Run a bash command inside the agent workspace (Modal Sandbox).
@@ -58,7 +59,10 @@ async def bash(
     if cwd and cwd != ".":
         command = f"cd {_abs(cwd)} && {command}"
     
-    p = await sb.exec.aio("bash", "-lc", command, timeout=timeout_s, env=env or {})
+    if env:
+        run_env.update(env)
+
+    p = await sb.exec.aio("bash", "-lc", command, timeout=timeout_s, env=run_env)
     stdout = await p.stdout.read.aio()
     stderr = await p.stderr.read.aio()
     await p.wait.aio()

@@ -3,6 +3,8 @@ from typing import Any, Optional
 
 from agents import RunContextWrapper, function_tool
 from app.config import settings
+from app.db.supabase_client import get_supabase
+from app.integrations.manager import get_valid_token
 
 if settings.workspace_backend == "production":
     from app.workspace.workspace_runtime import bash as ws_bash
@@ -67,13 +69,36 @@ async def tool_bash(
     command: str,
     cwd: str = ".",
     timeout_s: int = 60,
+    required_provider_auth: Optional[str] = None,
 ) -> dict[str, Any]:
     """Run a bash command inside the agent workspace.
     Args:
       command: Shell command to run.
       cwd: Relative working directory inside the workspace.
       timeout_s: Timeout in seconds.
+      required_provider_auth: Optional provider name (e.g. "linear") to inject authentication for.
     """
+
+    env_vars = {}
+    if required_provider_auth:
+        supabase = get_supabase()
+        try:
+            token = await get_valid_token(
+                supabase,
+                user_id=context.context.user_id,
+                provider=required_provider_auth,
+            )
+            if required_provider_auth == "linear":
+                # Prepend Bearer for OAuth tokens, not needed for API tokens
+                env_vars["LINEAR_API_KEY"] = f"Bearer {token}"
+
+        except Exception as e:
+            return {
+                "stdout": "",
+                "stderr": f"Authentication failed for {required_provider_auth}: {str(e)}", 
+                "exit_code": 1
+            }
+
     result = await ws_bash(
         context.context.workspace_id,
         command=command,
@@ -81,5 +106,6 @@ async def tool_bash(
         timeout_s=timeout_s,
         organization_id=context.context.organization_id,
         sandbox_id=context.context.sandbox_id,
+        env=env_vars
     )
     return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}

@@ -74,16 +74,21 @@ def bash(
     cwd: str = ".",
     timeout_s: int = 60,
     organization_id: str = "local",
+    env: dict[str, str] | None = None,
 ) -> BashResult:
     root = ensure_workspace(workspace_id, organization_id)
     cwd_path = safe_path_join(root, cwd)
+    run_env = {**os.environ}
+    if env:
+        run_env.update(env)
+
     proc = subprocess.run(
         ["bash", "-lc", command],
         cwd=str(cwd_path),
         capture_output=True,
         text=True,
         timeout=timeout_s,
-        env={**os.environ},
+        env=run_env,
     )
 
     return BashResult(

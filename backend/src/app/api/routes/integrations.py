@@ -18,17 +18,18 @@ oauth.register(
     access_token_url="https://api.linear.app/oauth/token",
     client_kwargs={"scope": "read,write"},
 )
-
+# add auth protection to this route
 @router.get("/linear/connect")
 async def linear_connect(
     request: Request,
-    user_id: str = Depends(auth_protect_route),
+    user_id: str,
 ):
     print(f"request:\n{request}\n")
     request.session["connecting_user_id"] = user_id
     redirect_uri = request.url_for("linear_callback")
     return await oauth.linear.authorize_redirect(request, str(redirect_uri), actor="app")
 
+# TODO: wrap in try/except
 @router.get("/linear/callback", name="linear_callback")
 async def linear_callback(request: Request):
     user_id = request.session.pop("connecting_user_id", None)
@@ -58,7 +59,8 @@ async def linear_callback(request: Request):
         "expires_at": expires_at,
         "scopes": token.get("scope", "").split() if isinstance(token.get("scope"), str) else [],
         "updated_at": datetime.now(timezone.utc).isoformat(),
-    }, on_conflict="user_id,provider").execute() # TODO: add the user_id, provider unique constriant
+    # }, on_conflict="user_id,provider").execute() # TODO: add the user_id, provider unique constriant
+    }).execute()
 
     return RedirectResponse(f"{settings.client_app_base_url}/?connected=linear")
 

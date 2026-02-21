@@ -104,7 +104,7 @@ async def tool_bash(
         command=command,
         cwd=cwd,
         timeout_s=timeout_s,
-        organization_id=context.context.organization_id,
+        organization_id=context.context.organization_id, # TODO: do i need this?? 
         sandbox_id=context.context.sandbox_id,
         env=env_vars
     )

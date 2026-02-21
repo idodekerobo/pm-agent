@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, HTTPException, Request, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from app.api.deps import auth_protect_route
 from app.integrations.crypto import encrypt_token
 from app.db.supabase_client import get_supabase
@@ -59,7 +60,7 @@ async def linear_callback(request: Request):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="user_id,provider").execute() # TODO: add the user_id, provider unique constriant
 
-    return RedirectResponse("/settings/integrations?connected=linear")
+    return RedirectResponse(f"{settings.client_app_base_url}/?connected=linear")
 
 @router.delete("/linear")
 async def linear_disconnect(user_id: str = Depends(auth_protect_route)):

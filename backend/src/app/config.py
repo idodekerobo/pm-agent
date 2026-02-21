@@ -2,7 +2,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_environment: str
-    allowed_origins: list[str] = ["http://localhost:3000"]
+    client_app_base_url: str
+    allowed_origins: list[str] = []
 
     supabase_url: str
     supabase_secret_key: str
@@ -20,5 +21,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    def model_post_init(self, __context) -> None:
+        self.allowed_origins = [self.client_app_base_url]
 
 settings = Settings()

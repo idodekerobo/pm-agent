@@ -27,6 +27,16 @@ async def _try_reconnect(sandbox_id: str) -> modal.Sandbox | None:
         pass
     return None
 
+def get_agent_image() -> modal.Image:
+    return (
+        modal.Image.debian_slim()
+        .apt_install("curl", "git", "unzip")
+        .run_commands(
+            "curl -fsSL https://deno.land/x/install/install.sh | DENO_INSTALL=/usr/local sh",
+            "/usr/local/bin/deno install --root /usr/local -A --reload -f -g -n linear jsr:@schpet/linear-cli",
+        )
+    )
+
 async def get_or_create_sandbox(
     organization_id: str,
     workspace_id: str,
@@ -55,7 +65,7 @@ async def get_or_create_sandbox(
     app = await get_modal_app()
 
     sb = await modal.Sandbox.create.aio(
-        image=modal.Image.debian_slim(),
+        image=get_agent_image(),
         volumes={WORKSPACE_MOUNT: vol},
         workdir=WORKSPACE_MOUNT,
         app=app,

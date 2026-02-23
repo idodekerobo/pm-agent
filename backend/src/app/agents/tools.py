@@ -76,7 +76,7 @@ async def tool_bash(
       command: Shell command to run.
       cwd: Relative working directory inside the workspace.
       timeout_s: Timeout in seconds.
-      required_provider_auth: Optional provider name (e.g. "linear") to inject authentication for.
+      required_provider_auth: Optional provider name (e.g. "linear", "google", etc.) to inject authentication for.
     """
 
     env_vars = {}
@@ -91,6 +91,8 @@ async def tool_bash(
             if required_provider_auth == "linear":
                 # Prepend Bearer for OAuth tokens, not needed for API tokens
                 env_vars["LINEAR_API_KEY"] = f"Bearer {token}"
+            if required_provider_auth == "google":
+                env_vars["BEARER_TOKEN"] = token
 
         except Exception as e:
             return {

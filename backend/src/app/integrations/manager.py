@@ -46,6 +46,7 @@ async def _refresh_token(provider: str, refresh_token: str) -> dict:
     """Internal helper to refresh OAuth tokens."""
     providers = {
         "linear": refresh_linear_token,
+        "google": refresh_google_token,
     }
     
     refresh_func = providers.get(provider)
@@ -69,6 +70,30 @@ async def refresh_linear_token(refresh_token: str) -> dict:
         response.raise_for_status()
         data = response.json()
         print(f"response data from linear refresh token request:\n{data}\n")
+
+        result = {"access_token": data["access_token"]}
+
+        if "refresh_token" in data:
+            result["refresh_token"] = data["refresh_token"]
+        if "expires_in" in data:
+            expires_at = datetime.now(timezone.utc).timestamp() + data["expires_in"]
+            result["expires_at"] = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
+        return result
+
+async def refresh_google_token(refresh_token: str) -> dict:
+    """Helper to refresh Google token with their OAuth structure."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
 
         result = {"access_token": data["access_token"]}
 

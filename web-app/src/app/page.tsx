@@ -8,6 +8,8 @@ interface Message {
   content: string;
 }
 
+const DEV_USER_ID = '5bb70a4e-b13d-4b76-b243-f3965779140c'
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -47,7 +49,7 @@ export default function Home() {
         body: JSON.stringify({
           prompt: input,
           agent_session_id: null,
-          user_id: "06ba609a-2954-499e-90dc-9416c3b4d362",
+          user_id: DEV_USER_ID,
         }),
       });
 
@@ -133,14 +135,60 @@ export default function Home() {
     }
   };
 
+  const handleConnectLinear = async () => {
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      sessionStorage.setItem("connecting_user_id", DEV_USER_ID);
+      window.open(`${apiBaseUrl}/integrations/linear/connect?user_id=${DEV_USER_ID}`, "_blank");
+    } catch (error) {
+      console.error("Error connecting to Linear:", error);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+      sessionStorage.setItem("connecting_user_id", DEV_USER_ID);
+      window.open(`${apiBaseUrl}/integrations/google/connect?user_id=${DEV_USER_ID}`, "_blank");
+    } catch (error) {
+      console.error("Error connecting to Google Drive:", error);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connected") === "linear") {
+      console.log("Successfully connected to Linear!");
+    }
+    if (params.get("connected") === "google") {
+      console.log("Successfully connected to Google Drive!");
+    }
+  }, []);
+
   return (
     <div className="flex h-screen flex-col bg-white">
       {/* Header */}
-      <div className="border-b border-zinc-200 bg-white px-6 py-4">
-        <h1 className="text-lg font-semibold text-zinc-900">Product Manager Agent</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Chat with your AI-powered product strategy assistant
-        </p>
+      <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-6 py-4">
+        <div>
+          <h1 className="text-lg font-semibold text-zinc-900">Product Manager Agent</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Chat with your AI-powered product strategy assistant
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={handleConnectLinear}
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
+          >
+            Connect Linear
+          </button>
+          <button
+            onClick={handleConnectGoogle}
+            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
+          >
+            Connect Google Drive
+          </button>
+        </div>
       </div>
 
       {/* Messages Container */}

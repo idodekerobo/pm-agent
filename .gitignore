@@ -3,6 +3,9 @@ plans/
 __pycache__
 *.py[cod]
 
+# Next.js
+.next
+
 # Dev workspaces
 local_state
 local_workspaces

@@ -62,7 +62,7 @@ async def linear_callback(request: Request):
     # }, on_conflict="user_id,provider").execute() # TODO: add the user_id, provider unique constriant
     }).execute()
 
-    return RedirectResponse(f"{settings.client_app_base_url}/?connected=linear")
+    return RedirectResponse(f"{settings.client_app_base_url}/integrations/linear/success")
 
 @router.delete("/linear")
 async def linear_disconnect(user_id: str = Depends(auth_protect_route)):
@@ -119,7 +119,7 @@ async def google_callback(request: Request):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
 
-    return RedirectResponse(f"{settings.client_app_base_url}/?connected=google")
+    return RedirectResponse(f"{settings.client_app_base_url}/integrations/google-drive/success")
 
 @router.delete("/google")
 async def google_disconnect(user_id: str = Depends(auth_protect_route)):

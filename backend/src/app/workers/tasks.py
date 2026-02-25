@@ -9,6 +9,7 @@ RQ jobs must be synchronous functions. The worker task handles:
 4. Calling the agent function with all context
 5. Saving results to Supabase
 """
+import asyncio
 from datetime import datetime, timezone
 from app.db.supabase_client import get_supabase
 from app.db.projects import get_or_create_default_project
@@ -27,7 +28,7 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
         user_id: User who connected the integration
         provider: Integration provider name
     """
-    try:
+    async def _run():
         supabase = get_supabase()
         
         user_response = (
@@ -60,7 +61,7 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
         workspace_row = get_workspace(supabase, workspace_id=workspace_id)
         sandbox_id = workspace_row.get("last_sandbox_id")
         
-        context_data = run_gdrive_context_agent(
+        await run_gdrive_context_agent(
             user_id=user_id,
             organization_id=organization_id,
             workspace_id=workspace_id,
@@ -75,6 +76,9 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
             "provider": provider,
             "context_gathered_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    try:
+        return asyncio.run(_run())
     except Exception as e:
         print(f"Error gathering Google Drive context for user {user_id}: {str(e)}")
         raise
@@ -89,7 +93,7 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
         user_id: User who connected the integration
         provider: Integration provider name
     """
-    try:
+    async def _run():
         supabase = get_supabase()
         
         user_response = (
@@ -122,7 +126,7 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
         workspace_row = get_workspace(supabase, workspace_id=workspace_id)
         sandbox_id = workspace_row.get("last_sandbox_id")
         
-        context_data = run_linear_context_agent(
+        await run_linear_context_agent(
             user_id=user_id,
             organization_id=organization_id,
             workspace_id=workspace_id,
@@ -137,6 +141,9 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
             "provider": provider,
             "context_gathered_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    try:
+        return asyncio.run(_run())
     except Exception as e:
         print(f"Error gathering Linear context for user {user_id}: {str(e)}")
         raise

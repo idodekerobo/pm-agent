@@ -60,7 +60,7 @@ BASE_INSTRUCTIONS = [
 ]
 
 
-def run_gdrive_context_agent(
+async def run_gdrive_context_agent(
     user_id: str,
     organization_id: str,
     workspace_id: str,
@@ -112,7 +112,7 @@ def run_gdrive_context_agent(
     
     result = Runner.run_streamed(agent, input=input_message, context=context)
     
-    for event in result.stream_events():
+    async for event in result.stream_events():
         if event.type == "raw_response_event":
             continue
         elif event.type == "agent_updated_stream_event":

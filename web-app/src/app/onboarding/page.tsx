@@ -5,15 +5,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { createClient } from '@/lib/supabaseClient';
 
-type Step = 'company' | 'integrations' | 'connecting' | 'integrations_connecting';
-
 interface OnboardingData {
   companyName: string;
   companyLink: string;
-  integrations: {
-    googleDrive: boolean;
-    linear: boolean;
-  };
 }
 
 interface IntegrationStatus {
@@ -22,19 +16,17 @@ interface IntegrationStatus {
 }
 
 export default function OnboardingPage() {
-  const [step, setStep] = useState<Step>('company');
   const [data, setData] = useState<OnboardingData>({
     companyName: '',
     companyLink: '',
-    integrations: {
-      googleDrive: false,
-      linear: false,
-    },
   });
+  
   const [integrationsCompleted, setIntegrationsCompleted] = useState<IntegrationStatus>({
     googleDrive: false,
     linear: false,
   });
+  
+  const [connectingProvider, setConnectingProvider] = useState<'googleDrive' | 'linear' | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -44,25 +36,18 @@ export default function OnboardingPage() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === 'integration_success') {
+        const provider = event.data.provider === 'google_drive' ? 'googleDrive' : 'linear';
         setIntegrationsCompleted(prev => ({
           ...prev,
-          [event.data.provider === 'google_drive' ? 'googleDrive' : 'linear']: true,
+          [provider]: true,
         }));
-
-        // If all selected integrations are complete, redirect to chat
-        const allComplete =
-          (!data.integrations.googleDrive || integrationsCompleted.googleDrive) &&
-          (!data.integrations.linear || integrationsCompleted.linear);
-
-        if (allComplete) {
-          setTimeout(() => router.push('/chat'), 1000);
-        }
+        setConnectingProvider(null);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [data.integrations, integrationsCompleted, router]);
+  }, []);
 
   const isValidUrl = (url: string) => {
     if (!url) return true;
@@ -74,7 +59,21 @@ export default function OnboardingPage() {
     }
   };
 
-  const handleCompanySubmit = (e: React.FormEvent) => {
+  const handleConnect = (provider: 'googleDrive' | 'linear') => {
+    if (!user?.id) return;
+    
+    setError('');
+    setConnectingProvider(provider);
+    
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const endpoint = provider === 'googleDrive' 
+      ? `${apiBaseUrl}/integrations/google/connect?user_id=${user.id}`
+      : `${apiBaseUrl}/integrations/linear/connect?user_id=${user.id}`;
+      
+    window.open(endpoint, '_blank', 'width=600,height=700');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -84,33 +83,15 @@ export default function OnboardingPage() {
     }
 
     if (!isValidUrl(data.companyLink)) {
-      setError('Please enter a valid URL');
+      setError('Please enter a valid URL for the company link');
       return;
     }
 
-    setStep('integrations');
-  };
-
-  const handleIntegrationToggle = (integration: 'googleDrive' | 'linear') => {
-    setData((prev) => ({
-      ...prev,
-      integrations: {
-        ...prev.integrations,
-        [integration]: !prev.integrations[integration],
-      },
-    }));
-  };
-
-  const handleIntegrationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!data.integrations.googleDrive) {
-      setError('Google Drive is required');
+    if (!integrationsCompleted.googleDrive) {
+      setError('Google Drive connection is required');
       return;
     }
 
-    setStep('connecting');
     setLoading(true);
 
     try {
@@ -131,193 +112,221 @@ export default function OnboardingPage() {
         }),
       });
 
-      sessionStorage.setItem('connecting_user_id', user?.id || '');
-      sessionStorage.setItem('pending_integrations', JSON.stringify(data.integrations));
-
-      if (data.integrations.googleDrive) {
-        window.open(`${apiBaseUrl}/integrations/google/connect?user_id=${user?.id}`, '_blank');
-      }
-
-      if (data.integrations.linear) {
-        window.open(`${apiBaseUrl}/integrations/linear/connect?user_id=${user?.id}`, '_blank');
-      }
-
-      setLoading(false);
-      setStep('integrations_connecting');
+      // Save integrations state if needed by backend, though connections are already established
+      sessionStorage.setItem('pending_integrations', JSON.stringify(integrationsCompleted));
+      
+      router.push('/chat');
     } catch (err: any) {
       setError(err.message || 'Failed to complete onboarding');
       setLoading(false);
-      setStep('integrations');
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4 py-8">
-      <div className="w-full max-w-md">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-zinc-900">Let's get started</h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            {step === 'company' && 'Tell us about your company'}
-            {step === 'integrations' && 'Connect your integrations'}
-            {step === 'integrations_connecting' && 'Completing integration setup...'}
+    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 font-sans text-zinc-900">
+      <div className="w-full max-w-2xl bg-white border border-zinc-200 shadow-sm rounded-xl overflow-hidden">
+        
+        {/* Header */}
+        <div className="px-8 py-6 border-b border-zinc-100 bg-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+            Initialize Agent Context
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            Configure the core knowledge base and execution capabilities for your agent.
           </p>
-
-          <div className="mt-6 flex gap-2">
-            <div className={`h-1 flex-1 rounded ${step !== 'company' ? 'bg-zinc-900' : 'bg-zinc-200'}`} />
-            <div className={`h-1 flex-1 rounded ${step === 'integrations' || step === 'integrations_connecting' ? 'bg-zinc-900' : 'bg-zinc-200'}`} />
-          </div>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3">
-            <p className="text-sm font-medium text-red-800">{error}</p>
+          <div className="mx-8 mt-6 rounded-md bg-red-50 p-4 border border-red-100">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Error</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{error}</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        {step === 'company' && (
-          <form onSubmit={handleCompanySubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="divide-y divide-zinc-100">
+          
+          {/* Section 1: Overall Company Context */}
+          <div className="px-8 py-6 space-y-6">
             <div>
-              <label htmlFor="companyName" className="block text-sm font-medium text-zinc-700 mb-1">
-                Company Name
-              </label>
-              <input
-                id="companyName"
-                type="text"
-                required
-                value={data.companyName}
-                onChange={(e) => setData({ ...data, companyName: e.target.value })}
-                className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                placeholder="Acme Inc."
-              />
-            </div>
+              <h2 className="text-base font-medium text-zinc-900 uppercase tracking-wider text-xs mb-4 text-zinc-500">
+                01 / Overall Company Context
+              </h2>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="col-span-2 sm:col-span-1">
+                  <label htmlFor="companyName" className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    id="companyName"
+                    required
+                    value={data.companyName}
+                    onChange={(e) => setData({ ...data, companyName: e.target.value })}
+                    className="block w-full rounded-md border-zinc-300 shadow-sm focus:border-zinc-900 focus:ring-zinc-900 sm:text-sm py-2.5 px-3 bg-zinc-50/50"
+                    placeholder="e.g. Acme Corp"
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="companyLink" className="block text-sm font-medium text-zinc-700 mb-1">
-                Company Link (Optional)
-              </label>
-              <input
-                id="companyLink"
-                type="url"
-                value={data.companyLink}
-                onChange={(e) => setData({ ...data, companyLink: e.target.value })}
-                className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                placeholder="https://acme.com"
-              />
+                <div className="col-span-2 sm:col-span-1">
+                  <label htmlFor="companyLink" className="block text-sm font-medium text-zinc-700 mb-1.5">
+                    Company URL
+                  </label>
+                  <input
+                    type="url"
+                    id="companyLink"
+                    value={data.companyLink}
+                    onChange={(e) => setData({ ...data, companyLink: e.target.value })}
+                    className="block w-full rounded-md border-zinc-300 shadow-sm focus:border-zinc-900 focus:ring-zinc-900 sm:text-sm py-2.5 px-3 bg-zinc-50/50"
+                    placeholder="https://acme.com"
+                  />
+                  <p className="mt-1.5 text-xs text-zinc-500">
+                    Where the company URL fits in the context.
+                  </p>
+                </div>
+              </div>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+          {/* Section 2: Issue Tracking & Planning */}
+          <div className="px-8 py-6 bg-zinc-50/30">
+            <h2 className="text-base font-medium text-zinc-900 uppercase tracking-wider text-xs mb-4 text-zinc-500">
+              02 / Issue Tracking & Planning
+            </h2>
+            
+            <div 
+              className={`group relative flex items-center justify-between p-4 rounded-lg border transition-all duration-200 ${
+                integrationsCompleted.linear
+                  ? 'bg-white border-zinc-900 shadow-sm' 
+                  : 'bg-white border-zinc-200 hover:border-zinc-300'
+              }`}
             >
-              Continue
-            </button>
-          </form>
-        )}
-
-        {step === 'integrations' && (
-          <form onSubmit={handleIntegrationSubmit} className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-300 p-4 hover:border-zinc-400 transition-colors">
-                <input
-                  type="checkbox"
-                  id="googleDrive"
-                  checked={data.integrations.googleDrive}
-                  onChange={() => handleIntegrationToggle('googleDrive')}
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                />
-                <div className="flex-1">
-                  <label htmlFor="googleDrive" className="block text-sm font-medium text-zinc-900 cursor-pointer">
-                    Google Drive
-                  </label>
-                  <p className="text-xs text-zinc-500">
-                    Required — Access your files and documents
-                  </p>
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-zinc-900">Linear Integration</h3>
+                  {integrationsCompleted.linear && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                      Connected
+                    </span>
+                  )}
                 </div>
+                <p className="text-zinc-500 mt-1 text-sm">
+                  Connect your issue tracking system. This is where Linear fits into the agent's workflow for planning and execution monitoring.
+                </p>
               </div>
-
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-300 p-4 hover:border-zinc-400 transition-colors">
-                <input
-                  type="checkbox"
-                  id="linear"
-                  checked={data.integrations.linear}
-                  onChange={() => handleIntegrationToggle('linear')}
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
-                />
-                <div className="flex-1">
-                  <label htmlFor="linear" className="block text-sm font-medium text-zinc-900 cursor-pointer">
-                    Linear
-                  </label>
-                  <p className="text-xs text-zinc-500">
-                    Optional — Track issues and project management
-                  </p>
-                </div>
-              </div>
+              
+              <button
+                type="button"
+                onClick={() => handleConnect('linear')}
+                disabled={integrationsCompleted.linear || connectingProvider === 'linear'}
+                className={`flex-shrink-0 inline-flex items-center justify-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-900 transition-colors ${
+                  integrationsCompleted.linear
+                    ? 'border-transparent text-zinc-400 bg-zinc-100 cursor-default'
+                    : 'border-zinc-300 text-zinc-700 bg-white hover:bg-zinc-50'
+                }`}
+              >
+                {connectingProvider === 'linear' ? (
+                  <span className="flex items-center">
+                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Connecting...
+                  </span>
+                ) : integrationsCompleted.linear ? (
+                  'Connected'
+                ) : (
+                  'Connect Linear'
+                )}
+              </button>
             </div>
+          </div>
 
+          {/* Section 3: Docs, Slides, etc. */}
+          <div className="px-8 py-6">
+            <h2 className="text-base font-medium text-zinc-900 uppercase tracking-wider text-xs mb-4 text-zinc-500">
+              03 / Docs, Slides, & Assets
+            </h2>
+
+            <div 
+              className={`group relative flex items-center justify-between p-4 rounded-lg border transition-all duration-200 ${
+                integrationsCompleted.googleDrive
+                  ? 'bg-white border-zinc-900 shadow-sm' 
+                  : 'bg-white border-zinc-200 hover:border-zinc-300'
+              }`}
+            >
+              <div className="flex-1 pr-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-medium text-zinc-900">Google Drive Integration</h3>
+                  {integrationsCompleted.googleDrive && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                      Connected
+                    </span>
+                  )}
+                </div>
+                <p className="text-zinc-500 mt-1 text-sm">
+                  Connect your document repository. This is where Google Drive fits for accessing docs, slides, and other unstructured knowledge.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleConnect('googleDrive')}
+                disabled={integrationsCompleted.googleDrive || connectingProvider === 'googleDrive'}
+                className={`flex-shrink-0 inline-flex items-center justify-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-900 transition-colors ${
+                  integrationsCompleted.googleDrive
+                    ? 'border-transparent text-zinc-400 bg-zinc-100 cursor-default'
+                    : 'border-zinc-300 text-zinc-700 bg-white hover:bg-zinc-50'
+                }`}
+              >
+                {connectingProvider === 'googleDrive' ? (
+                  <span className="flex items-center">
+                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-zinc-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Connecting...
+                  </span>
+                ) : integrationsCompleted.googleDrive ? (
+                  'Connected'
+                ) : (
+                  'Connect Drive'
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Footer Action */}
+          <div className="px-8 py-6 bg-zinc-50 border-t border-zinc-200 flex justify-end">
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:bg-zinc-300 disabled:cursor-not-allowed"
+              className="inline-flex justify-center rounded-md border border-transparent bg-zinc-900 py-2.5 px-6 text-sm font-medium text-white shadow-sm hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:ring-offset-2 disabled:bg-zinc-400 disabled:cursor-not-allowed transition-all duration-200"
             >
-              {loading ? 'Connecting...' : 'Connect Integrations'}
-            </button>
-          </form>
-        )}
-
-        {step === 'integrations_connecting' && (
-          <div className="text-center py-8">
-            <div className="mb-6">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100">
-                <div className="h-4 w-4 rounded-full border-2 border-zinc-300 border-t-zinc-900 animate-spin" />
-              </div>
-            </div>
-            <p className="text-sm text-zinc-600 mb-6">
-              Completing integration setup...
-            </p>
-
-            <div className="space-y-3 text-left">
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                <div className={`h-5 w-5 rounded-full flex items-center justify-center ${
-                  integrationsCompleted.googleDrive 
-                    ? 'bg-green-100'
-                    : 'border-2 border-zinc-300'
-                }`}>
-                  {integrationsCompleted.googleDrive ? (
-                    <svg className="h-3 w-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <div className="h-2 w-2 rounded-full bg-zinc-300 animate-pulse" />
-                  )}
-                </div>
-                <p className="text-sm font-medium text-zinc-900">Google Drive</p>
-              </div>
-
-              {data.integrations.linear && (
-                <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-                  <div className={`h-5 w-5 rounded-full flex items-center justify-center ${
-                    integrationsCompleted.linear
-                      ? 'bg-green-100'
-                      : 'border-2 border-zinc-300'
-                  }`}>
-                    {integrationsCompleted.linear ? (
-                      <svg className="h-3 w-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <div className="h-2 w-2 rounded-full bg-zinc-300 animate-pulse" />
-                    )}
-                  </div>
-                  <p className="text-sm font-medium text-zinc-900">Linear</p>
-                </div>
+              {loading ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : (
+                'Complete Onboarding'
               )}
-            </div>
-
-            <p className="mt-6 text-xs text-zinc-500">
-              Check the browser windows that opened for each integration
-            </p>
+            </button>
           </div>
-        )}
+        </form>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ class ConversationItemBase(BaseModel):
 
     agent_session_id: UUID
     item: dict
+    parent_id: Optional[UUID] = None
 
 
 class ConversationItemCreate(ConversationItemBase):

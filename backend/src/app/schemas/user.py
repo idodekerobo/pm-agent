@@ -3,12 +3,14 @@
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
+from typing import Optional
 
 
 class UserBase(BaseModel):
     """Base user schema with essential fields."""
 
     email: str
+    organization_id: Optional[str] = None
 
 
 class UserCreate(UserBase):

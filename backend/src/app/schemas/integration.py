@@ -11,7 +11,7 @@ class IntegrationBase(BaseModel):
 
     provider: str
     account_label: Optional[str] = None
-    organization_id: Optional[UUID] = None
+    organization_id: Optional[str] = None
     scopes: list[str]
     access_token: str
     refresh_token: Optional[str] = None

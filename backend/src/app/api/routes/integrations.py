@@ -6,6 +6,8 @@ from app.api.deps import auth_protect_route
 from app.integrations.crypto import encrypt_token
 from app.db.supabase_client import get_supabase
 from app.config import settings
+from app.workers.queue import queue
+from app.workers.tasks import gather_google_drive_context
 
 router = APIRouter(prefix="/integrations")
 
@@ -118,6 +120,8 @@ async def google_callback(request: Request):
         "scopes": token.get("scope", "").split() if isinstance(token.get("scope"), str) else [],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
+
+    queue.enqueue(gather_google_drive_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/google-drive/success")
 

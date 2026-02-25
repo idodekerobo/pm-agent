@@ -5,10 +5,18 @@ def append_conversation_item(
     *,
     agent_session_id: str,
     item: dict,
-) -> None:
-    supabase.table("conversation_items").insert(
-        {"agent_session_id": agent_session_id, "item": item}
-    ).execute()
+    parent_id: str | None = None,
+) -> str:
+    """Insert a conversation item and return its generated id."""
+    payload: dict = {"agent_session_id": agent_session_id, "item": item}
+    if parent_id is not None:
+        payload["parent_id"] = parent_id
+    response = (
+        supabase.table("conversation_items")
+        .insert(payload)
+        .execute()
+    )
+    return response.data[0]["id"]
 
 def get_conversation_items(
     supabase: Client,
@@ -25,5 +33,23 @@ def get_conversation_items(
     if limit is not None:
         query = query.limit(limit)
     response = query.execute()
+    rows = response.data or []
+    return [row["item"] for row in rows]
+
+def get_conversation_chain(
+    supabase: Client,
+    *,
+    leaf_item_id: str,
+) -> list[dict]:
+    """
+    Walk the parent_id chain from leaf_item_id back to the root and return
+    the items in chronological order (root first).
+
+    Uses a Postgres recursive CTE via rpc so we can do this in a single query.
+    """
+    response = supabase.rpc(
+        "get_conversation_chain",
+        {"leaf_id": leaf_item_id},
+    ).execute()
     rows = response.data or []
     return [row["item"] for row in rows]

@@ -33,6 +33,7 @@ async def tool_fs_write(context: RunContextWrapper[AgentContext], path: str, con
         path,
         content,
         organization_id=context.context.organization_id,
+        user_id=context.context.user_id,
         sandbox_id=context.context.sandbox_id,
     )
     return f"Wrote '{path}'."
@@ -47,6 +48,7 @@ async def tool_fs_read(context: RunContextWrapper[AgentContext], path: str) -> s
         context.context.workspace_id,
         path,
         organization_id=context.context.organization_id,
+        user_id=context.context.user_id,
         sandbox_id=context.context.sandbox_id,
     )
 
@@ -60,6 +62,7 @@ async def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = "."
         context.context.workspace_id,
         path=path,
         organization_id=context.context.organization_id,
+        user_id=context.context.user_id,
         sandbox_id=context.context.sandbox_id,
     )
 
@@ -107,6 +110,7 @@ async def tool_bash(
         cwd=cwd,
         timeout_s=timeout_s,
         organization_id=context.context.organization_id, # TODO: do i need this?? 
+        user_id=context.context.user_id,
         sandbox_id=context.context.sandbox_id,
         env=env_vars
     )

@@ -50,6 +50,7 @@ async def bash(
     cwd: str = ".",
     timeout_s: int = 60,
     organization_id: str = "local",
+    user_id: str = None,
     sandbox_id: str | None = None,
     env: dict[str, str] | None = None,
 ) -> BashResult:
@@ -62,12 +63,13 @@ async def bash(
         cwd: Relative working directory inside the workspace (default: ".")
         timeout_s: Timeout in seconds (default: 60)
         organization_id: Organization identifier (default: "local")
+        user_id: User identifier (required for volume naming)
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
         
     Returns:
         BashResult with stdout, stderr, exit_code
     """
-    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
     
     # If running in a subdirectory, prepend cd
     if cwd and cwd != ".":
@@ -93,6 +95,7 @@ async def fs_write(
     path: str,
     content: str,
     organization_id: str = "local",
+    user_id: str = None,
     sandbox_id: str | None = None,
 ) -> None:
     """
@@ -103,9 +106,10 @@ async def fs_write(
         path: Relative path inside the workspace (no absolute paths)
         content: File contents to write
         organization_id: Organization identifier (default: "local")
+        user_id: User identifier (required for volume naming)
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
     """
-    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
     async with sb.open.aio(path, "w") as f:
         await f.write.aio(content)
 
@@ -114,6 +118,7 @@ async def fs_read(
     workspace_id: str,
     path: str,
     organization_id: str = "local",
+    user_id: str = None,
     sandbox_id: str | None = None,
 ) -> str:
     """
@@ -123,12 +128,13 @@ async def fs_read(
         workspace_id: Workspace identifier
         path: Relative path inside the workspace (no absolute paths)
         organization_id: Organization identifier (default: "local")
+        user_id: User identifier (required for volume naming)
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
         
     Returns:
         File contents as string
     """
-    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
     with sb.open(path, "r") as f:
         return f.read()
 
@@ -137,6 +143,7 @@ async def fs_list(
     workspace_id: str,
     path: str = ".",
     organization_id: str = "local",
+    user_id: str = None,
     sandbox_id: str | None = None,
 ) -> List[str]:
     """
@@ -146,10 +153,11 @@ async def fs_list(
         workspace_id: Workspace identifier
         path: Relative path inside the workspace (default: ".")
         organization_id: Organization identifier (default: "local")
+        user_id: User identifier (required for volume naming)
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
         
     Returns:
         List of file/directory names in the specified path
     """
-    sb = await get_or_create_sandbox(organization_id, workspace_id, sandbox_id)
+    sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
     return sb.ls(_abs(path))

@@ -40,18 +40,18 @@ def safe_path_join(workspace_root: Path, rel_path: str) -> Path:
 
     return normalized
 
-def fs_write(workspace_id: str, path: str, content: str, organization_id: str) -> None:
+def fs_write(workspace_id: str, path: str, content: str, organization_id: str, user_id: str = None) -> None:
     root = ensure_workspace(workspace_id, organization_id)
     target = safe_path_join(root, path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
 
-def fs_read(workspace_id: str, path: str, organization_id: str) -> str:
+def fs_read(workspace_id: str, path: str, organization_id: str, user_id: str = None) -> str:
     root = ensure_workspace(workspace_id, organization_id)
     target = safe_path_join(root, path)
     return target.read_text(encoding="utf-8")
 
-def fs_list(workspace_id: str, path: str = ".", organization_id: str = "local") -> List[str]:
+def fs_list(workspace_id: str, path: str = ".", organization_id: str = "local", user_id: str = None) -> List[str]:
     root = ensure_workspace(workspace_id, organization_id)
     target = safe_path_join(root, path)
 
@@ -88,6 +88,7 @@ def bash(
     cwd: str = ".",
     timeout_s: int = 60,
     organization_id: str = "local",
+    user_id: str = None,
     env: dict[str, str] | None = None,
 ) -> BashResult:
     root = ensure_workspace(workspace_id, organization_id)

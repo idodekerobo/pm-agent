@@ -6,14 +6,14 @@ from app.db.workspaces import get_workspace, update_workspace_sandbox_id
 WORKSPACE_MOUNT = "/workspace"
 
 
-def volume_name(organization_id: str, workspace_id: str) -> str:
-    """Generate a Modal Volume name from organization and workspace IDs."""
-    return f"pmagent-{organization_id}-{workspace_id}"
+def volume_name(user_id: str, organization_id: str = None, workspace_id: str = None) -> str:
+    """Generate a Modal Volume name from user ID."""
+    return f"pm-agent-{user_id}"
 
-def get_or_create_volume(organization_id: str, workspace_id: str) -> modal.Volume:
+def get_or_create_volume(user_id: str, organization_id: str = None, workspace_id: str = None) -> modal.Volume:
     """Get or create a Modal Volume for the workspace."""
     return modal.Volume.from_name(
-        volume_name(organization_id, workspace_id),
+        volume_name(user_id, organization_id, workspace_id),
         create_if_missing=True,
     )
 
@@ -40,6 +40,7 @@ def get_agent_image() -> modal.Image:
 async def get_or_create_sandbox(
     organization_id: str,
     workspace_id: str,
+    user_id: str,
     last_sandbox_id: str | None = None,
 ) -> modal.Sandbox:
     """
@@ -61,7 +62,7 @@ async def get_or_create_sandbox(
         if sb:
             return sb
 
-    vol = get_or_create_volume(organization_id, workspace_id)
+    vol = get_or_create_volume(user_id, organization_id, workspace_id)
     app = await get_modal_app()
 
     sb = await modal.Sandbox.create.aio(

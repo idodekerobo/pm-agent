@@ -9,7 +9,7 @@ _jwks_client = PyJWKClient(
     f"{settings.supabase_url}/auth/v1/.well-known/jwks.json",
     lifespan=1200,  # 20 min cache
 )
-
+# TODO: update this to work with supabase jwt and user_id being in the runrequest
 def auth_protect_route(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ) -> str:

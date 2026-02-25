@@ -112,7 +112,6 @@ export default function OnboardingPage() {
         }),
       });
 
-      // Save integrations state if needed by backend, though connections are already established
       sessionStorage.setItem('pending_integrations', JSON.stringify(integrationsCompleted));
       
       router.push('/chat');

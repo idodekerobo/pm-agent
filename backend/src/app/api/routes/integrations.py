@@ -24,7 +24,7 @@ oauth.register(
     access_token_url="https://api.linear.app/oauth/token",
     client_kwargs={"scope": "read,write"},
 )
-# add auth protection to this route
+# TODO: add auth protection to this route
 @router.get("/linear/connect")
 async def linear_connect(
     request: Request,

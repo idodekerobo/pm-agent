@@ -46,6 +46,7 @@ BASE_INSTRUCTIONS = [
     "Write your findings to the filesystem using tool_fs_write:",
     "- context/company.md: Document the company, its business, mission, structure",
     "- context/user.md: Document the user's role, responsibilities, focus areas",
+    "- context/product.md: Document the product that the user is focused on, its current state, future plans, etc.",
     "",
     "Include in each file:",
     "- What you discovered and how",

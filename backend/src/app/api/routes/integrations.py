@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 from app.api.deps import auth_protect_route
 from app.integrations.crypto import encrypt_token
 from app.db.supabase_client import get_supabase
@@ -10,6 +11,9 @@ from app.workers.queue import queue
 from app.workers.tasks import gather_google_drive_context, gather_linear_context
 
 router = APIRouter(prefix="/integrations")
+
+class SyncRequest(BaseModel):
+    user_id: str
 
 oauth = OAuth()
 oauth.register(
@@ -67,6 +71,12 @@ async def linear_callback(request: Request):
     queue.enqueue(gather_linear_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/linear/success")
+
+@router.post("/linear/sync-agent")
+async def sync_linear(request: SyncRequest):
+    """Queue up a task to gather context from Linear."""
+    queue.enqueue(gather_linear_context, request.user_id)
+    return {"status": "success", "message": "Linear context gathering queued"}
 
 @router.delete("/linear")
 async def linear_disconnect(user_id: str = Depends(auth_protect_route)):
@@ -126,6 +136,12 @@ async def google_callback(request: Request):
     queue.enqueue(gather_google_drive_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/google-drive/success")
+
+@router.post("/google/sync-agent")
+async def sync_google_drive(request: SyncRequest):
+    """Queue up a task to gather context from Google Drive."""
+    queue.enqueue(gather_google_drive_context, request.user_id)
+    return {"status": "success", "message": "Google Drive context gathering queued"}
 
 @router.delete("/google")
 async def google_disconnect(user_id: str = Depends(auth_protect_route)):

@@ -7,7 +7,7 @@ from app.integrations.crypto import encrypt_token
 from app.db.supabase_client import get_supabase
 from app.config import settings
 from app.workers.queue import queue
-from app.workers.tasks import gather_google_drive_context
+from app.workers.tasks import gather_google_drive_context, gather_linear_context
 
 router = APIRouter(prefix="/integrations")
 
@@ -63,6 +63,8 @@ async def linear_callback(request: Request):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     # }, on_conflict="user_id,provider").execute() # TODO: add the user_id, provider unique constriant
     }).execute()
+
+    queue.enqueue(gather_linear_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/linear/success")
 

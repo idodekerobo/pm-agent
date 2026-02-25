@@ -15,6 +15,7 @@ from app.db.projects import get_or_create_default_project
 from app.db.agent_sessions import get_or_create_agent_session
 from app.db.workspaces import get_workspace
 from app.agents.gdrive_agent import run_gdrive_context_agent
+from app.agents.linear_agent import run_linear_context_agent
 
 
 def gather_google_drive_context(user_id: str, provider: str = "google"):
@@ -121,7 +122,13 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
         workspace_row = get_workspace(supabase, workspace_id=workspace_id)
         sandbox_id = workspace_row.get("last_sandbox_id")
         
-        # TODO: create linear context agent
+        context_data = run_linear_context_agent(
+            user_id=user_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            sandbox_id=sandbox_id,
+        )
+
         # TODO: save session tool calls and result
         
         return {

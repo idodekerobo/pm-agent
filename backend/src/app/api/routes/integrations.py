@@ -75,8 +75,13 @@ async def linear_callback(request: Request):
 @router.post("/linear/sync-agent")
 async def sync_linear(request: SyncRequest):
     """Queue up a task to gather context from Linear."""
-    queue.enqueue(gather_linear_context, request.user_id)
-    return {"status": "success", "message": "Linear context gathering queued"}
+    try:
+        job = queue.enqueue(gather_linear_context, request.user_id)
+        print(f"Linear job enqueued successfully: {job.id if job else 'NO JOB RETURNED'}")
+        return {"status": "success", "message": "Linear context gathering queued", "job_id": job.id if job else None}
+    except Exception as e:
+        print(f"ERROR enqueueing Linear job: {e}")
+        raise HTTPException(status_code=503, detail=f"Failed to enqueue: {e}")
 
 @router.delete("/linear")
 async def linear_disconnect(user_id: str = Depends(auth_protect_route)):
@@ -145,8 +150,16 @@ async def google_callback(request: Request):
 @router.post("/google/sync-agent")
 async def sync_google_drive(request: SyncRequest):
     """Queue up a task to gather context from Google Drive."""
-    queue.enqueue(gather_google_drive_context, request.user_id)
-    return {"status": "success", "message": "Google Drive context gathering queued"}
+    try:
+        job = queue.enqueue(gather_google_drive_context, request.user_id)
+        print(f"Google Drive job enqueued successfully: {job.id if job else 'NO JOB RETURNED'}")
+        return {"status": "success", "message": "Google Drive context gathering queued", "job_id": job.id if job else None}
+    except Exception as e:
+        print(f"Error queueing Google Drive context gathering: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to queue Google Drive context gathering: {e}"
+        )
 
 @router.delete("/google")
 async def google_disconnect(user_id: str = Depends(auth_protect_route)):

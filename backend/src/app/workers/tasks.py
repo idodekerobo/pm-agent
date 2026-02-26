@@ -23,11 +23,22 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
     """
     Enqueued after Google Drive OAuth callback.
     Fetches user context, creates agent session, and runs context gathering agent.
-    
+
     Args:
         user_id: User who connected the integration
         provider: Integration provider name
     """
+    import sys
+    import urllib.request
+    from httpx._utils import get_environment_proxies
+    print("=" * 80, flush=True)
+    print("STARTING GOOGLE DRIVE CONTEXT GATHERING TASK", flush=True)
+    print(f"User ID: {user_id}", flush=True)
+    print("WORKER ENV - getproxies:", urllib.request.getproxies(), flush=True)
+    print("WORKER ENV - httpx proxies:", get_environment_proxies(), flush=True)
+    print("=" * 80, flush=True)
+    sys.stdout.flush()
+
     async def _run():
         supabase = get_supabase()
         
@@ -88,11 +99,22 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
     """
     Enqueued after Linear OAuth callback.
     Fetches user context, creates agent session, and runs context gathering agent.
-    
+
     Args:
         user_id: User who connected the integration
         provider: Integration provider name
     """
+    import sys
+    import urllib.request
+    from httpx._utils import get_environment_proxies
+    print("=" * 80, flush=True)
+    print("STARTING LINEAR CONTEXT GATHERING TASK", flush=True)
+    print(f"User ID: {user_id}", flush=True)
+    print("WORKER ENV - getproxies:", urllib.request.getproxies(), flush=True)
+    print("WORKER ENV - httpx proxies:", get_environment_proxies(), flush=True)
+    print("=" * 80, flush=True)
+    sys.stdout.flush()
+
     async def _run():
         supabase = get_supabase()
         

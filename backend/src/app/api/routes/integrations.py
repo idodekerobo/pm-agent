@@ -101,7 +101,12 @@ async def google_connect(
     print(f"request:\n{request}\n")
     request.session["connecting_user_id"] = user_id
     redirect_uri = request.url_for("google_callback")
-    return await oauth.google.authorize_redirect(request, str(redirect_uri))
+    return await oauth.google.authorize_redirect(
+        request,
+        str(redirect_uri),
+        access_type='offline',
+        prompt='consent',
+    )
 
 @router.get("/google/callback", name="google_callback")
 async def google_callback(request: Request):

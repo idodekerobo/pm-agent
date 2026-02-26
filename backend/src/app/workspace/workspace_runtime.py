@@ -110,7 +110,8 @@ async def fs_write(
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
     """
     sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
-    async with sb.open.aio(path, "w") as f:
+    f = await sb.open.aio(path, "w")
+    async with f:
         await f.write.aio(content)
 
 

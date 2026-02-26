@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import re
+from pathlib import PurePosixPath
 from typing import List
 
 from .modal_sandbox import get_or_create_sandbox, WORKSPACE_MOUNT
@@ -110,6 +111,9 @@ async def fs_write(
         sandbox_id: Optional sandbox ID to reconnect to (default: None, creates new)
     """
     sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
+    parent = PurePosixPath(path).parent
+    if parent != PurePosixPath("."):
+        await sb.mkdir.aio(_abs(str(parent)), parents=True)
     f = await sb.open.aio(path, "w")
     async with f:
         await f.write.aio(content)

@@ -161,4 +161,4 @@ async def fs_list(
         List of file/directory names in the specified path
     """
     sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
-    return sb.ls(_abs(path))
+    return await sb.ls.aio(_abs(path))

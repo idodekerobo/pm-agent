@@ -101,14 +101,14 @@ async def run_gdrive_context_agent(
         sandbox_id=sandbox_id,
     )
     
-    input_message = {
+    input_message = [{
         "type": "message",
         "role": "user",
         "content": [{
             "type": "input_text",
             "text": "Analyze the user's Google Drive to discover and document their company context and role. Write your findings to context/company.md and context/user.md.",
         }]
-    }
+    }]
     
     result = Runner.run_streamed(agent, input=input_message, context=context)
     

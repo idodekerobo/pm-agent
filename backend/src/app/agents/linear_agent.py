@@ -102,14 +102,14 @@ async def run_linear_context_agent(
         sandbox_id=sandbox_id,
     )
     
-    input_message = {
+    input_message = [{
         "type": "message",
         "role": "user",
         "content": [{
             "type": "input_text",
             "text": "Analyze the user's Linear workspace to discover and document their team, projects, and work context. Write your findings to context/linear_teams.md, context/linear_projects.md, and context/user_work.md.",
         }]
-    }
+    }]
     
     result = Runner.run_streamed(agent, input=input_message, context=context)
     

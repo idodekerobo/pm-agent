@@ -90,6 +90,7 @@ def bash(
     organization_id: str = "local",
     user_id: str = None,
     env: dict[str, str] | None = None,
+    header: str | None = None,
 ) -> BashResult:
     root = ensure_workspace(workspace_id, organization_id)
     cwd_path = safe_path_join(root, cwd)

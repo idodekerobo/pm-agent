@@ -54,6 +54,7 @@ async def bash(
     user_id: str = None,
     sandbox_id: str | None = None,
     env: dict[str, str] | None = None,
+    header: str | None = None,
 ) -> BashResult:
     """
     Run a bash command inside the agent workspace (Modal Sandbox).

@@ -83,6 +83,7 @@ async def tool_bash(
     """
 
     env_vars = {}
+    header_string: str | None = None
     if required_provider_auth:
         supabase = get_supabase()
         try:
@@ -112,6 +113,7 @@ async def tool_bash(
         organization_id=context.context.organization_id, # TODO: do i need this?? 
         user_id=context.context.user_id,
         sandbox_id=context.context.sandbox_id,
-        env=env_vars
+        env=env_vars,
+        header=header_string,
     )
     return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}

@@ -93,7 +93,7 @@ async def tool_bash(
                 provider=required_provider_auth,
             )
             if required_provider_auth == "linear":
-                # Prepend Bearer for OAuth tokens, not needed for API tokens
+                # Prepend Bearer for OAuth tokens, which is what we're using
                 env_vars["LINEAR_API_KEY"] = f"Bearer {token}"
             if required_provider_auth == "google":
                 env_vars["BEARER_TOKEN"] = token

@@ -8,7 +8,7 @@ from app.integrations.crypto import encrypt_token
 from app.db.supabase_client import get_supabase
 from app.config import settings
 from app.workers.queue import queue
-from app.workers.tasks import gather_google_drive_context, gather_linear_context
+from app.workers.tasks import gather_google_drive_context, gather_linear_context, gather_notion_context
 
 router = APIRouter(prefix="/integrations")
 

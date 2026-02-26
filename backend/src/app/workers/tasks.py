@@ -147,3 +147,28 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
     except Exception as e:
         print(f"Error gathering Linear context for user {user_id}: {str(e)}")
         raise
+
+def gather_notion_context(user_id: str, provider: str = "notion"):
+    """
+    Fetches user context, creates agent session, and runs context gathering agent.
+    
+    Args:
+        user_id: User who connected the integration
+        provider: Integration provider name
+    """
+    async def _run():
+        print("RUNNING NOTION CONTEXT AGENT")
+        # TODO: Implement Notion context gathering agent
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "provider": provider,
+            "context_gathered_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"Error gathering Notion context for user {user_id}: {str(e)}")
+        raise

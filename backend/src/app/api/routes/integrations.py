@@ -149,6 +149,71 @@ async def google_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "google").execute()
     return {"status": "disconnected"}
 
+oauth.register(
+    name="notion",
+    client_id=settings.notion_client_id,
+    client_secret=settings.notion_client_secret,
+    authorize_url="https://api.notion.com/v1/oauth/authorize",
+    access_token_url="https://api.notion.com/v1/oauth/token",
+    client_kwargs={},
+)
+
+@router.get("/notion/connect")
+async def notion_connect(
+    request: Request,
+    user_id: str,
+):
+    print(f"request:\n{request}\n")
+    request.session["connecting_user_id"] = user_id
+    redirect_uri = request.url_for("notion_callback")
+    return await oauth.notion.authorize_redirect(request, str(redirect_uri), owner="user", response_type="code")
+
+@router.get("/notion/callback", name="notion_callback")
+async def notion_callback(request: Request):
+    user_id = request.session.pop("connecting_user_id", None)
+    if not user_id:
+        raise HTTPException(
+            status_code=400, 
+            detail="Session expired or user not found. Please try connecting again."
+        )
+
+    token = await oauth.notion.authorize_access_token(request)
+    supabase = get_supabase()
+
+    account_label = token.get("workspace_name", "Notion Workspace")
+
+    expires_at = None
+    if "expires_in" in token:
+        expires_timestamp = datetime.now(timezone.utc).timestamp() + token["expires_in"]
+        expires_at = datetime.fromtimestamp(expires_timestamp, tz=timezone.utc).isoformat()
+
+    supabase.table("integrations").upsert({
+        "user_id": user_id,
+        "provider": "notion",
+        "account_label": account_label,
+        "access_token": encrypt_token(token["access_token"]),
+        "refresh_token": encrypt_token(token.get("refresh_token", "")),
+        "expires_at": expires_at,
+        "scopes": [],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+
+    queue.enqueue(gather_notion_context, user_id)
+
+    return RedirectResponse(f"{settings.client_app_base_url}/integrations/notion/success")
+
+@router.post("/notion/sync-agent")
+async def sync_notion(request: SyncRequest):
+    """Queue up a task to gather context from Notion."""
+    queue.enqueue(gather_notion_context, request.user_id)
+    return {"status": "success", "message": "Notion context gathering queued"}
+
+@router.delete("/notion")
+async def notion_disconnect(user_id: str = Depends(auth_protect_route)):
+    supabase = get_supabase()
+    supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "notion").execute()
+    return {"status": "disconnected"}
+
 @router.get("/")
 async def list_integrations(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()

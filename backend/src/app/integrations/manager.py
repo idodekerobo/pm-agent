@@ -47,6 +47,7 @@ async def _refresh_token(provider: str, refresh_token: str) -> dict:
     providers = {
         "linear": refresh_linear_token,
         "google": refresh_google_token,
+        "notion": refresh_notion_token,
     }
     
     refresh_func = providers.get(provider)
@@ -102,4 +103,33 @@ async def refresh_google_token(refresh_token: str) -> dict:
         if "expires_in" in data:
             expires_at = datetime.now(timezone.utc).timestamp() + data["expires_in"]
             result["expires_at"] = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
+        return result
+
+async def refresh_notion_token(refresh_token: str) -> dict:
+    """Helper to refresh Notion token."""
+    # Notion uses Basic Auth for token endpoint
+    auth = httpx.BasicAuth(settings.notion_client_id, settings.notion_client_secret)
+    
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.notion.com/v1/oauth/token",
+            json={
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token,
+            },
+            auth=auth,
+            headers={"Notion-Version": "2022-06-28"}
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        result = {"access_token": data["access_token"]}
+        
+        if "refresh_token" in data:
+            result["refresh_token"] = data["refresh_token"]
+            
+        if "expires_in" in data:
+             expires_at = datetime.now(timezone.utc).timestamp() + data["expires_in"]
+             result["expires_at"] = datetime.fromtimestamp(expires_at, tz=timezone.utc).isoformat()
+             
         return result

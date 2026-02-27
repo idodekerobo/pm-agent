@@ -108,6 +108,28 @@ async def send_dm(
     return response.data
 
 
+async def get_channel_history(
+    bot_token: str,
+    channel: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Fetch the most recent messages from a channel.
+
+    Args:
+        bot_token: Decrypted xoxb- bot token.
+        channel: Slack channel ID.
+        limit: Maximum number of messages to return (most recent).
+
+    Returns:
+        List of Slack message dicts in chronological order (oldest first).
+    """
+    client = AsyncWebClient(token=bot_token)
+    response = await client.conversations_history(channel=channel, limit=limit)
+    messages = response.data.get("messages", [])
+    # conversations.history returns newest-first; reverse to get chronological order
+    return list(reversed(messages))
+
+
 async def get_thread_history(
     bot_token: str,
     channel: str,

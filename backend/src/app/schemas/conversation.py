@@ -3,6 +3,7 @@
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
+from typing import Optional
 
 
 class ConversationItemBase(BaseModel):
@@ -11,6 +12,8 @@ class ConversationItemBase(BaseModel):
     agent_session_id: UUID
     item: dict
     parent_id: Optional[UUID] = None
+    source_platform: str = "web"
+    source_channel_id: Optional[str] = None
 
 
 class ConversationItemCreate(ConversationItemBase):

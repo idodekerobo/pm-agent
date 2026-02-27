@@ -4,7 +4,7 @@ def append_conversation_item(
     supabase: Client,
     *,
     agent_session_id: str,
-    item: dict,
+    item: dict | list,
     parent_id: str | None = None,
     source_platform: str = "web",
     source_channel_id: str | None = None,

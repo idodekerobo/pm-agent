@@ -8,15 +8,17 @@ import re
 
 from app.messaging.slack.client import (
     add_reaction,
+    get_channel_history,
     get_thread_history,
     post_message,
     remove_reaction,
 )
 from app.messaging.slack.installation_store import remove_channel, upsert_channel
 
-# Thread compaction thresholds (per plan)
+# Compaction thresholds
 _MAX_THREAD_MESSAGES = 30
 _VERBATIM_THREAD_TAIL = 20
+_CHANNEL_HISTORY_LIMIT = 30
 
 
 # ---------------------------------------------------------------------------
@@ -33,9 +35,11 @@ async def dispatch_event(event_payload: dict, installation: dict) -> None:
     event_type = event.get("type")
 
     if event_type == "app_mention":
+        print("calling handle_app_mention")
         await handle_app_mention(event, installation)
 
     elif event_type == "message" and event.get("channel_type") == "im":
+        print("calling handle_im_message")
         await handle_im_message(event, installation)
 
     elif event_type == "member_joined_channel":
@@ -58,33 +62,42 @@ async def dispatch_event(event_payload: dict, installation: dict) -> None:
 async def handle_app_mention(event: dict, installation: dict) -> None:
     """Handle an app_mention event (someone @-mentioned the bot in a channel).
 
-    If the mention is inside an existing thread, the full thread history is
-    fetched and passed to the orchestrator as conversation context. Top-level
-    mentions start a new thread rooted at the triggering message.
+    Always fetches the last _CHANNEL_HISTORY_LIMIT channel messages for broad
+    context. When the mention is inside an existing thread, also fetches the
+    full thread history and merges it (deduplicating by ts so the thread parent
+    doesn't appear twice). Both are passed to the orchestrator as input_items.
     """
     bot_token = installation["bot_token"]
     bot_user_id = installation["slack_bot_user_id"]
     channel = event["channel"]
     ts = event["ts"]
-    thread_ts = event.get("thread_ts", ts)
+    is_in_thread = bool(event.get("thread_ts"))
+    thread_ts = event.get("thread_ts")  # None for top-level mentions
 
     prompt_text = _strip_bot_mention(event.get("text", ""), bot_user_id)
 
-    # Load thread history when this mention is a reply inside an existing thread
-    thread_history: list[dict] | None = None
-    if event.get("thread_ts"):
+    # Always fetch recent channel history for broad context
+    raw_channel = await get_channel_history(bot_token, channel, limit=_CHANNEL_HISTORY_LIMIT)
+
+    # Fetch thread history if this mention is inside an existing thread
+    raw_thread: list[dict] = []
+    if is_in_thread:
         raw_thread = await get_thread_history(bot_token, channel, thread_ts)
-        all_items = _build_conversation_history(raw_thread, bot_user_id)
-        # The triggering message is already captured as prompt_text — exclude
-        # it from history to avoid duplication.
-        thread_history = all_items[:-1] if all_items else None
+
+    # Build the combined context history, excluding the triggering message (ts)
+    # since it is captured separately as prompt_text / user_item below.
+    context_history = _build_combined_history(
+        raw_channel, raw_thread, bot_user_id, exclude_ts=ts
+    )
 
     await _run_agent_for_message(
         channel=channel,
         ts=ts,
         thread_ts=thread_ts,
+        is_in_thread=is_in_thread,
+        is_mention=True,
         prompt_text=prompt_text,
-        thread_history=thread_history,
+        context_history=context_history,
         installation=installation,
     )
 
@@ -111,8 +124,10 @@ async def handle_im_message(event: dict, installation: dict) -> None:
         channel=channel,
         ts=ts,
         thread_ts=ts,  # DMs: thread reply on the original message
+        is_in_thread=False,
+        is_mention=False,
         prompt_text=prompt_text,
-        thread_history=None,
+        context_history=None,
         installation=installation,
     )
 
@@ -173,21 +188,28 @@ async def _run_agent_for_message(
     *,
     channel: str,
     ts: str,
-    thread_ts: str,
+    thread_ts: str | None,
+    is_in_thread: bool,
+    is_mention: bool,
     prompt_text: str,
-    thread_history: list[dict] | None,
+    context_history: list[dict] | None,
     installation: dict,
 ) -> None:
     """Core orchestrator flow shared by handle_app_mention and handle_im_message.
 
-    1. Add :hourglass_flowing_sand: reaction to the triggering message
-    2. Set up agent session context
-    3. Run the orchestrator with thread history + current prompt
-    4. Post the reply in the same Slack thread
-    5. Save user + assistant conversation items (source_platform='slack')
-    6. Remove :hourglass_flowing_sand: reaction (always, even on error)
+    For @-mentions (is_mention=True):
+    1. Add :hourglass_flowing_sand: reaction
+    2. Inject Slack context as the first input_item so the agent knows where it was mentioned
+    3. Run the orchestrator — the agent decides to call tool_slack(action_type="reply")
+       with reply_in_thread=True/False to control placement
+    4. Fallback: if the agent didn't call tool_slack, post final_output in the channel
+    5. Save conversation items + remove reaction
+
+    For DMs (is_mention=False): runs the old auto-post flow — no context injection,
+    final_output is posted directly as a thread reply.
     """
     # Defer heavy imports — these won't be needed for channel management events
+    from app.agents.context import AgentContext
     from app.agents.orchestrator import run_orchestrator
     from app.db.agent_sessions import get_or_create_agent_session
     from app.db.conversations import append_conversation_item
@@ -234,14 +256,53 @@ async def _run_agent_for_message(
             "role": "user",
             "content": [{"type": "input_text", "text": prompt_text}],
         }
-        input_items = (thread_history or []) + [user_item]
+
+        if is_mention:
+            # Inject Slack context as first input_item so the agent knows where it was
+            # mentioned and how to use tool_slack to post its reply.
+            thread_info = (
+                f"This mention is inside an existing thread (thread_ts: {thread_ts})."
+                if is_in_thread
+                else "This is a top-level channel message (not inside a thread)."
+            )
+            slack_context_item: dict = {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": (
+                    f"[Slack Context]\n"
+                    f"You were @-mentioned in Slack channel {channel}.\n"
+                    f"{thread_info}\n"
+                    f"Use tool_slack with action_type=\"reply\" to post your response.\n"
+                    f"Set reply_in_thread=True to reply inside the thread, or "
+                    f"reply_in_thread=False to post directly in the channel.\n"
+                    f"Only omit calling tool_slack if no reply is needed."
+                )}],
+            }
+            input_items = [slack_context_item] + (context_history or []) + [user_item]
+        else:
+            input_items = (context_history or []) + [user_item]
 
         user_item_id = append_conversation_item(
             supabase,
             agent_session_id=agent_session_id,
-            item=user_item,
+            item=input_items,
             source_platform="slack",
             source_channel_id=channel,
+        )
+
+        # Build AgentContext — for mentions, populate slack_mention_context so
+        # dispatcher.py can resolve the channel/thread when the agent calls tool_slack.
+        agent_ctx = AgentContext(
+            organization_id=organization_id,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            sandbox_id=sandbox_id,
+            slack_mention_context={
+                "channel_id": channel,
+                "ts": ts,
+                "thread_ts": thread_ts,
+                "is_in_thread": is_in_thread,
+            } if is_mention else None,
         )
 
         final_output = ""
@@ -252,12 +313,26 @@ async def _run_agent_for_message(
             agent_session_id=agent_session_id,
             workspace_id=workspace_id,
             sandbox_id=sandbox_id,
+            agent_context=agent_ctx,
         ):
             if chunk["type"] == "final_output":
                 final_output = chunk["content"]
 
+        if is_mention:
+            # Fallback: if the agent produced output but didn't call tool_slack,
+            # post final_output directly in the channel.
+            if not agent_ctx.slack_mention_replied and final_output:
+                print(
+                    "[slack] agent did not call tool_slack reply — falling back to channel post",
+                    flush=True,
+                )
+                await post_message(bot_token, channel, final_output)
+        else:
+            # DMs: always auto-post the final_output as a thread reply
+            if final_output:
+                await post_message(bot_token, channel, final_output, thread_ts=thread_ts)
+
         if final_output:
-            await post_message(bot_token, channel, final_output, thread_ts=thread_ts)
             assistant_item: dict = {
                 "type": "message",
                 "role": "assistant",
@@ -282,13 +357,12 @@ def _strip_bot_mention(text: str, bot_user_id: str) -> str:
 
 
 def _build_conversation_history(messages: list[dict], bot_user_id: str) -> list[dict]:
-    """Map Slack thread messages to orchestrator conversation items.
+    """Map a flat list of Slack messages to orchestrator conversation items.
 
     - Messages from the bot → role "assistant"
     - Messages from humans → role "user"
     - Strips @BOT_USER_ID mentions from all text
-    - Compacts threads longer than _MAX_THREAD_MESSAGES by keeping only
-      the most recent _VERBATIM_THREAD_TAIL messages
+    - Compacts lists longer than _MAX_THREAD_MESSAGES to the most recent tail
     """
     if len(messages) > _MAX_THREAD_MESSAGES:
         messages = messages[-_VERBATIM_THREAD_TAIL:]
@@ -297,9 +371,52 @@ def _build_conversation_history(messages: list[dict], bot_user_id: str) -> list[
     for msg in messages:
         text = _strip_bot_mention(msg.get("text", ""), bot_user_id)
         role = "assistant" if msg.get("user") == bot_user_id else "user"
+        # OpenAI Responses API requires "output_text" for assistant messages
+        # and "input_text" for user messages.
+        content_type = "output_text" if role == "assistant" else "input_text"
         items.append({
             "type": "message",
             "role": role,
-            "content": [{"type": "input_text", "text": text}],
+            "content": [{"type": content_type, "text": text}],
         })
     return items
+
+
+def _build_combined_history(
+    channel_msgs: list[dict],
+    thread_msgs: list[dict],
+    bot_user_id: str,
+    exclude_ts: str,
+) -> list[dict]:
+    """Merge channel history and thread history into a single ordered context list.
+
+    Strategy:
+    - Channel messages provide broad conversational context (oldest first).
+    - Thread messages provide the specific thread context (oldest first).
+    - The thread parent message appears in both lists — deduplicate by ts.
+    - The triggering mention (exclude_ts) is excluded from both since it is
+      passed separately as the user_item in input_items.
+
+    Returns a chronologically ordered list of orchestrator conversation items.
+    """
+    seen_ts: set[str] = {exclude_ts}
+    merged: list[dict] = []
+
+    # Channel messages first (broad context)
+    for msg in channel_msgs:
+        msg_ts = msg.get("ts", "")
+        if msg_ts in seen_ts:
+            continue
+        seen_ts.add(msg_ts)
+        merged.append(msg)
+
+    # Thread messages next — the parent ts may already be in seen_ts from
+    # channel history, so it won't be added again.
+    for msg in thread_msgs:
+        msg_ts = msg.get("ts", "")
+        if msg_ts in seen_ts:
+            continue
+        seen_ts.add(msg_ts)
+        merged.append(msg)
+
+    return _build_conversation_history(merged, bot_user_id)

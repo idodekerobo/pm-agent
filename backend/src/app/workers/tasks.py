@@ -184,9 +184,13 @@ def handle_slack_message(event_payload: dict, installation_id: str):
     import sys
     event_type = event_payload.get("event", {}).get("type")
     print("=" * 80, flush=True)
+    print("\n")
     print("SLACK EVENT — handle_slack_message", flush=True)
     print(f"installation_id: {installation_id}", flush=True)
     print(f"event type: {event_type}", flush=True)
+    print("event payload:")
+    print(event_payload)
+    print("\n")
     print("=" * 80, flush=True)
     sys.stdout.flush()
 

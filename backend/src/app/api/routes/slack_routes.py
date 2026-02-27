@@ -157,6 +157,7 @@ async def slack_events(request: Request):
     The endpoint returns HTTP 200 immediately and offloads the actual work to an
     RQ background task — Slack requires a response within 3 seconds.
     """
+    print("Hitting /slack/events endpoint to process messages")
     body = await request.body()
     timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
     signature = request.headers.get("X-Slack-Signature", "")

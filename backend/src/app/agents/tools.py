@@ -117,29 +117,40 @@ async def tool_bash(
 async def tool_slack(
     context: RunContextWrapper[AgentContext],
     action_type: str,
-    channel: Optional[str] = None,
     message: Optional[str] = None,
+    reply_in_thread: Optional[bool] = None,
+    channel: Optional[str] = None,
     thread_ts: Optional[str] = None,
     slack_user_id: Optional[str] = None,
 ) -> str:
     """Execute a Slack action on behalf of the user.
     Args:
-      action_type: The action to perform. One of "post_message", "post_reply", or "send_dm".
-      channel: Channel name to post to (e.g. "general"). Required for post_message and post_reply.
+      action_type: The action to perform. One of "reply", "post_message", "post_reply", or "send_dm".
       message: Text content to send. Required for all action types.
-      thread_ts: Timestamp of the parent message to reply to. Required for post_reply.
-      slack_user_id: Slack user ID to send a DM to (e.g. "U0123ABCD"). Required for send_dm.
+      reply_in_thread: Only used with action_type="reply". Set True to reply inside the existing
+        thread, False to post directly in the channel. Use True for in-depth or technical responses
+        that benefit from threading; use False for brief or conversational replies.
+      channel: Channel name (e.g. "general"). Required for post_message and post_reply.
+      thread_ts: Timestamp of the parent message. Required for post_reply.
+      slack_user_id: Slack user ID (e.g. "U0123ABCD"). Required for send_dm.
+    Action types:
+    - "reply": Respond to the current @-mention. Use reply_in_thread to control placement.
+        Only omit this call entirely if no reply is needed (e.g. you silently completed an action).
+    - "post_message": Proactively post a new message in a channel. Requires channel.
+    - "post_reply": Proactively reply inside an existing thread. Requires channel and thread_ts.
+    - "send_dm": Send a direct message to a user. Requires slack_user_id.
     Rules:
-    - Use channel names (e.g. "general"), not raw Slack channel IDs.
+    - Use channel names (e.g. "general"), not raw Slack channel IDs, for post_message/post_reply.
     - Only post to channels the user has explicitly enabled in their settings.
     - If Slack is not connected or the channel is inaccessible, explain this to the user and stop.
-    - Do not post to Slack unless the user has explicitly asked you to.
+    - Do not post to Slack proactively unless the user has explicitly asked you to.
     """
     return await dispatch_slack_action(
         ctx=context.context,
         action_type=action_type,
-        channel=channel,
         message=message,
+        reply_in_thread=reply_in_thread,
+        channel=channel,
         thread_ts=thread_ts,
         slack_user_id=slack_user_id,
     )

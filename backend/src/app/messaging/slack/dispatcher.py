@@ -21,8 +21,9 @@ from app.messaging.slack.installation_store import get_installation_by_user_id
 async def dispatch_slack_action(
     ctx: AgentContext,
     action_type: str,
-    channel: Optional[str] = None,
     message: Optional[str] = None,
+    reply_in_thread: Optional[bool] = None,
+    channel: Optional[str] = None,
     thread_ts: Optional[str] = None,
     slack_user_id: Optional[str] = None,
 ) -> str:
@@ -30,9 +31,10 @@ async def dispatch_slack_action(
 
     Args:
         ctx: The agent's run context (provides user_id for installation lookup).
-        action_type: One of "post_message", "post_reply", or "send_dm".
-        channel: Channel name (e.g. "general") for post_message / post_reply.
+        action_type: One of "reply", "post_message", "post_reply", or "send_dm".
         message: Text body to send.
+        reply_in_thread: For action_type="reply" — True posts in thread, False posts in channel.
+        channel: Channel name (e.g. "general") for post_message / post_reply.
         thread_ts: Parent message timestamp — required for post_reply.
         slack_user_id: Slack user ID — required for send_dm.
 
@@ -48,7 +50,21 @@ async def dispatch_slack_action(
 
     bot_token = installation["bot_token"]  # already decrypted by installation_store
 
-    if action_type == "post_message":
+    if action_type == "reply":
+        if not message:
+            return "reply requires 'message'."
+        if reply_in_thread is None:
+            return "reply requires 'reply_in_thread' (True or False)."
+        mention_ctx = ctx.slack_mention_context
+        if not mention_ctx:
+            return "reply can only be used when responding to a Slack @-mention."
+        post_thread_ts = mention_ctx["thread_ts"] if reply_in_thread else None
+        await post_message(bot_token, mention_ctx["channel_id"], message, thread_ts=post_thread_ts)
+        ctx.slack_mention_replied = True
+        placement = "in thread" if reply_in_thread else "in channel"
+        return f"Replied {placement} successfully."
+
+    elif action_type == "post_message":
         if not channel or not message:
             return "post_message requires both 'channel' and 'message'."
         channel_id = _resolve_channel(installation["id"], channel)
@@ -81,7 +97,7 @@ async def dispatch_slack_action(
     else:
         return (
             f"Unknown action_type '{action_type}'. "
-            f"Valid options: post_message, post_reply, send_dm."
+            f"Valid options: reply, post_message, post_reply, send_dm."
         )
 
 

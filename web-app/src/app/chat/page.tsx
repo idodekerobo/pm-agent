@@ -13,7 +13,7 @@ interface Message {
 
 export default function ChatPage() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -53,7 +53,7 @@ export default function ChatPage() {
 
     try {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-      const token = (await user?.getIdToken?.()) || '';
+      const token = session?.access_token ?? "";
       const response = await fetch(`${apiBaseUrl}/run`, {
         method: "POST",
         headers: {

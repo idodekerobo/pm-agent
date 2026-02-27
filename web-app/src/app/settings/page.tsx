@@ -42,7 +42,7 @@ function ProviderIcon({ provider }: { provider: string }) {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +53,7 @@ export default function SettingsPage() {
 
   const fetchIntegrations = useCallback(async () => {
     try {
-      const token = (await user?.getIdToken?.()) || "";
+      const token = session?.access_token ?? "";
       const res = await fetch(`${apiBase}/integrations/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -73,7 +73,7 @@ export default function SettingsPage() {
   const handleDisconnect = async (provider: string) => {
     setDisconnecting((p) => ({ ...p, [provider]: true }));
     try {
-      const token = (await user?.getIdToken?.()) || "";
+      const token = session?.access_token ?? "";
       const res = await fetch(`${apiBase}/integrations/${provider}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },

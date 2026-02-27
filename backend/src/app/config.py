@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     notion_client_id: str = ""
     notion_client_secret: str = ""
 
+    slack_client_id: str = ""
+    slack_client_secret: str = ""
+    slack_signing_secret: str = ""
+
     redis_url: str = ""
 
     model_config = SettingsConfigDict(

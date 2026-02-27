@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 
 interface Message {
@@ -148,26 +149,6 @@ export default function ChatPage() {
     }
   };
 
-  const handleConnectLinear = async () => {
-    try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-      sessionStorage.setItem("connecting_user_id", user?.id || "");
-      window.open(`${apiBaseUrl}/integrations/linear/connect?user_id=${user?.id}`, "_blank");
-    } catch (error) {
-      console.error("Error connecting to Linear:", error);
-    }
-  };
-
-  const handleConnectGoogle = async () => {
-    try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-      sessionStorage.setItem("connecting_user_id", user?.id || "");
-      window.open(`${apiBaseUrl}/integrations/google/connect?user_id=${user?.id}`, "_blank");
-    } catch (error) {
-      console.error("Error connecting to Google Drive:", error);
-    }
-  };
-
   return (
     <div className="flex h-screen flex-col bg-white">
       {/* Header */}
@@ -179,18 +160,12 @@ export default function ChatPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleConnectLinear}
+          <Link
+            href="/settings"
             className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
           >
-            Connect Linear
-          </button>
-          <button
-            onClick={handleConnectGoogle}
-            className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
-          >
-            Connect Google Drive
-          </button>
+            Settings
+          </Link>
           <div className="border-l border-zinc-200 pl-3">
             <button
               onClick={handleSignOut}

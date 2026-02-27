@@ -45,6 +45,7 @@ async def run_orchestrator(
     agent_session_id: str,
     workspace_id: str,
     sandbox_id: str | None = None,
+    agent_context: AgentContext | None = None,
 ) -> AsyncGenerator[dict, None]:
     supabase = get_supabase()
     integrations_response = (
@@ -86,7 +87,7 @@ async def run_orchestrator(
         model="gpt-5.2",
         tools=tools,
     )
-    context = AgentContext(
+    context = agent_context or AgentContext(
         organization_id=organization_id,
         user_id=user_id,
         workspace_id=workspace_id,

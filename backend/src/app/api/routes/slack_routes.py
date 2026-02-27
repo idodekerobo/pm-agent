@@ -57,15 +57,15 @@ def _get_verifier() -> SignatureVerifier:
 async def slack_connect(request: Request, user_id: str):
     """Redirect the user to Slack's OAuth v2 consent page.
 
-    Stores user_id in the session so the callback knows which PM Agent user
-    is completing the install.
+    Passes user_id as the OAuth state parameter so the callback can identify
+    the PM Agent user without relying on a session cookie. This is required
+    when connect and callback land on different domains (e.g. localhost vs ngrok).
     """
-    request.session["connecting_user_id"] = user_id
-    redirect_uri = str(request.url_for("slack_callback"))
     params = urlencode({
         "client_id": settings.slack_client_id,
         "scope": " ".join(_SLACK_BOT_SCOPES),
-        "redirect_uri": redirect_uri,
+        "redirect_uri": _get_redirect_uri(request),
+        "state": user_id,
     })
     return RedirectResponse(f"https://slack.com/oauth/v2/authorize?{params}")
 
@@ -75,18 +75,20 @@ async def slack_callback(
     request: Request,
     code: str | None = None,
     error: str | None = None,
+    state: str | None = None,
 ):
     """Receive the OAuth code from Slack, exchange it for a bot token, and save the installation.
 
     Slack sends either `code` (success) or `error` (user denied / misconfigured scopes).
+    user_id is recovered from the `state` parameter set during /connect.
     On success the installation is upserted in `slack_installations` and the user is
     redirected to the frontend success page.
     """
-    user_id = request.session.pop("connecting_user_id", None)
+    user_id = state
     if not user_id:
         raise HTTPException(
             status_code=400,
-            detail="Session expired. Please try connecting again.",
+            detail="Missing state parameter. Please try connecting again.",
         )
 
     if error:

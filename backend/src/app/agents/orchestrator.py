@@ -2,7 +2,8 @@ from typing import AsyncGenerator
 import os
 from agents import Agent, Runner, ItemHelpers
 
-from app.agents.tools import AgentContext, tool_bash, tool_fs_list, tool_fs_read, tool_fs_write
+from app.agents.context import AgentContext
+from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write
 from app.db.supabase_client import get_supabase
 
 BASE_INSTRUCTIONS = [

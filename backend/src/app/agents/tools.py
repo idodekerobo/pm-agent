@@ -5,6 +5,7 @@ from app.agents.context import AgentContext
 from app.config import settings
 from app.db.supabase_client import get_supabase
 from app.integrations.manager import get_valid_token
+from app.messaging.slack.dispatcher import dispatch_slack_action
 
 if settings.workspace_backend == "production":
     from app.workspace.workspace_runtime import bash as ws_bash
@@ -110,3 +111,35 @@ async def tool_bash(
         header=header_string,
     )
     return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}
+
+
+@function_tool
+async def tool_slack(
+    context: RunContextWrapper[AgentContext],
+    action_type: str,
+    channel: Optional[str] = None,
+    message: Optional[str] = None,
+    thread_ts: Optional[str] = None,
+    slack_user_id: Optional[str] = None,
+) -> str:
+    """Execute a Slack action on behalf of the user.
+    Args:
+      action_type: The action to perform. One of "post_message", "post_reply", or "send_dm".
+      channel: Channel name to post to (e.g. "general"). Required for post_message and post_reply.
+      message: Text content to send. Required for all action types.
+      thread_ts: Timestamp of the parent message to reply to. Required for post_reply.
+      slack_user_id: Slack user ID to send a DM to (e.g. "U0123ABCD"). Required for send_dm.
+    Rules:
+    - Use channel names (e.g. "general"), not raw Slack channel IDs.
+    - Only post to channels the user has explicitly enabled in their settings.
+    - If Slack is not connected or the channel is inaccessible, explain this to the user and stop.
+    - Do not post to Slack unless the user has explicitly asked you to.
+    """
+    return await dispatch_slack_action(
+        ctx=context.context,
+        action_type=action_type,
+        channel=channel,
+        message=message,
+        thread_ts=thread_ts,
+        slack_user_id=slack_user_id,
+    )

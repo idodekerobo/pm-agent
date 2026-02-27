@@ -1,6 +1,7 @@
 """Slack OAuth install flow, event webhook, and web settings routes."""
 
 import json
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 import httpx
@@ -12,6 +13,7 @@ from slack_sdk.signature import SignatureVerifier
 from app.api.deps import auth_protect_route
 from app.config import settings
 from app.db.supabase_client import get_supabase
+from app.integrations.crypto import encrypt_token
 from app.messaging.slack.installation_store import (
     get_channels,
     get_installation_by_team_id,
@@ -114,6 +116,17 @@ async def slack_callback(
         )
 
     save_installation(user_id, token_data)
+
+    supabase = get_supabase()
+    supabase.table("integrations").upsert({
+        "user_id": user_id,
+        "provider": "slack",
+        "account_label": token_data.get("team", {}).get("name", "Slack Workspace"),
+        "access_token": encrypt_token(token_data["access_token"]),
+        "scopes": token_data.get("scope", "").split(","),
+        "expires_at": datetime(2099, 12, 31, tzinfo=timezone.utc).isoformat(), # slack tokens don't expire and have no refresh token
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/slack/success")
 

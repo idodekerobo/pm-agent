@@ -83,6 +83,31 @@ async def remove_reaction(
             raise
 
 
+async def send_dm(
+    bot_token: str,
+    slack_user_id: str,
+    text: str,
+) -> dict:
+    """Send a direct message to a Slack user.
+
+    Opens a DM channel with the user (idempotent — Slack returns the same
+    channel ID on repeated calls) then posts the message to it.
+
+    Args:
+        bot_token: Decrypted xoxb- bot token.
+        slack_user_id: The Slack user ID to DM (e.g. 'U0123ABCD').
+        text: Message body.
+
+    Returns:
+        The Slack API response data dict from chat.postMessage.
+    """
+    client = AsyncWebClient(token=bot_token)
+    open_response = await client.conversations_open(users=[slack_user_id])
+    dm_channel_id = open_response.data["channel"]["id"]
+    response = await client.chat_postMessage(channel=dm_channel_id, text=text)
+    return response.data
+
+
 async def get_thread_history(
     bot_token: str,
     channel: str,

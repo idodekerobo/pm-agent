@@ -3,7 +3,7 @@ import os
 from agents import Agent, Runner, ItemHelpers
 
 from app.agents.context import AgentContext
-from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write
+from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
 from app.db.supabase_client import get_supabase
 
 BASE_INSTRUCTIONS = [
@@ -17,6 +17,7 @@ BASE_INSTRUCTIONS = [
     "- fs_read: Read files from the workspace. Provide a relative path and you'll get the file contents.",
     "- fs_list: List files and directories in the workspace. Provide a path (defaults to current directory).",
     "- bash: Execute bash commands in the workspace. You can run CLI tools, scripts, and interact with integrated services. The bash tool supports authentication for external providers like Linear and Google - use the required_provider_auth parameter to automatically inject credentials for CLI tools.",
+    "- slack: If the user has added Slack, you can send read, send, and react to slack messages. The slack tool supports multiple actions detailed in teh tool definition.",
     "",
     "The workspace has integrations with platforms like Linear (for issue tracking) and Google (for documents). You can access these services via the bash tool by providing the appropriate provider name for authentication and following instructions via the appropriate SKILL.",
     "When accessing Google Suite, use the Google Drive skill.",
@@ -67,11 +68,23 @@ async def run_orchestrator(
     # TODO: dynamically load skills based on whats needed
     dynamic_instructions.append("\n## Available Skills:\n" + load_skills())
 
+    tools = [tool_fs_list, tool_fs_write, tool_fs_read, tool_bash]
+
+    slack_result = (
+        supabase.table("slack_installations")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if slack_result.data:
+        tools.append(tool_slack)
+
     pm_agent = Agent(
         name="Product Manager Agent",
         instructions="\n".join(dynamic_instructions),
         model="gpt-5.2",
-        tools=[tool_fs_list, tool_fs_write, tool_fs_read, tool_bash]
+        tools=tools,
     )
     context = AgentContext(
         organization_id=organization_id,

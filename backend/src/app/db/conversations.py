@@ -4,13 +4,21 @@ def append_conversation_item(
     supabase: Client,
     *,
     agent_session_id: str,
-    item: dict,
+    item: dict | list,
     parent_id: str | None = None,
+    source_platform: str = "web",
+    source_channel_id: str | None = None,
 ) -> str:
     """Insert a conversation item and return its generated id."""
-    payload: dict = {"agent_session_id": agent_session_id, "item": item}
+    payload: dict = {
+        "agent_session_id": agent_session_id,
+        "item": item,
+        "source_platform": source_platform,
+    }
     if parent_id is not None:
         payload["parent_id"] = parent_id
+    if source_channel_id is not None:
+        payload["source_channel_id"] = source_channel_id
     response = (
         supabase.table("conversation_items")
         .insert(payload)

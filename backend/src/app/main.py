@@ -6,6 +6,7 @@ from app.config import settings
 from app.api.routes.health import router as health_router
 from app.api.routes.run import router as run_router
 from app.api.routes.integrations import router as integrations_router
+from app.api.routes.slack_routes import router as slack_router
 
 os.environ["OPENAI_API_KEY"] = settings.openai_api_key
 
@@ -29,3 +30,4 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(run_router)
 app.include_router(integrations_router)
+app.include_router(slack_router)

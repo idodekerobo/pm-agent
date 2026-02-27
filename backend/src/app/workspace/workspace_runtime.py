@@ -141,8 +141,9 @@ async def fs_read(
         File contents as string
     """
     sb = await get_or_create_sandbox(organization_id, workspace_id, user_id, sandbox_id)
-    with sb.open(path, "r") as f:
-        return f.read()
+    f = await sb.open.aio(path, "r")
+    async with f:
+        return await f.read.aio()
 
 
 async def fs_list(

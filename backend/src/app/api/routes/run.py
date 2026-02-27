@@ -17,14 +17,12 @@ from app.api.deps import auth_protect_route
 
 router = APIRouter()
 ORGANIZATION_ID = "local"
-DEFAULT_USER_ID = "5bb70a4e-b13d-4b76-b243-f3965779140c"
 
 MAX_HISTORY_ITEMS = 50
 
 class RunRequest(BaseModel):
     prompt: str
     agent_session_id: Optional[str] = None
-    user_id: str
     parent_item_id: Optional[str] = None
 
 class RunResponse(BaseModel):
@@ -34,22 +32,20 @@ class RunResponse(BaseModel):
     output: str
 
 @router.post("/run")
-# TODO: build auth protection
-# async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)) -> RunResponse:
-async def run(req: RunRequest):
+async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     run_id = str(uuid4())
     supabase = get_supabase()
 
     project_id, _ = get_or_create_default_project(
         supabase,
         organization_id=ORGANIZATION_ID,
-        user_id=req.user_id,
+        user_id=user_id,
     )
 
     agent_session_id, workspace_id = get_or_create_agent_session(
         supabase,
         organization_id=ORGANIZATION_ID,
-        user_id=req.user_id,
+        user_id=user_id,
         project_id=project_id,
         agent_session_id=req.agent_session_id,
     )
@@ -85,7 +81,7 @@ async def run(req: RunRequest):
             async for event in run_orchestrator(
                 input_items=history_items + [user_item],
                 organization_id=ORGANIZATION_ID,
-                user_id=req.user_id,
+                user_id=user_id,
                 agent_session_id=agent_session_id,
                 workspace_id=workspace_id,
                 sandbox_id=last_sandbox_id,

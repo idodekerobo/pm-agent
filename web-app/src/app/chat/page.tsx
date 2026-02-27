@@ -63,7 +63,6 @@ export default function ChatPage() {
         body: JSON.stringify({
           prompt: input,
           agent_session_id: null,
-          user_id: user?.id,
         }),
       });
 

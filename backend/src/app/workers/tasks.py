@@ -170,6 +170,25 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
         print(f"Error gathering Linear context for user {user_id}: {str(e)}")
         raise
 
+def handle_slack_message(event_payload: dict, installation_id: str):
+    """
+    Process an incoming Slack event (app_mention or DM) and post a reply.
+
+    Enqueued by POST /slack/events immediately after the 200 ACK so Slack's
+    3-second response window is never at risk. Full implementation in plan step 10.
+
+    Args:
+        event_payload: The full Slack Events API payload dict.
+        installation_id: UUID of the slack_installations row for this workspace.
+    """
+    print("=" * 80, flush=True)
+    print("SLACK EVENT RECEIVED — handle_slack_message (stub)", flush=True)
+    print(f"installation_id: {installation_id}", flush=True)
+    print(f"event type: {event_payload.get('event', {}).get('type')}", flush=True)
+    print("=" * 80, flush=True)
+    # TODO: implement full orchestrator integration (plan step 10)
+
+
 def gather_notion_context(user_id: str, provider: str = "notion"):
     """
     Fetches user context, creates agent session, and runs context gathering agent.

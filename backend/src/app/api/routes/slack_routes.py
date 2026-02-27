@@ -55,6 +55,18 @@ def _get_verifier() -> SignatureVerifier:
 # OAuth install flow
 # ---------------------------------------------------------------------------
 
+def _get_redirect_uri(request: Request) -> str:
+    """Return the OAuth redirect URI.
+
+    Uses SLACK_REDIRECT_URI from config when set (required for local dev via ngrok,
+    and for production where the canonical URL differs from the request origin).
+    Falls back to url_for only when the config value is empty.
+    """
+    if settings.slack_redirect_uri:
+        return settings.slack_redirect_uri
+    return str(request.url_for("slack_callback"))
+
+
 @router.get("/integrations/slack/connect")
 async def slack_connect(request: Request, user_id: str):
     """Redirect the user to Slack's OAuth v2 consent page.
@@ -99,11 +111,10 @@ async def slack_callback(
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code from Slack.")
 
-    redirect_uri = str(request.url_for("slack_callback"))
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://slack.com/api/oauth.v2.access",
-            data={"code": code, "redirect_uri": redirect_uri},
+            data={"code": code, "redirect_uri": _get_redirect_uri(request)},
             # Slack requires client credentials as HTTP Basic Auth
             auth=(settings.slack_client_id, settings.slack_client_secret),
         )

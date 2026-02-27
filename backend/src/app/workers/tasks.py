@@ -175,18 +175,49 @@ def handle_slack_message(event_payload: dict, installation_id: str):
     Process an incoming Slack event (app_mention or DM) and post a reply.
 
     Enqueued by POST /slack/events immediately after the 200 ACK so Slack's
-    3-second response window is never at risk. Full implementation in plan step 10.
+    3-second response window is never at risk.
 
     Args:
         event_payload: The full Slack Events API payload dict.
         installation_id: UUID of the slack_installations row for this workspace.
     """
+    import sys
+    event_type = event_payload.get("event", {}).get("type")
     print("=" * 80, flush=True)
-    print("SLACK EVENT RECEIVED — handle_slack_message (stub)", flush=True)
+    print("SLACK EVENT — handle_slack_message", flush=True)
     print(f"installation_id: {installation_id}", flush=True)
-    print(f"event type: {event_payload.get('event', {}).get('type')}", flush=True)
+    print(f"event type: {event_type}", flush=True)
     print("=" * 80, flush=True)
-    # TODO: implement full orchestrator integration (plan step 10)
+    sys.stdout.flush()
+
+    async def _run():
+        from app.messaging.slack.installation_store import get_installation_by_user_id
+        from app.messaging.slack.events_handler import dispatch_event
+        from app.db.supabase_client import get_supabase
+
+        supabase = get_supabase()
+        result = (
+            supabase.table("slack_installations")
+            .select("*")
+            .eq("id", installation_id)
+            .single()
+            .execute()
+        )
+        if not result.data:
+            print(f"[slack] installation {installation_id} not found — skipping", flush=True)
+            return
+
+        from app.integrations.crypto import decrypt_token
+        installation = result.data
+        installation["bot_token"] = decrypt_token(installation["bot_token"])
+
+        await dispatch_event(event_payload, installation)
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"[slack] error in handle_slack_message: {e}", flush=True)
+        raise
 
 
 def gather_notion_context(user_id: str, provider: str = "notion"):

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -22,6 +22,8 @@ class AgentRunPayload:
     workspace_id: str
     sandbox_id: str | None
     agent_context: AgentContext
+    tools: list = field(default_factory=list)
+    active_providers: list[str] = field(default_factory=list)
 
 
 def build_agent_run_payload(
@@ -46,6 +48,7 @@ def build_agent_run_payload(
         slack_mention_context: Populate AgentContext.slack_mention_context for
             @-mention flows so the agent knows how to route its reply via tool_slack.
     """
+    from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
     from app.db.agent_sessions import get_or_create_agent_session
     from app.db.projects import get_or_create_default_project
     from app.db.workspaces import get_workspace
@@ -81,6 +84,29 @@ def build_agent_run_payload(
     workspace_row = get_workspace(supabase, workspace_id=workspace_id)
     sandbox_id = workspace_row.get("last_sandbox_id")
 
+    integrations_response = (
+        supabase.table("integrations")
+        .select("provider")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    active_providers = (
+        [i["provider"] for i in integrations_response.data]
+        if integrations_response.data
+        else []
+    )
+
+    tools = [tool_fs_list, tool_fs_write, tool_fs_read, tool_bash]
+    slack_result = (
+        supabase.table("slack_installations")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if slack_result.data:
+        tools.append(tool_slack)
+
     agent_context = AgentContext(
         organization_id=organization_id,
         user_id=user_id,
@@ -96,4 +122,6 @@ def build_agent_run_payload(
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,
         agent_context=agent_context,
+        tools=tools,
+        active_providers=active_providers,
     )

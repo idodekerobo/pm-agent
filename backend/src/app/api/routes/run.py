@@ -69,6 +69,8 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 agent_session_id=payload.agent_session_id,
                 workspace_id=payload.workspace_id,
                 sandbox_id=payload.sandbox_id,
+                tools=payload.tools,
+                active_providers=payload.active_providers,
             ):
                 if event["type"] == "final_output":
                     final_output = event["content"]

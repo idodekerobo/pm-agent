@@ -297,6 +297,8 @@ async def _run_agent_for_message(
             workspace_id=payload.workspace_id,
             sandbox_id=payload.sandbox_id,
             agent_context=payload.agent_context,
+            tools=payload.tools,
+            active_providers=payload.active_providers,
         ):
             if chunk["type"] == "final_output":
                 final_output = chunk["content"]

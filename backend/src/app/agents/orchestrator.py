@@ -3,8 +3,6 @@ import os
 from agents import Agent, Runner, ItemHelpers
 
 from app.agents.context import AgentContext
-from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
-from app.db.supabase_client import get_supabase
 
 BASE_INSTRUCTIONS = [
     "You are a product manager who's job is to help the team and organziation.",
@@ -48,40 +46,22 @@ async def run_orchestrator(
     workspace_id: str,
     sandbox_id: str | None = None,
     agent_context: AgentContext | None = None,
+    tools: list,
+    active_providers: list[str] | None = None,
 ) -> AsyncGenerator[dict, None]:
-    supabase = get_supabase()
-    integrations_response = (
-        supabase.table("integrations")
-        .select("provider")
-        .eq("user_id", user_id)
-        .execute()
-    )
     dynamic_instructions = list(BASE_INSTRUCTIONS)
 
-    active_providers = [i['provider'] for i in integrations_response.data] if integrations_response.data else []
     if active_providers:
         formatted_providers = "\n".join([f"- {p}" for p in active_providers])
         dynamic_instructions.append(
             f"\n## Active User Integrations \n"
             f"You can connect to the below providers/apps to help or do work on behalf of the user. "
             f"To figure out how to use the app you'll need to use the appropriate SKILL:\n"
-            f"{formatted_providers}.\n"  # Added \n here for a blank line after
+            f"{formatted_providers}.\n"
         )
 
     # TODO: dynamically load skills based on whats needed
     dynamic_instructions.append("\n## Available Skills:\n" + load_skills())
-
-    tools = [tool_fs_list, tool_fs_write, tool_fs_read, tool_bash]
-
-    slack_result = (
-        supabase.table("slack_installations")
-        .select("id")
-        .eq("user_id", user_id)
-        .maybe_single()
-        .execute()
-    )
-    if slack_result.data:
-        tools.append(tool_slack)
 
     pm_agent = Agent(
         name="Product Manager Agent",

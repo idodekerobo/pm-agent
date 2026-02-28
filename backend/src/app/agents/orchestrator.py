@@ -109,19 +109,33 @@ async def run_orchestrator(
             continue
         elif event.type == "run_item_stream_event":
             if event.item.type == "tool_call_item":
-                print(f"-- Tool was called: {event.item.raw_item.name}")
-                print(event.item.raw_item.arguments)
+                raw = event.item.raw_item
+                print(f"-- Tool was called: {raw.name}")
+                print(raw.arguments)
                 yield {
                     "type": "tool_call",
-                    "content": f"{event.item.raw_item.name} tool was called"
+                    "content": f"{raw.name} tool was called",
+                    "db_item": {
+                        "type": "function_call",
+                        "name": raw.name,
+                        "call_id": raw.call_id,
+                        "arguments": raw.arguments,
+                    },
                 }
             elif event.item.type == "tool_call_output_item":
                 output = str(event.item.output)
                 print(f"-- Tool output: {output[:200]}")
                 short_output = (output[:200] + '...') if len(output) > 200 else output
+                raw = event.item.raw_item
+                call_id = raw.call_id if hasattr(raw, "call_id") else raw.get("call_id", "")
                 yield {
                     "type": "tool_output",
-                    "content": short_output
+                    "content": short_output,
+                    "db_item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": output,
+                    },
                 }
             elif event.item.type == "message_output_item":
                 print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")

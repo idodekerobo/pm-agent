@@ -77,7 +77,16 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 if event["type"] == "final_output":
                     final_output = event["content"]
 
-                yield f"data: {json.dumps(event)}\n\n"
+                if "db_item" in event:
+                    append_conversation_item(
+                        supabase,
+                        agent_session_id=payload.agent_session_id,
+                        item=event["db_item"],
+                        parent_id=user_item_id,
+                    )
+
+                stream_event = {k: v for k, v in event.items() if k != "db_item"}
+                yield f"data: {json.dumps(stream_event)}\n\n"
 
             if final_output:
                 assistant_item: dict = {

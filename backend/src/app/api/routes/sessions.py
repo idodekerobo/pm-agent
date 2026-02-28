@@ -52,6 +52,16 @@ def list_sessions(user_id: str = Depends(auth_protect_route)):
 
 @router.get("/sessions/{session_id}/messages")
 def get_session_messages(session_id: str, user_id: str = Depends(auth_protect_route)):
+    from fastapi import HTTPException
     supabase = get_supabase()
+    session_row = (
+        supabase.table("agent_sessions")
+        .select("user_id")
+        .eq("id", session_id)
+        .maybe_single()
+        .execute()
+    )
+    if not session_row.data or session_row.data["user_id"] != user_id:
+        raise HTTPException(status_code=404, detail="Session not found")
     items = get_conversation_items(supabase, agent_session_id=session_id)
     return items

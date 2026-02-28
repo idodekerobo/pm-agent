@@ -286,7 +286,8 @@ async def _run_agent_for_message(
         user_item_id = append_conversation_item(
             supabase,
             agent_session_id=payload.agent_session_id,
-            item=input_items,
+            item=user_item,
+            llm_input_context=input_items,
             source_platform="slack",
             source_channel_id=channel,
         )

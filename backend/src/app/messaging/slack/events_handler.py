@@ -208,22 +208,42 @@ async def _run_agent_for_message(
     For DMs (is_mention=False): runs the old auto-post flow — no context injection,
     final_output is posted directly as a thread reply.
     """
-    # Defer heavy imports — these won't be needed for channel management events
     from app.agents.context import build_agent_run_payload
     from app.agents.orchestrator import run_orchestrator
+    from app.db.agent_sessions import find_session_by_thread_id
     from app.db.conversations import append_conversation_item
     from app.db.supabase_client import get_supabase
 
     bot_token = installation["bot_token"]
     user_id = installation["user_id"]
 
+    supabase = get_supabase()
+    if is_mention:
+        external_thread_id = f"{channel}:{thread_ts or ts}"
+        existing_session_id = find_session_by_thread_id(
+            supabase,
+            user_id=user_id,
+            session_start_platform="slack",
+            external_thread_id=external_thread_id,
+        )
+    else:
+        external_thread_id = f"dm:{channel}"
+        existing_session_id = find_session_by_thread_id(
+            supabase,
+            user_id=user_id,
+            session_start_platform="slack",
+            external_thread_id=external_thread_id,
+            max_age_hours=36,
+        )
+
     await add_reaction(bot_token, channel, ts, "hourglass_flowing_sand")
     try:
-        supabase = get_supabase()
-
         payload = build_agent_run_payload(
             supabase,
             user_id,
+            agent_session_id=existing_session_id,
+            session_start_platform="slack",
+            external_thread_id=external_thread_id,
             slack_mention_context={
                 "channel_id": channel,
                 "ts": ts,

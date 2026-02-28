@@ -211,7 +211,7 @@ async def _run_agent_for_message(
     from app.agents.context import build_agent_run_payload
     from app.agents.orchestrator import run_orchestrator
     from app.db.agent_sessions import find_session_by_thread_id
-    from app.db.conversations import append_conversation_item
+    from app.db.conversations import append_conversation_item, make_user_item, make_assistant_item
     from app.db.supabase_client import get_supabase
 
     bot_token = installation["bot_token"]
@@ -252,11 +252,7 @@ async def _run_agent_for_message(
             } if is_mention else None,
         )
 
-        user_item: dict = {
-            "type": "message",
-            "role": "user",
-            "content": [{"type": "input_text", "text": prompt_text}],
-        }
+        user_item = make_user_item(prompt_text)
 
         if is_mention:
             # Inject Slack context as first input_item so the agent knows where it was
@@ -320,15 +316,10 @@ async def _run_agent_for_message(
                 await post_message(bot_token, channel, final_output, thread_ts=thread_ts)
 
         if final_output:
-            assistant_item: dict = {
-                "type": "message",
-                "role": "assistant",
-                "content": [{"type": "input_text", "text": final_output}],
-            }
             append_conversation_item(
                 supabase,
                 agent_session_id=payload.agent_session_id,
-                item=assistant_item,
+                item=make_assistant_item(final_output),
                 parent_id=user_item_id,
                 source_platform="slack",
                 source_channel_id=channel,

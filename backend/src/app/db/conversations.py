@@ -1,5 +1,14 @@
 from supabase import Client
 
+
+def make_user_item(text: str) -> dict:
+    return {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}
+
+
+def make_assistant_item(text: str) -> dict:
+    return {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": text}]}
+
+
 def append_conversation_item(
     supabase: Client,
     *,

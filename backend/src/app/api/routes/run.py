@@ -10,7 +10,7 @@ from uuid import uuid4
 from app.agents.context import build_agent_run_payload
 from app.agents.orchestrator import run_orchestrator
 from app.db.supabase_client import get_supabase
-from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain
+from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain, make_user_item, make_assistant_item
 from app.api.deps import auth_protect_route
 
 router = APIRouter()
@@ -50,11 +50,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     print("conversation history:")
     print(history_items)
 
-    user_item: dict = {
-        "type": "message",
-        "role": "user",
-        "content": [{"type": "input_text", "text": req.prompt}],
-    }
+    user_item = make_user_item(req.prompt)
     user_item_id = append_conversation_item(
         supabase,
         agent_session_id=payload.agent_session_id,
@@ -89,15 +85,10 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 yield f"data: {json.dumps(stream_event)}\n\n"
 
             if final_output:
-                assistant_item: dict = {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": final_output}],
-                }
                 assistant_item_id = append_conversation_item(
                     supabase,
                     agent_session_id=payload.agent_session_id,
-                    item=assistant_item,
+                    item=make_assistant_item(final_output),
                     parent_id=user_item_id,
                 )
                 yield f"data: {json.dumps({'type': 'item_created', 'role': 'assistant', 'id': assistant_item_id})}\n\n"

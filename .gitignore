@@ -9,6 +9,8 @@ __pycache__
 # Dev workspaces
 local_state
 local_workspaces
+dump.rdb
+
 # Cursor IDE configuration (auto-managed by Portcullis)
 .cursorrules
 .cursor/

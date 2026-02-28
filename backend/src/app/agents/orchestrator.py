@@ -19,6 +19,8 @@ BASE_INSTRUCTIONS = [
     "- bash: Execute bash commands in the workspace. You can run CLI tools, scripts, and interact with integrated services. The bash tool supports authentication for external providers like Linear and Google - use the required_provider_auth parameter to automatically inject credentials for CLI tools.",
     "- slack: If the user has added Slack, you can send read, send, and react to slack messages. The slack tool supports multiple actions detailed in teh tool definition.",
     "",
+    # TODO: tell the agent how to look up history
+    "",
     "The workspace has integrations with platforms like Linear (for issue tracking) and Google (for documents). You can access these services via the bash tool by providing the appropriate provider name for authentication and following instructions via the appropriate SKILL.",
     "When accessing Google Suite, use the Google Drive skill.",
     "<important>",

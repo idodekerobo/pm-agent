@@ -49,6 +49,8 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             limit=MAX_HISTORY_ITEMS,
         )
 
+    print("conversation history:")
+    print(history_items)
     user_item: dict = {
         "type": "message",
         "role": "user",

@@ -30,6 +30,8 @@ def build_agent_run_payload(
     *,
     agent_session_id: str | None = None,
     slack_mention_context: dict | None = None,
+    session_start_platform: str = "web",
+    external_thread_id: str | None = None,
 ) -> AgentRunPayload:
     """Resolve all IDs and build the context needed to invoke any agent.
 
@@ -72,6 +74,8 @@ def build_agent_run_payload(
         user_id=user_id,
         project_id=project_id,
         agent_session_id=agent_session_id,
+        session_start_platform=session_start_platform,
+        external_thread_id=external_thread_id,
     )
 
     workspace_row = get_workspace(supabase, workspace_id=workspace_id)

@@ -7,16 +7,13 @@ from pydantic import BaseModel
 from typing import Optional, AsyncGenerator
 from uuid import uuid4
 
+from app.agents.context import build_agent_run_payload
 from app.agents.orchestrator import run_orchestrator
 from app.db.supabase_client import get_supabase
-from app.db.projects import get_or_create_default_project
-from app.db.agent_sessions import get_or_create_agent_session
 from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain
-from app.db.workspaces import get_workspace
 from app.api.deps import auth_protect_route
 
 router = APIRouter()
-ORGANIZATION_ID = "local"
 
 MAX_HISTORY_ITEMS = 50
 
@@ -36,17 +33,9 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     run_id = str(uuid4())
     supabase = get_supabase()
 
-    project_id, _ = get_or_create_default_project(
+    payload = build_agent_run_payload(
         supabase,
-        organization_id=ORGANIZATION_ID,
-        user_id=user_id,
-    )
-
-    agent_session_id, workspace_id = get_or_create_agent_session(
-        supabase,
-        organization_id=ORGANIZATION_ID,
-        user_id=user_id,
-        project_id=project_id,
+        user_id,
         agent_session_id=req.agent_session_id,
     )
 
@@ -56,7 +45,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     else:
         history_items = get_conversation_items(
             supabase,
-            agent_session_id=agent_session_id,
+            agent_session_id=payload.agent_session_id,
             limit=MAX_HISTORY_ITEMS,
         )
 
@@ -67,7 +56,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     }
     user_item_id = append_conversation_item(
         supabase,
-        agent_session_id=agent_session_id,
+        agent_session_id=payload.agent_session_id,
         item=user_item,
         parent_id=req.parent_item_id,
     )
@@ -75,16 +64,13 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
         try:
-            workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-            last_sandbox_id = workspace_row.get("last_sandbox_id")
-            
             async for event in run_orchestrator(
                 input_items=history_items + [user_item],
-                organization_id=ORGANIZATION_ID,
+                organization_id=payload.organization_id,
                 user_id=user_id,
-                agent_session_id=agent_session_id,
-                workspace_id=workspace_id,
-                sandbox_id=last_sandbox_id,
+                agent_session_id=payload.agent_session_id,
+                workspace_id=payload.workspace_id,
+                sandbox_id=payload.sandbox_id,
             ):
                 if event["type"] == "final_output":
                     final_output = event["content"]
@@ -99,7 +85,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 }
                 assistant_item_id = append_conversation_item(
                     supabase,
-                    agent_session_id=agent_session_id,
+                    agent_session_id=payload.agent_session_id,
                     item=assistant_item,
                     parent_id=user_item_id,
                 )

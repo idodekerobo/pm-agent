@@ -209,13 +209,10 @@ async def _run_agent_for_message(
     final_output is posted directly as a thread reply.
     """
     # Defer heavy imports — these won't be needed for channel management events
-    from app.agents.context import AgentContext
+    from app.agents.context import build_agent_run_payload
     from app.agents.orchestrator import run_orchestrator
-    from app.db.agent_sessions import get_or_create_agent_session
     from app.db.conversations import append_conversation_item
-    from app.db.projects import get_or_create_default_project
     from app.db.supabase_client import get_supabase
-    from app.db.workspaces import get_workspace
 
     bot_token = installation["bot_token"]
     user_id = installation["user_id"]
@@ -224,32 +221,16 @@ async def _run_agent_for_message(
     try:
         supabase = get_supabase()
 
-        user_row = (
-            supabase.table("users")
-            .select("organization_id")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-        if not user_row.data:
-            raise ValueError(f"User {user_id} not found in DB")
-
-        organization_id = user_row.data.get("organization_id") or "local"
-
-        project_id, _ = get_or_create_default_project(
+        payload = build_agent_run_payload(
             supabase,
-            organization_id=organization_id,
-            user_id=user_id,
+            user_id,
+            slack_mention_context={
+                "channel_id": channel,
+                "ts": ts,
+                "thread_ts": thread_ts,
+                "is_in_thread": is_in_thread,
+            } if is_mention else None,
         )
-        agent_session_id, workspace_id = get_or_create_agent_session(
-            supabase,
-            organization_id=organization_id,
-            user_id=user_id,
-            project_id=project_id,
-            agent_session_id=None,
-        )
-        workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-        sandbox_id = workspace_row.get("last_sandbox_id")
 
         user_item: dict = {
             "type": "message",
@@ -284,36 +265,21 @@ async def _run_agent_for_message(
 
         user_item_id = append_conversation_item(
             supabase,
-            agent_session_id=agent_session_id,
+            agent_session_id=payload.agent_session_id,
             item=input_items,
             source_platform="slack",
             source_channel_id=channel,
         )
 
-        # Build AgentContext — for mentions, populate slack_mention_context so
-        # dispatcher.py can resolve the channel/thread when the agent calls tool_slack.
-        agent_ctx = AgentContext(
-            organization_id=organization_id,
-            user_id=user_id,
-            workspace_id=workspace_id,
-            sandbox_id=sandbox_id,
-            slack_mention_context={
-                "channel_id": channel,
-                "ts": ts,
-                "thread_ts": thread_ts,
-                "is_in_thread": is_in_thread,
-            } if is_mention else None,
-        )
-
         final_output = ""
         async for chunk in run_orchestrator(
             input_items=input_items,
-            organization_id=organization_id,
+            organization_id=payload.organization_id,
             user_id=user_id,
-            agent_session_id=agent_session_id,
-            workspace_id=workspace_id,
-            sandbox_id=sandbox_id,
-            agent_context=agent_ctx,
+            agent_session_id=payload.agent_session_id,
+            workspace_id=payload.workspace_id,
+            sandbox_id=payload.sandbox_id,
+            agent_context=payload.agent_context,
         ):
             if chunk["type"] == "final_output":
                 final_output = chunk["content"]
@@ -321,7 +287,7 @@ async def _run_agent_for_message(
         if is_mention:
             # Fallback: if the agent produced output but didn't call tool_slack,
             # post final_output directly in the channel.
-            if not agent_ctx.slack_mention_replied and final_output:
+            if not payload.agent_context.slack_mention_replied and final_output:
                 print(
                     "[slack] agent did not call tool_slack reply — falling back to channel post",
                     flush=True,
@@ -340,7 +306,7 @@ async def _run_agent_for_message(
             }
             append_conversation_item(
                 supabase,
-                agent_session_id=agent_session_id,
+                agent_session_id=payload.agent_session_id,
                 item=assistant_item,
                 parent_id=user_item_id,
                 source_platform="slack",
@@ -381,7 +347,8 @@ def _build_conversation_history(messages: list[dict], bot_user_id: str) -> list[
         })
     return items
 
-
+# TODO: prefix the thread messages so the llm will know what messages are from channel and what is from the thread
+# TODO: see if its possible to send timestamps for each message so the the llm has that context
 def _build_combined_history(
     channel_msgs: list[dict],
     thread_msgs: list[dict],

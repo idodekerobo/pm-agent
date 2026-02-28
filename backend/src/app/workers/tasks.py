@@ -12,9 +12,7 @@ RQ jobs must be synchronous functions. The worker task handles:
 import asyncio
 from datetime import datetime, timezone
 from app.db.supabase_client import get_supabase
-from app.db.projects import get_or_create_default_project
-from app.db.agent_sessions import get_or_create_agent_session
-from app.db.workspaces import get_workspace
+from app.agents.context import build_agent_run_payload
 from app.agents.gdrive_agent import run_gdrive_context_agent
 from app.agents.linear_agent import run_linear_context_agent
 
@@ -41,42 +39,13 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
 
     async def _run():
         supabase = get_supabase()
-        
-        user_response = (
-            supabase.table("users")
-            .select("organization_id")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-        
-        if not user_response.data:
-            raise ValueError(f"User {user_id} not found")
-        
-        organization_id = user_response.data["organization_id"]
-        
-        project_id, _ = get_or_create_default_project(
-            supabase,
-            organization_id=organization_id,
-            user_id=user_id,
-        )
-        
-        agent_session_id, workspace_id = get_or_create_agent_session(
-            supabase,
-            organization_id=organization_id,
-            user_id=user_id,
-            project_id=project_id,
-            agent_session_id=None,
-        )
-        
-        workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-        sandbox_id = workspace_row.get("last_sandbox_id")
-        
+        payload = build_agent_run_payload(supabase, user_id)
+
         await run_gdrive_context_agent(
-            user_id=user_id,
-            organization_id=organization_id,
-            workspace_id=workspace_id,
-            sandbox_id=sandbox_id,
+            user_id=payload.user_id,
+            organization_id=payload.organization_id,
+            workspace_id=payload.workspace_id,
+            sandbox_id=payload.sandbox_id,
         )
 
         # TODO: save session tool calls and result
@@ -117,42 +86,13 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
 
     async def _run():
         supabase = get_supabase()
-        
-        user_response = (
-            supabase.table("users")
-            .select("organization_id")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-        
-        if not user_response.data:
-            raise ValueError(f"User {user_id} not found")
-        
-        organization_id = user_response.data["organization_id"]
-        
-        project_id, _ = get_or_create_default_project(
-            supabase,
-            organization_id=organization_id,
-            user_id=user_id,
-        )
-        
-        agent_session_id, workspace_id = get_or_create_agent_session(
-            supabase,
-            organization_id=organization_id,
-            user_id=user_id,
-            project_id=project_id,
-            agent_session_id=None,
-        )
-        
-        workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-        sandbox_id = workspace_row.get("last_sandbox_id")
-        
+        payload = build_agent_run_payload(supabase, user_id)
+
         await run_linear_context_agent(
-            user_id=user_id,
-            organization_id=organization_id,
-            workspace_id=workspace_id,
-            sandbox_id=sandbox_id,
+            user_id=payload.user_id,
+            organization_id=payload.organization_id,
+            workspace_id=payload.workspace_id,
+            sandbox_id=payload.sandbox_id,
         )
 
         # TODO: save session tool calls and result

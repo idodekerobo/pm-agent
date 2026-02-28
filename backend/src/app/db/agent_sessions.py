@@ -40,3 +40,14 @@ def get_or_create_agent_session(
     )
     created_session = new_session.data[0]
     return created_session["id"], created_session["workspace_id"]
+
+
+def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[dict]:
+    result = (
+        supabase.table("agent_sessions")
+        .select("id, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return result.data or []

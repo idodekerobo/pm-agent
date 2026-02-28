@@ -65,6 +65,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
+        yield f"data: {json.dumps({'type': 'item_created', 'role': 'user', 'id': user_item_id})}\n\n"
         try:
             async for event in run_orchestrator(
                 input_items=history_items + [user_item],
@@ -76,7 +77,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             ):
                 if event["type"] == "final_output":
                     final_output = event["content"]
-                
+
                 yield f"data: {json.dumps(event)}\n\n"
 
             if final_output:
@@ -91,7 +92,6 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                     item=assistant_item,
                     parent_id=user_item_id,
                 )
-                yield f"data: {json.dumps({'type': 'item_created', 'role': 'user', 'id': user_item_id})}\n\n"
                 yield f"data: {json.dumps({'type': 'item_created', 'role': 'assistant', 'id': assistant_item_id})}\n\n"
         except Exception as e:
             print(f"Error in stream: {e}")

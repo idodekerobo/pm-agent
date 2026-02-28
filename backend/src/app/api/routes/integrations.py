@@ -91,7 +91,7 @@ oauth.register(
     client_secret=settings.google_client_secret,
     authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
     access_token_url="https://oauth2.googleapis.com/token",
-    client_kwargs={"scope": "https://www.googleapis.com/auth/drive"}, # https://www.googleapis.com/auth/documents.readonly, https://www.googleapis.com/auth/drive.readonly, https://www.googleapis.com/auth/drive.metadata.readonly
+    client_kwargs={"scope": "https://www.googleapis.com/auth/drive.readonly, https://www.googleapis.com/auth/drive.metadata, https://www.googleapis.com/auth/documents, https://www.googleapis.com/auth/spreadsheets, https://www.googleapis.com/auth/presentations"}, # https://www.googleapis.com/auth/drive,, https://www.googleapis.com/auth/drive.metadata.readonly
 )
 
 @router.get("/google/connect")

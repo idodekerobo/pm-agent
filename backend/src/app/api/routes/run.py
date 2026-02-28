@@ -30,7 +30,6 @@ class RunResponse(BaseModel):
 
 @router.post("/run")
 async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
-    run_id = str(uuid4())
     supabase = get_supabase()
 
     payload = build_agent_run_payload(
@@ -39,7 +38,6 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
         agent_session_id=req.agent_session_id,
     )
 
-    # Load history: if branching, walk the parent chain; otherwise load flat session history.
     if req.parent_item_id:
         history_items = get_conversation_chain(supabase, leaf_item_id=req.parent_item_id)
     else:
@@ -51,6 +49,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     print("conversation history:")
     print(history_items)
+
     user_item: dict = {
         "type": "message",
         "role": "user",

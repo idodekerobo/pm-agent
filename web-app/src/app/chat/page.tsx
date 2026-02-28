@@ -7,8 +7,9 @@ import { useAuth } from "@/lib/AuthContext";
 
 interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool_call" | "tool_output";
   content: string;
+  toolName?: string;
 }
 
 interface Session {
@@ -99,17 +100,32 @@ export default function ChatPage() {
         const mapped: Message[] = [];
         for (const item of items) {
           try {
-            const role = item?.role as "user" | "assistant";
-            const text = item?.content?.[0]?.text;
-            if (!role || !text || !["user", "assistant"].includes(role)) continue;
-            mapped.push({
-              id: `${sessionId}-${mapped.length}`,
-              role,
-              content: text,
-            });
+            if (item?.type === "function_call") {
+              mapped.push({
+                id: `${sessionId}-${mapped.length}`,
+                role: "tool_call",
+                content: item.arguments ?? "",
+                toolName: item.name,
+              });
+            } else if (item?.type === "function_call_output") {
+              const out = typeof item.output === "string" ? item.output : JSON.stringify(item.output);
+              mapped.push({
+                id: `${sessionId}-${mapped.length}`,
+                role: "tool_output",
+                content: out.length > 200 ? out.slice(0, 200) + "..." : out,
+              });
+            } else {
+              const role = item?.role as "user" | "assistant";
+              const text = item?.content?.[0]?.text;
+              if (!role || !text || !["user", "assistant"].includes(role)) continue;
+              mapped.push({
+                id: `${sessionId}-${mapped.length}`,
+                role,
+                content: text,
+              });
+            }
           } catch (error) {
-            console.log("error when forming session messages")
-            console.log(error);
+            console.log("error when forming session messages", error);
           }
         }
         setActiveSessionId(sessionId);
@@ -161,16 +177,10 @@ export default function ChatPage() {
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No response body");
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "",
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-
       const decoder = new TextDecoder();
-      let assistantContent = "";
       let buffer = "";
+      let currentAssistantId: string | null = null;
+      let currentAssistantContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -186,30 +196,58 @@ export default function ChatPage() {
 
           try {
             const eventData = JSON.parse(trimmedLine.slice(6));
-            if (["message", "tool_call", "tool_output", "error"].includes(eventData.type)) {
-              const content = eventData.content;
-              if (content) {
-                if (assistantContent && !assistantContent.endsWith("\n")) {
-                  assistantContent += "\n";
-                }
-                if (eventData.type === "tool_call") {
-                  assistantContent += `🛠️ ${content}`;
-                } else if (eventData.type === "tool_output") {
-                  assistantContent += `📋 Output: ${content}`;
-                } else if (eventData.type === "error") {
-                  assistantContent += `❌ ${content}`;
-                } else {
-                  assistantContent += content;
-                }
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  const lastMsg = updated[updated.length - 1];
-                  if (lastMsg && lastMsg.role === "assistant") {
-                    lastMsg.content = assistantContent;
-                  }
-                  return updated;
-                });
+
+            if (eventData.type === "tool_call") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `tool-${Date.now()}-${Math.random()}`,
+                  role: "tool_call" as const,
+                  content: eventData.content ?? "",
+                  toolName: eventData.content,
+                },
+              ]);
+              // next text chunk should open a fresh assistant bubble
+              currentAssistantId = null;
+              currentAssistantContent = "";
+            } else if (eventData.type === "tool_output") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `output-${Date.now()}-${Math.random()}`,
+                  role: "tool_output" as const,
+                  content: eventData.content ?? "",
+                },
+              ]);
+            } else if (eventData.type === "message") {
+              const chunk = eventData.content ?? "";
+              if (!currentAssistantId) {
+                currentAssistantId = `asst-${Date.now()}-${Math.random()}`;
+                currentAssistantContent = chunk;
+                const newId = currentAssistantId;
+                setMessages((prev) => [
+                  ...prev,
+                  { id: newId, role: "assistant" as const, content: chunk },
+                ]);
+              } else {
+                currentAssistantContent += chunk;
+                const targetId = currentAssistantId;
+                const snapshot = currentAssistantContent;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === targetId ? { ...m, content: snapshot } : m
+                  )
+                );
               }
+            } else if (eventData.type === "error") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `err-${Date.now()}`,
+                  role: "assistant" as const,
+                  content: `❌ ${eventData.content}`,
+                },
+              ]);
             }
           } catch (e) {
             console.error("Error parsing SSE event:", e, trimmedLine);
@@ -404,24 +442,54 @@ export default function ChatPage() {
                 </div>
               </div>
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                >
+              messages.map((message) => {
+                if (message.role === "tool_call") {
+                  return (
+                    <div key={message.id} className="flex justify-start">
+                      <div className="max-w-lg rounded-lg border border-zinc-200 bg-white px-3 py-2">
+                        <p className="font-mono text-xs font-semibold text-zinc-500">
+                          🛠 {message.toolName}
+                        </p>
+                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">
+                          {message.content}
+                        </pre>
+                      </div>
+                    </div>
+                  );
+                }
+                if (message.role === "tool_output") {
+                  return (
+                    <div key={message.id} className="flex justify-start">
+                      <div className="max-w-lg rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                        <p className="font-mono text-xs font-semibold text-zinc-400">
+                          📋 Output
+                        </p>
+                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">
+                          {message.content}
+                        </pre>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
                   <div
-                    className={`max-w-lg rounded-lg px-4 py-3 ${
-                      message.role === "user"
-                        ? "bg-zinc-900 text-white"
-                        : "bg-zinc-100 text-zinc-900"
-                    }`}
+                    key={message.id}
+                    className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                   >
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {message.content}
-                    </p>
+                    <div
+                      className={`max-w-lg rounded-lg px-4 py-3 ${
+                        message.role === "user"
+                          ? "bg-zinc-900 text-white"
+                          : "bg-zinc-100 text-zinc-900"
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                        {message.content}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
             {isLoading && (
               <div className="flex justify-start">

@@ -81,7 +81,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 assistant_item: dict = {
                     "type": "message",
                     "role": "assistant",
-                    "content": [{"type": "input_text", "text": final_output}],
+                    "content": [{"type": "output_text", "text": final_output}],
                 }
                 assistant_item_id = append_conversation_item(
                     supabase,

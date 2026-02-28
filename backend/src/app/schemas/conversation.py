@@ -27,5 +27,6 @@ class ConversationItem(ConversationItemBase):
 
     id: UUID
     created_at: datetime
+    llm_input_context: Optional[list] = None
 
     model_config = ConfigDict(from_attributes=True)

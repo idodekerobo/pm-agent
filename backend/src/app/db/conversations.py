@@ -4,12 +4,18 @@ def append_conversation_item(
     supabase: Client,
     *,
     agent_session_id: str,
-    item: dict | list,
+    item: dict,
     parent_id: str | None = None,
     source_platform: str = "web",
     source_channel_id: str | None = None,
+    llm_input_context: list | None = None,
 ) -> str:
-    """Insert a conversation item and return its generated id."""
+    """Insert a conversation item and return its generated id.
+
+    llm_input_context: the full input_items list passed to the orchestrator for this
+    turn. Only used on surfaces that inject extra context before the user message
+    (e.g. Slack channel history + slack_context_item). NULL for web sessions.
+    """
     payload: dict = {
         "agent_session_id": agent_session_id,
         "item": item,
@@ -19,6 +25,8 @@ def append_conversation_item(
         payload["parent_id"] = parent_id
     if source_channel_id is not None:
         payload["source_channel_id"] = source_channel_id
+    if llm_input_context is not None:
+        payload["llm_input_context"] = llm_input_context
     response = (
         supabase.table("conversation_items")
         .insert(payload)

@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     slack_client_secret: str = ""
     slack_signing_secret: str = ""
     slack_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
+    notion_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
 
     redis_url: str = ""
 

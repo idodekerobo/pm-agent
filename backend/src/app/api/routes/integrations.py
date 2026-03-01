@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from urllib.parse import urlencode
+import httpx
 from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -163,51 +165,52 @@ async def google_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "google").execute()
     return {"status": "disconnected"}
 
-oauth.register(
-    name="notion",
-    client_id=settings.notion_client_id,
-    client_secret=settings.notion_client_secret,
-    authorize_url="https://api.notion.com/v1/oauth/authorize",
-    access_token_url="https://api.notion.com/v1/oauth/token",
-    client_kwargs={},
-)
-
 @router.get("/notion/connect")
-async def notion_connect(
-    request: Request,
-    user_id: str,
-):
-    print(f"request:\n{request}\n")
-    request.session["connecting_user_id"] = user_id
-    redirect_uri = request.url_for("notion_callback")
-    return await oauth.notion.authorize_redirect(request, str(redirect_uri), owner="user", response_type="code")
+async def notion_connect(request: Request, user_id: str):
+    redirect_uri = settings.notion_redirect_uri or str(request.url_for("notion_callback"))
+    params = urlencode({
+        "client_id": settings.notion_client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "owner": "user",
+        "state": user_id,
+    })
+    return RedirectResponse(f"https://api.notion.com/v1/oauth/authorize?{params}")
 
 @router.get("/notion/callback", name="notion_callback")
-async def notion_callback(request: Request):
-    user_id = request.session.pop("connecting_user_id", None)
+async def notion_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+):
+    user_id = state
     if not user_id:
-        raise HTTPException(
-            status_code=400, 
-            detail="Session expired or user not found. Please try connecting again."
+        raise HTTPException(status_code=400, detail="Session expired or user not found. Please try connecting again.")
+    if error:
+        raise HTTPException(status_code=400, detail=f"Notion OAuth error: {error}")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing authorization code from Notion.")
+
+    redirect_uri = settings.notion_redirect_uri or str(request.url_for("notion_callback"))
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.notion.com/v1/oauth/token",
+            json={"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri},
+            auth=(settings.notion_client_id, settings.notion_client_secret),
         )
+    token = response.json()
+    if "error" in token:
+        raise HTTPException(status_code=400, detail=f"Notion token exchange failed: {token.get('error')}")
 
-    token = await oauth.notion.authorize_access_token(request)
     supabase = get_supabase()
-
-    account_label = token.get("workspace_name", "Notion Workspace")
-
-    expires_at = None
-    if "expires_in" in token:
-        expires_timestamp = datetime.now(timezone.utc).timestamp() + token["expires_in"]
-        expires_at = datetime.fromtimestamp(expires_timestamp, tz=timezone.utc).isoformat()
-
     supabase.table("integrations").upsert({
         "user_id": user_id,
         "provider": "notion",
-        "account_label": account_label,
+        "account_label": token.get("workspace_name", "Notion Workspace"),
         "access_token": encrypt_token(token["access_token"]),
         "refresh_token": encrypt_token(token.get("refresh_token", "")),
-        "expires_at": expires_at,
+        "expires_at": None,
         "scopes": [],
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()

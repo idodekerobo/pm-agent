@@ -15,6 +15,7 @@ interface Message {
 interface Session {
   id: string;
   created_at: string;
+  display_name?: string | null;
 }
 
 export default function ChatPage() {
@@ -26,10 +27,15 @@ export default function ChatPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
   const isCreatingSession = useRef(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const getToken = () => session?.access_token ?? "";
@@ -51,6 +57,22 @@ export default function ChatPage() {
     };
     init();
   }, [session]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [openMenuId]);
+
+  // Focus rename input when rename mode activates
+  useEffect(() => {
+    if (renamingSessionId) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [renamingSessionId]);
 
   const fetchSessions = async () => {
     try {
@@ -136,6 +158,29 @@ export default function ChatPage() {
     }
   };
 
+  const handleRenameSubmit = async (sessionId: string) => {
+    const trimmed = renameValue.trim();
+    setRenamingSessionId(null);
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ display_name: trimmed }),
+      });
+      if (res.ok) {
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, display_name: trimmed } : s))
+        );
+      }
+    } catch (e) {
+      console.error("Failed to rename session:", e);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -207,7 +252,6 @@ export default function ChatPage() {
                   toolName: eventData.content,
                 },
               ]);
-              // next text chunk should open a fresh assistant bubble
               currentAssistantId = null;
               currentAssistantContent = "";
             } else if (eventData.type === "tool_output") {
@@ -337,20 +381,89 @@ export default function ChatPage() {
             {/* Session List */}
             <div className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
               {sessions.map((s) => (
-                <button
+                <div
                   key={s.id}
-                  onClick={() => loadSession(s.id)}
-                  className={`w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors ${
-                    s.id === activeSessionId
-                      ? "bg-zinc-200 text-zinc-900"
-                      : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                  }`}
+                  className="relative"
+                  onMouseEnter={() => setHoveredSessionId(s.id)}
+                  onMouseLeave={() => setHoveredSessionId(null)}
                 >
-                  <span className="block truncate font-medium">Session</span>
-                  <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
-                    {formatSessionTime(s.created_at)}
-                  </span>
-                </button>
+                  {renamingSessionId === s.id ? (
+                    <div className="rounded-lg px-3 py-2.5">
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRenameSubmit(s.id);
+                          if (e.key === "Escape") setRenamingSessionId(null);
+                        }}
+                        onBlur={() => handleRenameSubmit(s.id)}
+                        className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-none"
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => loadSession(s.id)}
+                      className={`w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors ${
+                        s.id === activeSessionId
+                          ? "bg-zinc-200 text-zinc-900"
+                          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+                      }`}
+                    >
+                      <span className="block truncate pr-5 font-medium">
+                        {s.display_name ?? formatSessionTime(s.created_at)}
+                      </span>
+                      {s.display_name && (
+                        <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
+                          {formatSessionTime(s.created_at)}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Ellipsis button */}
+                  {renamingSessionId !== s.id && (hoveredSessionId === s.id || openMenuId === s.id) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId((prev) => (prev === s.id ? null : s.id));
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
+                      aria-label="Session options"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <circle cx="5" cy="12" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="19" cy="12" r="2" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {/* Dropdown menu */}
+                  {openMenuId === s.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-2 top-full z-10 mt-1 w-32 rounded-lg border border-zinc-200 bg-white py-1 shadow-md"
+                    >
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setRenamingSessionId(s.id);
+                          setRenameValue(s.display_name ?? "");
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100"
+                      >
+                        Rename
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </>

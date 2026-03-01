@@ -181,6 +181,25 @@ export default function ChatPage() {
     }
   };
 
+  const handleDelete = async (sessionId: string) => {
+    if (!window.confirm("Delete this session? This cannot be undone.")) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/sessions/${sessionId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) {
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        if (activeSessionId === sessionId) {
+          setActiveSessionId(null);
+          setMessages([]);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to delete session:", e);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -460,6 +479,15 @@ export default function ChatPage() {
                         className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100"
                       >
                         Rename
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          handleDelete(s.id);
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-zinc-100"
+                      >
+                        Delete
                       </button>
                     </div>
                   )}

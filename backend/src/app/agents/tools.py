@@ -93,6 +93,8 @@ async def tool_bash(
                 env_vars["BEARER_TOKEN"] = token
             elif required_provider_auth == "notion":
                 env_vars["BEARER_TOKEN"] = token
+            elif required_provider_auth == "slack":
+                env_vars["SLACK_BOT_TOKEN"] = token
 
         except Exception as e:
             return {

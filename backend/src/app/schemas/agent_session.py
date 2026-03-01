@@ -14,6 +14,7 @@ class AgentSessionBase(BaseModel):
     project_id: UUID
     workspace_id: UUID
     session_start_platform: str = "web"
+    external_thread_id: Optional[str] = None
 
 
 class AgentSessionCreate(AgentSessionBase):
@@ -28,6 +29,5 @@ class AgentSession(AgentSessionBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
-    external_thread_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

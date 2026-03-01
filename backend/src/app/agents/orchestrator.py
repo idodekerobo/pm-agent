@@ -14,9 +14,12 @@ BASE_INSTRUCTIONS = [
     "- fs_write: Write files to the workspace. Provide a relative path and the content to write.",
     "- fs_read: Read files from the workspace. Provide a relative path and you'll get the file contents.",
     "- fs_list: List files and directories in the workspace. Provide a path (defaults to current directory).",
-    "- bash: Execute bash commands in the workspace. You can run CLI tools, scripts, and interact with integrated services. The bash tool supports authentication for external providers like Linear and Google - use the required_provider_auth parameter to automatically inject credentials for CLI tools.",
+    "- bash: Execute bash commands in the workspace. You can run CLI tools, scripts, and interact with integrated services.",
+    "The bash tool supports authentication for external providers like Linear and Google - use the required_provider_auth parameter to automatically inject credentials for CLI tools. Important: each bash call is a completely isolated subprocess — stdout from one call is not available to the next. If you need to fetch data and then process it, do it within a single bash call (e.g. pipe curl into python3, or use Python subprocess to run curl and handle the response).",
+    " The workspace environment is Debian Linux with the following available: curl, git, python3 (standard library only — no third-party packages like requests or httpx; use curl for HTTP), deno, and the linear CLI.",
     "- slack: If the user has added Slack, you can send read, send, and react to slack messages. The slack tool supports multiple actions detailed in teh tool definition.",
     "",
+    # TODO: tell the agent how to use the file system as a scratch pad where needed.
     # TODO: tell the agent how to look up history
     "",
     "The workspace has integrations with platforms like Linear (for issue tracking) and Google (for documents). You can access these services via the bash tool by providing the appropriate provider name for authentication and following instructions via the appropriate SKILL.",

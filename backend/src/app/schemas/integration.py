@@ -15,7 +15,7 @@ class IntegrationBase(BaseModel):
     scopes: list[str]
     access_token: str
     refresh_token: Optional[str] = None
-    expires_at: datetime
+    expires_at: Optional[datetime] = None
 
 
 class IntegrationCreate(IntegrationBase):

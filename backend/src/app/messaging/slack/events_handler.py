@@ -10,6 +10,7 @@ from app.messaging.slack.client import (
     add_reaction,
     get_channel_history,
     get_thread_history,
+    list_channels,
     post_message,
     remove_reaction,
 )
@@ -44,7 +45,7 @@ async def dispatch_event(event_payload: dict, installation: SlackInstallation) -
         await handle_im_message(event, installation)
 
     elif event_type == "member_joined_channel":
-        handle_member_joined_channel(event, installation)
+        await handle_member_joined_channel(event, installation)
 
     elif event_type == "member_left_channel":
         handle_member_left_channel(event, installation)
@@ -137,20 +138,33 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
 # Channel membership handlers
 # ---------------------------------------------------------------------------
 
-def handle_member_joined_channel(event: dict, installation: SlackInstallation) -> None:
+async def handle_member_joined_channel(event: dict, installation: SlackInstallation) -> None:
     """Auto-register a channel when the bot is added to it.
 
     Only acts on events where the bot user itself joined — not when other
     users join a channel the bot is already in.
+
+    member_joined_channel events don't always include channel_name, so we fall
+    back to the Slack API (conversations.list) to resolve the name when missing.
     """
     if event.get("user") != installation.slack_bot_user_id:
         return
+
+    channel_id = event["channel"]
+    channel_name = event.get("channel_name")
+
+    if not channel_name:
+        channels = await list_channels(installation.bot_token)
+        match = next((ch for ch in channels if ch["id"] == channel_id), None)
+        if match:
+            channel_name = match.get("name")
+
     upsert_channel(
         installation_id=str(installation.id),
-        channel_id=event["channel"],
-        channel_name=event.get("channel_name"),
+        channel_id=channel_id,
+        channel_name=channel_name,
     )
-    print(f"[slack] bot joined channel {event['channel']!r} — registered in DB", flush=True)
+    print(f"[slack] bot joined channel {channel_id!r} ({channel_name!r}) — registered in DB", flush=True)
 
 
 def handle_member_left_channel(event: dict, installation: SlackInstallation) -> None:

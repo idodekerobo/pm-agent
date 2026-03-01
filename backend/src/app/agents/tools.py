@@ -148,6 +148,8 @@ async def tool_slack(
     - Only post to channels the user has explicitly enabled in their settings.
     - If Slack is not connected or the channel is inaccessible, explain this to the user and stop.
     - Do not post to Slack proactively unless the user has explicitly asked you to.
+    - If the user has multiple Slack workspaces connected and hasn't specified which one to use,
+      ask them which workspace to post to before proceeding.
     """
     return await dispatch_slack_action(
         ctx=context.context,

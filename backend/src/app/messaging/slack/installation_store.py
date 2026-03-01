@@ -76,7 +76,7 @@ def get_installation_by_user_id(user_id: str) -> SlackInstallation | None:
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if result is None or not result.data:
         return None
     return _decrypt_installation(result.data)
 

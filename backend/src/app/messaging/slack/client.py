@@ -130,6 +130,39 @@ async def get_channel_history(
     return list(reversed(messages))
 
 
+async def list_channels(
+    bot_token: str,
+    types: str = "public_channel,private_channel",
+    limit: int = 200,
+) -> list[dict]:
+    """List all channels the bot has access to in this workspace.
+
+    Args:
+        bot_token: Decrypted xoxb- bot token.
+        types: Comma-separated channel types to include.
+        limit: Max total channels to return.
+
+    Returns:
+        List of Slack channel dicts, each containing at least 'id' and 'name'.
+    """
+    client = AsyncWebClient(token=bot_token)
+    channels: list[dict] = []
+    cursor: str | None = None
+
+    while True:
+        kwargs: dict = {"types": types, "limit": min(limit, 200)}
+        if cursor:
+            kwargs["cursor"] = cursor
+        response = await client.conversations_list(**kwargs)
+        channels.extend(response.data.get("channels", []))
+        next_cursor = response.data.get("response_metadata", {}).get("next_cursor")
+        if not next_cursor or len(channels) >= limit:
+            break
+        cursor = next_cursor
+
+    return channels[:limit]
+
+
 async def get_thread_history(
     bot_token: str,
     channel: str,

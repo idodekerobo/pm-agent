@@ -14,7 +14,7 @@ Layers:
 from typing import Optional
 
 from app.agents.context import AgentContext
-from app.messaging.slack.client import post_message, send_dm
+from app.messaging.slack.client import list_channels, post_message, send_dm
 from app.messaging.slack.installation_store import get_installation_by_user_id
 from app.schemas.slack import SlackInstallation
 
@@ -68,7 +68,7 @@ async def dispatch_slack_action(
     elif action_type == "post_message":
         if not channel or not message:
             return "post_message requires both 'channel' and 'message'."
-        channel_id = _resolve_channel(str(installation.id), channel)
+        channel_id = await _resolve_channel(str(installation.id), channel, bot_token)
         if channel_id is None:
             return (
                 f"Channel #{channel} is not accessible. "
@@ -80,7 +80,7 @@ async def dispatch_slack_action(
     elif action_type == "post_reply":
         if not channel or not message or not thread_ts:
             return "post_reply requires 'channel', 'message', and 'thread_ts'."
-        channel_id = _resolve_channel(str(installation.id), channel)
+        channel_id = await _resolve_channel(str(installation.id), channel, bot_token)
         if channel_id is None:
             return (
                 f"Channel #{channel} is not accessible. "
@@ -102,17 +102,15 @@ async def dispatch_slack_action(
         )
 
 
-def _resolve_channel(installation_id: str, channel_name: str) -> str | None:
+async def _resolve_channel(installation_id: str, channel_name: str, bot_token: str) -> str | None:
     """Resolve a human-readable channel name to a Slack channel ID.
 
-    Looks up the slack_channels table for a channel that:
-    - belongs to this installation
-    - matches on slack_channel_name (case-insensitive)
-    - has is_enabled = True
+    First checks the slack_channels table (fast, no API call). Falls back to
+    the Slack API if the DB lookup returns nothing — this handles rows where
+    slack_channel_name is null (member_joined_channel events don't always
+    include the channel name).
 
-    The agent always uses channel names (e.g. "general") rather than raw IDs.
-    If the bot hasn't been added to the channel, or the user has disabled it
-    in web settings, returns None so the dispatcher can surface a clear error.
+    Returns None if the channel can't be found or the bot hasn't been added.
     """
     from app.db.supabase_client import get_supabase
 
@@ -125,8 +123,17 @@ def _resolve_channel(installation_id: str, channel_name: str) -> str | None:
         .maybe_single()
         .execute()
     )
-    if not result.data:
-        return None
-    if not result.data["is_enabled"]:
-        return None
-    return result.data["slack_channel_id"]
+
+    if result is not None and result.data:
+        if not result.data["is_enabled"]:
+            return None
+        return result.data["slack_channel_id"]
+
+    # DB lookup missed — channel may be registered with a null name.
+    # Fall back to the Slack API to resolve name → ID.
+    api_channels = await list_channels(bot_token)
+    for ch in api_channels:
+        if ch.get("name", "").lower() == channel_name.lower():
+            return ch["id"]
+
+    return None

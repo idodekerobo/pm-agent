@@ -1,13 +1,13 @@
 ---
-name: google-drive-recent-activity
-description: Retrieve recent files from Google Drive to discover current projects and active work areas. Use when building context about a user's recent work or identifying active projects in Google Drive.
+name: google-drive
+description: Find, search, and retrieve any file in Google Drive — Docs, Sheets, Slides, PDFs, folders, and more. Use this skill whenever you need to find a file by name, look up a document ID, browse folder structure, or discover files by type, content, recency, or owner.
 ---
 
-# Google Drive Recent Activity
+# Google Drive File Search & Discovery
 
 ## Overview
 
-This skill teaches how to query the Google Drive API using cURL to retrieve files based on flexible criteria. Use this to discover files by recency, folder structure, document type, naming patterns, sharing status, or content.
+This skill teaches how to query the Google Drive API using cURL to find and retrieve **any file type** in Google Drive — Google Docs, Sheets, Slides, PDFs, folders, and more. Use this whenever you need to locate a file by name, look up its ID, browse folders, or discover files based on type, content, date, or sharing status.
 
 ## cURL Query Structure
 

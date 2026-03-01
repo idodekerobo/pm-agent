@@ -82,7 +82,7 @@ def build_agent_run_payload(
     )
 
     workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-    sandbox_id = workspace_row.get("last_sandbox_id")
+    sandbox_id = workspace_row.last_sandbox_id
 
     integrations_response = (
         supabase.table("integrations")

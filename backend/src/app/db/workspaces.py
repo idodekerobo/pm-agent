@@ -2,9 +2,10 @@
 Database helpers for managing workspace metadata (Modal volumes, sandbox IDs, etc).
 """
 from supabase import Client
+from app.schemas.workspace import Workspace
 
 
-def get_workspace(supabase: Client, *, workspace_id: str) -> dict:
+def get_workspace(supabase: Client, *, workspace_id: str) -> Workspace:
     """
     Retrieve workspace metadata by ID.
     
@@ -22,7 +23,7 @@ def get_workspace(supabase: Client, *, workspace_id: str) -> dict:
         .single()
         .execute()
     )
-    return result.data
+    return Workspace.model_validate(result.data)
 
 
 def create_workspace(
@@ -31,7 +32,7 @@ def create_workspace(
     workspace_id: str,
     organization_id: str,
     user_id: str,
-) -> dict:
+) -> Workspace:
     """
     Create a new workspace record.
     """
@@ -46,7 +47,7 @@ def create_workspace(
         )
         .execute()
     )
-    return result.data[0]
+    return Workspace.model_validate(result.data[0])
 
 def update_workspace_sandbox_id(
     supabase: Client,

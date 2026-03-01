@@ -85,6 +85,39 @@ def find_session_by_thread_id(
     return result.data[0]["id"] if result.data else None
 
 
+def update_session_display_name(
+    supabase: Client,
+    *,
+    session_id: str,
+    user_id: str,
+    display_name: str,
+) -> bool:
+    result = (
+        supabase.table("agent_sessions")
+        .update({"display_name": display_name})
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return bool(result.data)
+
+
+def delete_session(
+    supabase: Client,
+    *,
+    session_id: str,
+    user_id: str,
+) -> bool:
+    result = (
+        supabase.table("agent_sessions")
+        .delete()
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return bool(result.data)
+
+
 def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[AgentSession]:
     result = (
         supabase.table("agent_sessions")

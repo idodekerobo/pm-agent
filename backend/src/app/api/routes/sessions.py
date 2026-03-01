@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
 from app.db.projects import get_or_create_default_project
-from app.db.agent_sessions import get_or_create_agent_session, list_sessions_for_user
+from app.db.agent_sessions import get_or_create_agent_session, list_sessions_for_user, update_session_display_name, delete_session
 from app.db.conversations import get_conversation_items
 
 router = APIRouter()
+
+
+class UpdateSessionRequest(BaseModel):
+    display_name: str
 
 
 @router.post("/sessions")
@@ -50,9 +55,26 @@ def list_sessions(user_id: str = Depends(auth_protect_route)):
     return sessions
 
 
+@router.patch("/sessions/{session_id}")
+def rename_session(session_id: str, body: UpdateSessionRequest, user_id: str = Depends(auth_protect_route)):
+    supabase = get_supabase()
+    ok = update_session_display_name(supabase, session_id=session_id, user_id=user_id, display_name=body.display_name)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
+
+
+@router.delete("/sessions/{session_id}")
+def remove_session(session_id: str, user_id: str = Depends(auth_protect_route)):
+    supabase = get_supabase()
+    ok = delete_session(supabase, session_id=session_id, user_id=user_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
+
+
 @router.get("/sessions/{session_id}/messages")
 def get_session_messages(session_id: str, user_id: str = Depends(auth_protect_route)):
-    from fastapi import HTTPException
     supabase = get_supabase()
     session_row = (
         supabase.table("agent_sessions")

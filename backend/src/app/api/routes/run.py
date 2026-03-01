@@ -60,6 +60,8 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
+        if req.agent_session_id is None:
+            yield f"data: {json.dumps({'type': 'session_created', 'agent_session_id': payload.agent_session_id})}\n\n"
         yield f"data: {json.dumps({'type': 'item_created', 'role': 'user', 'id': user_item_id})}\n\n"
         try:
             async for event in run_orchestrator(

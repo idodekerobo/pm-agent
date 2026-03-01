@@ -34,7 +34,6 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
-  const isCreatingSession = useRef(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -51,11 +50,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!session || hasInitialized.current) return;
     hasInitialized.current = true;
-    const init = async () => {
-      await fetchSessions();
-      await createNewSession();
-    };
-    init();
+    fetchSessions();
   }, [session]);
 
   // Close dropdown when clicking outside
@@ -88,28 +83,9 @@ export default function ChatPage() {
     }
   };
 
-  const createNewSession = async () => {
-    if (isCreatingSession.current) return;
-    isCreatingSession.current = true;
-    try {
-      const res = await fetch(`${apiBaseUrl}/sessions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setActiveSessionId(data.agent_session_id);
-        setMessages([]);
-        await fetchSessions();
-      }
-    } catch (e) {
-      console.error("Failed to create session:", e);
-    } finally {
-      isCreatingSession.current = false;
-    }
+  const startNewSession = () => {
+    setActiveSessionId(null);
+    setMessages([]);
   };
 
   const loadSession = async (sessionId: string) => {
@@ -224,16 +200,16 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
+      const body: Record<string, string> = { prompt: input };
+      if (activeSessionId) body.agent_session_id = activeSessionId;
+
       const response = await fetch(`${apiBaseUrl}/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({
-          prompt: input,
-          agent_session_id: activeSessionId,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) throw new Error("Failed to get response from server");
@@ -261,7 +237,10 @@ export default function ChatPage() {
           try {
             const eventData = JSON.parse(trimmedLine.slice(6));
 
-            if (eventData.type === "tool_call") {
+            if (eventData.type === "session_created") {
+              setActiveSessionId(eventData.agent_session_id);
+              fetchSessions();
+            } else if (eventData.type === "tool_call") {
               setMessages((prev) => [
                 ...prev,
                 {
@@ -377,7 +356,7 @@ export default function ChatPage() {
             {/* New Chat Button */}
             <div className="px-3 py-3">
               <button
-                onClick={createNewSession}
+                onClick={startNewSession}
                 className="flex w-full items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
               >
                 <svg
@@ -518,7 +497,7 @@ export default function ChatPage() {
               </svg>
             </button>
             <button
-              onClick={createNewSession}
+              onClick={startNewSession}
               className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
               aria-label="New chat"
             >

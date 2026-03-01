@@ -14,7 +14,7 @@ def get_workspace(supabase: Client, *, workspace_id: str) -> Workspace:
         workspace_id: Workspace identifier
         
     Returns:
-        Workspace record dict with keys: id, organization_id, modal_volume_name, last_sandbox_id, sandbox_status, created_at, updated_at
+        Workspace model with fields: id, organization_id, modal_volume_name, last_sandbox_id, sandbox_status, created_at, updated_at
     """
     result = (
         supabase.table("workspaces")

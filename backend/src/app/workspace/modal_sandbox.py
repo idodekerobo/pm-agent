@@ -55,7 +55,7 @@ async def get_or_create_sandbox(
 
     supabase = get_supabase()
     workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-    db_sandbox_id = workspace_row.get("last_sandbox_id")
+    db_sandbox_id = workspace_row.last_sandbox_id
 
     if db_sandbox_id and db_sandbox_id != last_sandbox_id:
         sb = await _try_reconnect(db_sandbox_id)

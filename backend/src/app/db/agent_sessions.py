@@ -1,4 +1,5 @@
 from supabase import Client
+from app.schemas.agent_session import AgentSession
 
 
 def get_or_create_agent_session(
@@ -84,12 +85,12 @@ def find_session_by_thread_id(
     return result.data[0]["id"] if result.data else None
 
 
-def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[dict]:
+def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[AgentSession]:
     result = (
         supabase.table("agent_sessions")
-        .select("id, created_at, session_start_platform")
+        .select("*")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .execute()
     )
-    return result.data or []
+    return [AgentSession.model_validate(row) for row in (result.data or [])]

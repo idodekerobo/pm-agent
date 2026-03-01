@@ -15,6 +15,7 @@ class AgentSessionBase(BaseModel):
     workspace_id: UUID
     session_start_platform: str = "web"
     external_thread_id: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 class AgentSessionCreate(AgentSessionBase):

@@ -16,6 +16,7 @@ from typing import Optional
 from app.agents.context import AgentContext
 from app.messaging.slack.client import post_message, send_dm
 from app.messaging.slack.installation_store import get_installation_by_user_id
+from app.schemas.slack import SlackInstallation
 
 
 async def dispatch_slack_action(
@@ -48,7 +49,7 @@ async def dispatch_slack_action(
             "Ask the user to install the Slack app from the integrations settings page."
         )
 
-    bot_token = installation["bot_token"]  # already decrypted by installation_store
+    bot_token = installation.bot_token  # already decrypted by installation_store
 
     if action_type == "reply":
         if not message:
@@ -67,7 +68,7 @@ async def dispatch_slack_action(
     elif action_type == "post_message":
         if not channel or not message:
             return "post_message requires both 'channel' and 'message'."
-        channel_id = _resolve_channel(installation["id"], channel)
+        channel_id = _resolve_channel(str(installation.id), channel)
         if channel_id is None:
             return (
                 f"Channel #{channel} is not accessible. "
@@ -79,7 +80,7 @@ async def dispatch_slack_action(
     elif action_type == "post_reply":
         if not channel or not message or not thread_ts:
             return "post_reply requires 'channel', 'message', and 'thread_ts'."
-        channel_id = _resolve_channel(installation["id"], channel)
+        channel_id = _resolve_channel(str(installation.id), channel)
         if channel_id is None:
             return (
                 f"Channel #{channel} is not accessible. "

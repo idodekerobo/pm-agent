@@ -7,7 +7,6 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel
 from slack_sdk.signature import SignatureVerifier
 
 from app.api.deps import auth_protect_route
@@ -20,6 +19,7 @@ from app.messaging.slack.installation_store import (
     get_installation_by_user_id,
     save_installation,
 )
+from app.schemas.slack import SlackChannel, SlackChannelUpdate
 from app.workers.queue import queue
 from app.workers.tasks import handle_slack_message
 
@@ -181,7 +181,7 @@ async def slack_events(request: Request):
         # Unknown workspace — installation may have been revoked; silently ack
         return JSONResponse({"ok": True})
 
-    queue.enqueue(handle_slack_message, payload, installation["id"])
+    queue.enqueue(handle_slack_message, payload, str(installation.id))
 
     return JSONResponse({"ok": True})
 
@@ -190,25 +190,22 @@ async def slack_events(request: Request):
 # Web settings — channel management
 # ---------------------------------------------------------------------------
 
-class ChannelToggle(BaseModel):
-    is_enabled: bool
-
 
 @router.get("/integrations/slack/channels")
-async def list_slack_channels(user_id: str = Depends(auth_protect_route)):
+async def list_slack_channels(user_id: str = Depends(auth_protect_route)) -> list[SlackChannel]:
     """Return all channels the bot has been added to, with their is_enabled status."""
     installation = get_installation_by_user_id(user_id)
     if not installation:
         return []
-    return get_channels(installation["id"])
+    return get_channels(str(installation.id))
 
 
 @router.patch("/integrations/slack/channels/{channel_id}")
 async def toggle_slack_channel(
     channel_id: str,
-    body: ChannelToggle,
+    body: SlackChannelUpdate,
     user_id: str = Depends(auth_protect_route),
-):
+) -> SlackChannel:
     """Enable or disable the agent posting in a specific channel."""
     installation = get_installation_by_user_id(user_id)
     if not installation:
@@ -218,13 +215,13 @@ async def toggle_slack_channel(
     result = (
         supabase.table("slack_channels")
         .update({"is_enabled": body.is_enabled})
-        .eq("installation_id", installation["id"])
+        .eq("installation_id", str(installation.id))
         .eq("slack_channel_id", channel_id)
         .execute()
     )
     if not result.data:
         raise HTTPException(status_code=404, detail="Channel not found")
-    return result.data[0]
+    return SlackChannel.model_validate(result.data[0])
 
 
 @router.delete("/integrations/slack")

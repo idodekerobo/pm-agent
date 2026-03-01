@@ -14,6 +14,7 @@ from app.messaging.slack.client import (
     remove_reaction,
 )
 from app.messaging.slack.installation_store import remove_channel, upsert_channel
+from app.schemas.slack import SlackInstallation
 
 # Compaction thresholds
 _MAX_THREAD_MESSAGES = 30
@@ -25,7 +26,7 @@ _CHANNEL_HISTORY_LIMIT = 30
 # Dispatcher
 # ---------------------------------------------------------------------------
 
-async def dispatch_event(event_payload: dict, installation: dict) -> None:
+async def dispatch_event(event_payload: dict, installation: SlackInstallation) -> None:
     """Route a Slack event payload to the correct handler.
 
     This is the entry point called from the RQ task. The installation dict
@@ -59,7 +60,7 @@ async def dispatch_event(event_payload: dict, installation: dict) -> None:
 # Mention + DM handlers
 # ---------------------------------------------------------------------------
 
-async def handle_app_mention(event: dict, installation: dict) -> None:
+async def handle_app_mention(event: dict, installation: SlackInstallation) -> None:
     """Handle an app_mention event (someone @-mentioned the bot in a channel).
 
     Always fetches the last _CHANNEL_HISTORY_LIMIT channel messages for broad
@@ -67,8 +68,8 @@ async def handle_app_mention(event: dict, installation: dict) -> None:
     full thread history and merges it (deduplicating by ts so the thread parent
     doesn't appear twice). Both are passed to the orchestrator as input_items.
     """
-    bot_token = installation["bot_token"]
-    bot_user_id = installation["slack_bot_user_id"]
+    bot_token = installation.bot_token
+    bot_user_id = installation.slack_bot_user_id
     channel = event["channel"]
     ts = event["ts"]
     is_in_thread = bool(event.get("thread_ts"))
@@ -102,13 +103,13 @@ async def handle_app_mention(event: dict, installation: dict) -> None:
     )
 
 
-async def handle_im_message(event: dict, installation: dict) -> None:
+async def handle_im_message(event: dict, installation: SlackInstallation) -> None:
     """Handle a direct message to the bot.
 
     Guards against the bot replying to its own messages (infinite loop
     prevention) and ignores empty or bot-originated messages.
     """
-    bot_user_id = installation["slack_bot_user_id"]
+    bot_user_id = installation.slack_bot_user_id
     channel = event["channel"]
     ts = event["ts"]
 
@@ -136,28 +137,28 @@ async def handle_im_message(event: dict, installation: dict) -> None:
 # Channel membership handlers
 # ---------------------------------------------------------------------------
 
-def handle_member_joined_channel(event: dict, installation: dict) -> None:
+def handle_member_joined_channel(event: dict, installation: SlackInstallation) -> None:
     """Auto-register a channel when the bot is added to it.
 
     Only acts on events where the bot user itself joined — not when other
     users join a channel the bot is already in.
     """
-    if event.get("user") != installation["slack_bot_user_id"]:
+    if event.get("user") != installation.slack_bot_user_id:
         return
     upsert_channel(
-        installation_id=installation["id"],
+        installation_id=str(installation.id),
         channel_id=event["channel"],
         channel_name=event.get("channel_name"),
     )
     print(f"[slack] bot joined channel {event['channel']!r} — registered in DB", flush=True)
 
 
-def handle_member_left_channel(event: dict, installation: dict) -> None:
+def handle_member_left_channel(event: dict, installation: SlackInstallation) -> None:
     """Auto-remove a channel record when the bot is kicked from it."""
-    if event.get("user") != installation["slack_bot_user_id"]:
+    if event.get("user") != installation.slack_bot_user_id:
         return
     remove_channel(
-        installation_id=installation["id"],
+        installation_id=str(installation.id),
         channel_id=event["channel"],
     )
     print(f"[slack] bot left channel {event['channel']!r} — removed from DB", flush=True)
@@ -167,7 +168,7 @@ def handle_member_left_channel(event: dict, installation: dict) -> None:
 # Revocation handler
 # ---------------------------------------------------------------------------
 
-def _handle_revocation(event_payload: dict, installation: dict) -> None:
+def _handle_revocation(event_payload: dict, installation: SlackInstallation) -> None:
     """Delete the installation record on app_uninstalled or tokens_revoked.
 
     CASCADE on the FK means all associated slack_channels rows are also deleted.
@@ -176,8 +177,8 @@ def _handle_revocation(event_payload: dict, installation: dict) -> None:
 
     event_type = event_payload.get("event", {}).get("type")
     supabase = get_supabase()
-    supabase.table("slack_installations").delete().eq("id", installation["id"]).execute()
-    print(f"[slack] installation {installation['id']} removed — reason: {event_type!r}", flush=True)
+    supabase.table("slack_installations").delete().eq("id", str(installation.id)).execute()
+    print(f"[slack] installation {installation.id} removed — reason: {event_type!r}", flush=True)
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +194,7 @@ async def _run_agent_for_message(
     is_mention: bool,
     prompt_text: str,
     context_history: list[dict] | None,
-    installation: dict,
+    installation: SlackInstallation,
 ) -> None:
     """Core orchestrator flow shared by handle_app_mention and handle_im_message.
 
@@ -214,8 +215,8 @@ async def _run_agent_for_message(
     from app.db.conversations import append_conversation_item, make_user_item, make_assistant_item
     from app.db.supabase_client import get_supabase
 
-    bot_token = installation["bot_token"]
-    user_id = installation["user_id"]
+    bot_token = installation.bot_token
+    user_id = str(installation.user_id)
 
     supabase = get_supabase()
     if is_mention:

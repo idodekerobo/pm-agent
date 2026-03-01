@@ -135,25 +135,13 @@ def handle_slack_message(event_payload: dict, installation_id: str):
     sys.stdout.flush()
 
     async def _run():
-        from app.messaging.slack.installation_store import get_installation_by_user_id
+        from app.messaging.slack.installation_store import get_installation_by_id
         from app.messaging.slack.events_handler import dispatch_event
-        from app.db.supabase_client import get_supabase
 
-        supabase = get_supabase()
-        result = (
-            supabase.table("slack_installations")
-            .select("*")
-            .eq("id", installation_id)
-            .single()
-            .execute()
-        )
-        if not result.data:
+        installation = get_installation_by_id(installation_id)
+        if not installation:
             print(f"[slack] installation {installation_id} not found — skipping", flush=True)
             return
-
-        from app.integrations.crypto import decrypt_token
-        installation = result.data
-        installation["bot_token"] = decrypt_token(installation["bot_token"])
 
         await dispatch_event(event_payload, installation)
 

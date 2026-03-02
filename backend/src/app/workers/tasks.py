@@ -159,10 +159,16 @@ def provision_skill(user_id: str, provider: str):
     available on its next run without needing to provision them each time.
     """
     async def _run():
+        from app.agents.context import resolve_workspace_context, provision_skills_for_provider
         supabase = get_supabase()
-        payload = build_agent_run_payload(supabase, user_id)
-        from app.agents.context import provision_skills_for_provider
-        await provision_skills_for_provider(payload, provider)
+        organization_id, _project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
+        await provision_skills_for_provider(
+            workspace_id=workspace_id,
+            organization_id=organization_id,
+            user_id=user_id,
+            sandbox_id=sandbox_id,
+            provider=provider,
+        )
 
     try:
         return asyncio.run(_run())
@@ -177,10 +183,16 @@ def deprovision_skill(user_id: str, provider: str):
     Enqueued when the user disconnects an integration.
     """
     async def _run():
+        from app.agents.context import resolve_workspace_context, deprovision_skills_for_provider
         supabase = get_supabase()
-        payload = build_agent_run_payload(supabase, user_id)
-        from app.agents.context import deprovision_skills_for_provider
-        await deprovision_skills_for_provider(payload, provider)
+        organization_id, _project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
+        await deprovision_skills_for_provider(
+            workspace_id=workspace_id,
+            organization_id=organization_id,
+            user_id=user_id,
+            sandbox_id=sandbox_id,
+            provider=provider,
+        )
 
     try:
         return asyncio.run(_run())

@@ -113,7 +113,14 @@ def _load_skills_from_disk() -> list[dict]:
     return skills
 
 
-async def provision_skills_for_provider(payload: AgentRunPayload, provider: str) -> None:
+async def provision_skills_for_provider(
+    *,
+    workspace_id: str,
+    organization_id: str,
+    user_id: str,
+    sandbox_id: str | None,
+    provider: str,
+) -> None:
     """Write skill files for a provider into the user's workspace volume.
 
     Called once from an RQ task when the user connects an integration —
@@ -137,27 +144,34 @@ async def provision_skills_for_provider(payload: AgentRunPayload, provider: str)
         if settings.workspace_backend == "production":
             from app.workspace.workspace_runtime import fs_write
             await fs_write(
-                payload.workspace_id,
+                workspace_id,
                 workspace_path,
                 skill["content"],
-                organization_id=payload.organization_id,
-                user_id=payload.user_id,
-                sandbox_id=payload.sandbox_id,
+                organization_id=organization_id,
+                user_id=user_id,
+                sandbox_id=sandbox_id,
             )
         else:
             import asyncio
             from app.workspace.local_workspace_runtime import fs_write as _sync_fs_write
             await asyncio.to_thread(
                 _sync_fs_write,
-                payload.workspace_id,
+                workspace_id,
                 workspace_path,
                 skill["content"],
-                organization_id=payload.organization_id,
-                user_id=payload.user_id,
+                organization_id=organization_id,
+                user_id=user_id,
             )
 
 
-async def deprovision_skills_for_provider(payload: AgentRunPayload, provider: str) -> None:
+async def deprovision_skills_for_provider(
+    *,
+    workspace_id: str,
+    organization_id: str,
+    user_id: str,
+    sandbox_id: str | None,
+    provider: str,
+) -> None:
     """Delete skill files for a provider from the user's workspace volume.
 
     Called once from an RQ task when the user disconnects an integration.
@@ -174,21 +188,21 @@ async def deprovision_skills_for_provider(payload: AgentRunPayload, provider: st
     if settings.workspace_backend == "production":
         from app.workspace.workspace_runtime import bash
         await bash(
-            payload.workspace_id,
+            workspace_id,
             command=command,
-            organization_id=payload.organization_id,
-            user_id=payload.user_id,
-            sandbox_id=payload.sandbox_id,
+            organization_id=organization_id,
+            user_id=user_id,
+            sandbox_id=sandbox_id,
         )
     else:
         import asyncio
         from app.workspace.local_workspace_runtime import bash as _sync_bash
         await asyncio.to_thread(
             _sync_bash,
-            payload.workspace_id,
+            workspace_id,
             command=command,
-            organization_id=payload.organization_id,
-            user_id=payload.user_id,
+            organization_id=organization_id,
+            user_id=user_id,
         )
 
 

@@ -236,6 +236,40 @@ def build_agent_instructions(payload: AgentRunPayload) -> str:
     return "\n".join(instructions)
 
 
+def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, str | None]:
+    """Resolve organization, project, workspace, and sandbox for a user.
+
+    Returns (organization_id, project_id, workspace_id, sandbox_id).
+
+    Used by both build_agent_run_payload and background tasks (e.g. skill
+    provisioning) that need workspace access without creating an agent session.
+    """
+    from app.db.projects import get_or_create_default_project
+    from app.db.workspaces import get_workspace
+    user_row = (
+        supabase.table("users")
+        .select("organization_id")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    if not user_row.data:
+        raise ValueError(f"User {user_id} not found in DB")
+
+    organization_id = user_row.data.get("organization_id") or "local"
+
+    project_id, workspace_id = get_or_create_default_project(
+        supabase,
+        organization_id=organization_id,
+        user_id=user_id,
+    )
+
+    workspace_row = get_workspace(supabase, workspace_id=workspace_id)
+    sandbox_id = workspace_row.last_sandbox_id
+
+    return organization_id, project_id, workspace_id, sandbox_id
+
+
 # ---------------------------------------------------------------------------
 # Payload builder
 # ---------------------------------------------------------------------------
@@ -264,28 +298,10 @@ def build_agent_run_payload(
     """
     from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
     from app.db.agent_sessions import get_or_create_agent_session
-    from app.db.projects import get_or_create_default_project
-    from app.db.workspaces import get_workspace
 
-    user_row = (
-        supabase.table("users")
-        .select("organization_id")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
-    if not user_row.data:
-        raise ValueError(f"User {user_id} not found in DB")
+    organization_id, project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
 
-    organization_id = user_row.data.get("organization_id") or "local"
-
-    project_id, _ = get_or_create_default_project(
-        supabase,
-        organization_id=organization_id,
-        user_id=user_id,
-    )
-
-    resolved_session_id, workspace_id = get_or_create_agent_session(
+    resolved_session_id, _ = get_or_create_agent_session(
         supabase,
         organization_id=organization_id,
         user_id=user_id,
@@ -294,9 +310,6 @@ def build_agent_run_payload(
         session_start_platform=session_start_platform,
         external_thread_id=external_thread_id,
     )
-
-    workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-    sandbox_id = workspace_row.last_sandbox_id
 
     integrations_response = (
         supabase.table("integrations")

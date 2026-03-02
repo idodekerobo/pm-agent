@@ -315,10 +315,10 @@ def build_agent_run_payload(
         supabase.table("slack_installations")
         .select("id")
         .eq("user_id", user_id)
-        .maybe_single()
+        .limit(1)
         .execute()
     )
-    if slack_result.data:
+    if slack_result and slack_result.data:
         tools.append(tool_slack)
 
     agent_context = AgentContext(

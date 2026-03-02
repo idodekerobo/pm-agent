@@ -123,6 +123,7 @@ def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[AgentSessi
         supabase.table("agent_sessions")
         .select("*")
         .eq("user_id", user_id)
+        .neq("session_start_platform", "background")
         .order("created_at", desc=True)
         .execute()
     )

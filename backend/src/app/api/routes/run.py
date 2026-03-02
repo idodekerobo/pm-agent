@@ -66,13 +66,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
         try:
             async for event in run_orchestrator(
                 input_items=history_items + [user_item],
-                organization_id=payload.organization_id,
-                user_id=user_id,
-                agent_session_id=payload.agent_session_id,
-                workspace_id=payload.workspace_id,
-                sandbox_id=payload.sandbox_id,
-                tools=payload.tools,
-                active_providers=payload.active_providers,
+                payload=payload,
             ):
                 if event["type"] == "final_output":
                     final_output = event["content"]

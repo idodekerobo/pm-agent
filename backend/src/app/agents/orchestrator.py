@@ -1,37 +1,24 @@
 from typing import AsyncGenerator
 from agents import Agent, Runner, ItemHelpers
 
-from app.agents.context import AgentContext, build_agent_instructions
+from app.agents.context import AgentRunPayload, build_agent_instructions
+
 
 async def run_orchestrator(
     *,
     input_items: str | list[dict],
-    organization_id: str,
-    user_id: str,
-    agent_session_id: str,
-    workspace_id: str,
-    sandbox_id: str | None = None,
-    agent_context: AgentContext | None = None,
-    tools: list,
-    active_providers: list[str] | None = None,
+    payload: AgentRunPayload,
 ) -> AsyncGenerator[dict, None]:
     pm_agent = Agent(
         name="Product Manager Agent",
-        instructions=build_agent_instructions(active_providers or []),
+        instructions=build_agent_instructions(payload),
         model="gpt-5.2",
-        tools=tools,
+        tools=payload.tools,
     )
-    context = agent_context or AgentContext(
-        organization_id=organization_id,
-        user_id=user_id,
-        workspace_id=workspace_id,
-        sandbox_id=sandbox_id,
-    )
-    # TODO: build message thread management in
     result = Runner.run_streamed(
         pm_agent,
         input=input_items,
-        context=context,
+        context=payload.agent_context,
     )
     async for event in result.stream_events():
         if event.type == "raw_response_event":

@@ -39,7 +39,7 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
 
     async def _run():
         supabase = get_supabase()
-        payload = build_agent_run_payload(supabase, user_id)
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
 
         await run_gdrive_context_agent(
             user_id=payload.user_id,
@@ -86,7 +86,7 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
 
     async def _run():
         supabase = get_supabase()
-        payload = build_agent_run_payload(supabase, user_id)
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
 
         await run_linear_context_agent(
             user_id=payload.user_id,

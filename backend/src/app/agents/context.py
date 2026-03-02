@@ -132,7 +132,7 @@ async def provision_skills_for_provider(payload: AgentRunPayload, provider: str)
         if not skill:
             continue
 
-        workspace_path = f".skills/{skill_name}.md"
+        workspace_path = f".skills/{skill_name}/SKILL.md"
 
         if settings.workspace_backend == "production":
             from app.workspace.workspace_runtime import fs_write
@@ -168,7 +168,7 @@ async def deprovision_skills_for_provider(payload: AgentRunPayload, provider: st
     if not skill_names:
         return
 
-    targets = " ".join([f".skills/{name}.md" for name in skill_names])
+    targets = " ".join([f".skills/{name}/SKILL.md" for name in skill_names])
     command = f"rm -f {targets}"
 
     if settings.workspace_backend == "production":
@@ -229,7 +229,7 @@ def build_agent_instructions(payload: AgentRunPayload) -> str:
             "\n## Available Skills\n"
             "Skills contain detailed instructions for working with integrated services. "
             "Before performing any action with an integration, read the relevant skill first "
-            "using `fs_read(\".skills/<name>.md\")` — the name matches exactly the skill name listed below.\n\n"
+            "using `fs_read(\".skills/<name>/SKILL.md\")` — the name matches exactly the skill name listed below.\n\n"
             + skill_list
         )
 

@@ -12,7 +12,7 @@ from slack_sdk.signature import SignatureVerifier
 from app.api.deps import auth_protect_route
 from app.config import settings
 from app.db.supabase_client import get_supabase
-from app.integrations.crypto import encrypt_token
+from app.integrations.crypto import encrypt_token, decrypt_token
 from app.messaging.slack.installation_store import (
     get_channels,
     get_installation_by_team_id,
@@ -226,8 +226,16 @@ async def toggle_slack_channel(
 
 @router.delete("/integrations/slack")
 async def slack_disconnect(user_id: str = Depends(auth_protect_route)):
-    """Remove the Slack installation, associated channels (CASCADE), and integrations row."""
+    """Revoke the bot token, remove the Slack installation, associated channels (CASCADE), and integrations row."""
     supabase = get_supabase()
+    row = supabase.table("integrations").select("access_token").eq("user_id", user_id).eq("provider", "slack").maybe_single().execute()
+    if row and row.data:
+        try:
+            token = decrypt_token(row.data["access_token"])
+            async with httpx.AsyncClient() as client:
+                await client.post("https://slack.com/api/auth.revoke", headers={"Authorization": f"Bearer {token}"})
+        except Exception as e:
+            print(f"[slack] token revocation failed (continuing disconnect): {e}")
     supabase.table("slack_installations").delete().eq("user_id", user_id).execute()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "slack").execute()
     return {"status": "disconnected"}

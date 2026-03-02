@@ -5,7 +5,7 @@ from authlib.integrations.starlette_client import OAuth
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from app.api.deps import auth_protect_route
-from app.integrations.crypto import encrypt_token
+from app.integrations.crypto import encrypt_token, decrypt_token
 from app.db.supabase_client import get_supabase
 from app.config import settings
 from app.workers.queue import queue
@@ -85,6 +85,14 @@ async def sync_linear(user_id: str = Depends(auth_protect_route)):
 @router.delete("/linear")
 async def linear_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
+    row = supabase.table("integrations").select("access_token").eq("user_id", user_id).eq("provider", "linear").maybe_single().execute()
+    if row and row.data:
+        try:
+            token = decrypt_token(row.data["access_token"])
+            async with httpx.AsyncClient() as client:
+                await client.post("https://api.linear.app/oauth/revoke", data={"access_token": token})
+        except Exception as e:
+            print(f"[linear] token revocation failed (continuing disconnect): {e}")
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "linear").execute()
     queue.enqueue(deprovision_skill, user_id, "linear")
     return {"status": "disconnected"}
@@ -95,7 +103,12 @@ oauth.register(
     client_secret=settings.google_client_secret,
     authorize_url="https://accounts.google.com/o/oauth2/v2/auth",
     access_token_url="https://oauth2.googleapis.com/token",
-    client_kwargs={"scope": "https://www.googleapis.com/auth/drive.readonly, https://www.googleapis.com/auth/drive.metadata, https://www.googleapis.com/auth/documents, https://www.googleapis.com/auth/spreadsheets, https://www.googleapis.com/auth/presentations"}, # https://www.googleapis.com/auth/drive,, https://www.googleapis.com/auth/drive.metadata.readonly
+    client_kwargs={"scope": " ".join([
+        "https://www.googleapis.com/auth/drive.readonly",      # read all Drive files + metadata
+        "https://www.googleapis.com/auth/documents",           # read + edit Google Docs
+        "https://www.googleapis.com/auth/spreadsheets",        # read + edit Google Sheets
+        "https://www.googleapis.com/auth/presentations",       # read + edit Google Slides
+    ])},
 )
 
 @router.get("/google/connect")
@@ -165,6 +178,14 @@ async def sync_google_drive(user_id: str = Depends(auth_protect_route)):
 @router.delete("/google")
 async def google_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
+    row = supabase.table("integrations").select("access_token").eq("user_id", user_id).eq("provider", "google").maybe_single().execute()
+    if row and row.data:
+        try:
+            token = decrypt_token(row.data["access_token"])
+            async with httpx.AsyncClient() as client:
+                await client.post(f"https://oauth2.googleapis.com/revoke?token={token}")
+        except Exception as e:
+            print(f"[google] token revocation failed (continuing disconnect): {e}")
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "google").execute()
     queue.enqueue(deprovision_skill, user_id, "google")
     return {"status": "disconnected"}
@@ -231,6 +252,7 @@ async def sync_notion(user_id: str = Depends(auth_protect_route)):
     return {"status": "success", "message": "Notion context gathering queued"}
 
 @router.delete("/notion")
+# TODO: tell the user that they have to disconnect notion manually
 async def notion_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "notion").execute()

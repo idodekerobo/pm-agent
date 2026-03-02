@@ -47,9 +47,6 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             limit=MAX_HISTORY_ITEMS,
         )
 
-    print("conversation history:")
-    print(history_items)
-
     user_item = make_user_item(req.prompt)
     user_item_id = append_conversation_item(
         supabase,

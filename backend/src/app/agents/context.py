@@ -112,6 +112,86 @@ def _load_skills_from_disk() -> list[dict]:
             })
     return skills
 
+
+async def provision_skills_for_provider(payload: AgentRunPayload, provider: str) -> None:
+    """Write skill files for a provider into the user's workspace volume.
+
+    Called once from an RQ task when the user connects an integration —
+    NOT on every agent run. Skills persist in the volume until removed.
+    """
+    from app.config import settings
+
+    skill_names = PROVIDER_SKILL_MAP.get(provider, [])
+    if not skill_names:
+        return
+
+    all_skills_by_name = {s["name"]: s for s in _load_skills_from_disk()}
+
+    for skill_name in skill_names:
+        skill = all_skills_by_name.get(skill_name)
+        if not skill:
+            continue
+
+        workspace_path = f".skills/{skill_name}.md"
+
+        if settings.workspace_backend == "production":
+            from app.workspace.workspace_runtime import fs_write
+            await fs_write(
+                payload.workspace_id,
+                workspace_path,
+                skill["content"],
+                organization_id=payload.organization_id,
+                user_id=payload.user_id,
+                sandbox_id=payload.sandbox_id,
+            )
+        else:
+            import asyncio
+            from app.workspace.local_workspace_runtime import fs_write as _sync_fs_write
+            await asyncio.to_thread(
+                _sync_fs_write,
+                payload.workspace_id,
+                workspace_path,
+                skill["content"],
+                organization_id=payload.organization_id,
+                user_id=payload.user_id,
+            )
+
+
+async def deprovision_skills_for_provider(payload: AgentRunPayload, provider: str) -> None:
+    """Delete skill files for a provider from the user's workspace volume.
+
+    Called once from an RQ task when the user disconnects an integration.
+    """
+    from app.config import settings
+
+    skill_names = PROVIDER_SKILL_MAP.get(provider, [])
+    if not skill_names:
+        return
+
+    targets = " ".join([f".skills/{name}.md" for name in skill_names])
+    command = f"rm -f {targets}"
+
+    if settings.workspace_backend == "production":
+        from app.workspace.workspace_runtime import bash
+        await bash(
+            payload.workspace_id,
+            command=command,
+            organization_id=payload.organization_id,
+            user_id=payload.user_id,
+            sandbox_id=payload.sandbox_id,
+        )
+    else:
+        import asyncio
+        from app.workspace.local_workspace_runtime import bash as _sync_bash
+        await asyncio.to_thread(
+            _sync_bash,
+            payload.workspace_id,
+            command=command,
+            organization_id=payload.organization_id,
+            user_id=payload.user_id,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Instruction builder
 # ---------------------------------------------------------------------------

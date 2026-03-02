@@ -9,7 +9,7 @@ from app.integrations.crypto import encrypt_token
 from app.db.supabase_client import get_supabase
 from app.config import settings
 from app.workers.queue import queue
-from app.workers.tasks import gather_google_drive_context, gather_linear_context, gather_notion_context
+from app.workers.tasks import gather_google_drive_context, gather_linear_context, gather_notion_context, provision_skill, deprovision_skill
 
 router = APIRouter(prefix="/integrations")
 
@@ -67,6 +67,7 @@ async def linear_callback(request: Request):
     }).execute()
 
     queue.enqueue(gather_linear_context, user_id)
+    queue.enqueue(provision_skill, user_id, "linear")
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/linear/success")
 
@@ -85,6 +86,7 @@ async def sync_linear(user_id: str = Depends(auth_protect_route)):
 async def linear_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "linear").execute()
+    queue.enqueue(deprovision_skill, user_id, "linear")
     return {"status": "disconnected"}
 
 oauth.register(
@@ -142,6 +144,7 @@ async def google_callback(request: Request):
     }).execute()
 
     queue.enqueue(gather_google_drive_context, user_id)
+    queue.enqueue(provision_skill, user_id, "google")
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/google-drive/success")
 
@@ -163,6 +166,7 @@ async def sync_google_drive(user_id: str = Depends(auth_protect_route)):
 async def google_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "google").execute()
+    queue.enqueue(deprovision_skill, user_id, "google")
     return {"status": "disconnected"}
 
 @router.get("/notion/connect")
@@ -216,6 +220,7 @@ async def notion_callback(
     }).execute()
 
     queue.enqueue(gather_notion_context, user_id)
+    queue.enqueue(provision_skill, user_id, "notion")
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/notion/success")
 
@@ -229,6 +234,7 @@ async def sync_notion(user_id: str = Depends(auth_protect_route)):
 async def notion_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "notion").execute()
+    queue.enqueue(deprovision_skill, user_id, "notion")
     return {"status": "disconnected"}
 
 @router.get("/")

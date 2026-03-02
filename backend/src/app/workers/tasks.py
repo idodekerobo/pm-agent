@@ -152,6 +152,43 @@ def handle_slack_message(event_payload: dict, installation_id: str):
         raise
 
 
+def provision_skill(user_id: str, provider: str):
+    """Write skill files for the given provider into the user's workspace volume.
+
+    Enqueued after a successful OAuth callback so the agent has skill docs
+    available on its next run without needing to provision them each time.
+    """
+    async def _run():
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id)
+        from app.agents.context import provision_skills_for_provider
+        await provision_skills_for_provider(payload, provider)
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"Error provisioning skill for provider={provider} user={user_id}: {e}")
+        raise
+
+
+def deprovision_skill(user_id: str, provider: str):
+    """Remove skill files for the given provider from the user's workspace volume.
+
+    Enqueued when the user disconnects an integration.
+    """
+    async def _run():
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id)
+        from app.agents.context import deprovision_skills_for_provider
+        await deprovision_skills_for_provider(payload, provider)
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"Error deprovisioning skill for provider={provider} user={user_id}: {e}")
+        raise
+
+
 def gather_notion_context(user_id: str, provider: str = "notion"):
     """
     Fetches user context, creates agent session, and runs context gathering agent.

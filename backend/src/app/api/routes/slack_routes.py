@@ -226,7 +226,8 @@ async def toggle_slack_channel(
 
 @router.delete("/integrations/slack")
 async def slack_disconnect(user_id: str = Depends(auth_protect_route)):
-    """Remove the Slack installation and all associated channels (CASCADE)."""
+    """Remove the Slack installation, associated channels (CASCADE), and integrations row."""
     supabase = get_supabase()
     supabase.table("slack_installations").delete().eq("user_id", user_id).execute()
+    supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "slack").execute()
     return {"status": "disconnected"}

@@ -13,8 +13,11 @@ import asyncio
 from datetime import datetime, timezone
 from app.db.supabase_client import get_supabase
 from app.agents.context import build_agent_run_payload
-from app.agents.gdrive_agent import run_gdrive_context_agent
-from app.agents.linear_agent import run_linear_context_agent
+from app.agents.researcher_agent import (
+    run_research_and_learn,
+    GDRIVE_CONTEXT_PROMPT,
+    LINEAR_CONTEXT_PROMPT,
+)
 
 
 def gather_google_drive_context(user_id: str, provider: str = "google"):
@@ -41,15 +44,10 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
         supabase = get_supabase()
         payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
 
-        await run_gdrive_context_agent(
-            user_id=payload.user_id,
-            organization_id=payload.organization_id,
-            workspace_id=payload.workspace_id,
-            sandbox_id=payload.sandbox_id,
-        )
+        await run_research_and_learn(payload, GDRIVE_CONTEXT_PROMPT)
 
         # TODO: save session tool calls and result
-        
+
         return {
             "status": "success",
             "user_id": user_id,
@@ -88,15 +86,10 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
         supabase = get_supabase()
         payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
 
-        await run_linear_context_agent(
-            user_id=payload.user_id,
-            organization_id=payload.organization_id,
-            workspace_id=payload.workspace_id,
-            sandbox_id=payload.sandbox_id,
-        )
+        await run_research_and_learn(payload, LINEAR_CONTEXT_PROMPT)
 
         # TODO: save session tool calls and result
-        
+
         return {
             "status": "success",
             "user_id": user_id,

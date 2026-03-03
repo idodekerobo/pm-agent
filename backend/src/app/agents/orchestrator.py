@@ -2,6 +2,9 @@ from typing import AsyncGenerator
 from agents import Agent, Runner, ItemHelpers
 
 from app.agents.context import AgentRunPayload, build_agent_instructions
+from app.agents.execution_agent import build_execution_agent
+from app.agents.researcher_agent import build_researcher_agent
+from app.agents.learning_agent import build_learning_agent
 
 
 async def run_orchestrator(
@@ -9,17 +12,53 @@ async def run_orchestrator(
     input_items: str | list[dict],
     payload: AgentRunPayload,
 ) -> AsyncGenerator[dict, None]:
+    execution = build_execution_agent(payload)
+    researcher = build_researcher_agent(payload)
+    learner = build_learning_agent(payload)
+
+    read_tools = [t for t in payload.tools if t.name in {"tool_fs_read", "tool_fs_list"}]
+
     pm_agent = Agent(
         name="Product Manager Agent",
         instructions=build_agent_instructions(payload),
         model="gpt-5.2",
-        tools=payload.tools,
+        tools=[
+            *read_tools,
+            execution.as_tool(
+                tool_name="execution_agent",
+                tool_description=(
+                    "Performs concrete actions: writes documents, sends Slack messages, "
+                    "creates Linear issues, runs integrations. Use when you need to DO something."
+                ),
+            ),
+            researcher.as_tool(
+                tool_name="researcher_agent",
+                tool_description=(
+                    "Finds and retrieves information: searches workspace files, reads docs, "
+                    "queries external APIs. Use when you need to KNOW something."
+                ),
+            ),
+            learner.as_tool(
+                tool_name="learning_agent",
+                tool_description=(
+                    "Updates persistent memory: writes and merges context files "
+                    "(company, user, product). Use after learning something worth remembering."
+                ),
+            ),
+        ],
     )
+
     result = Runner.run_streamed(
         pm_agent,
         input=input_items,
         context=payload.agent_context,
     )
+
+    # TODO: sub-agent tool calls (execution_agent, researcher_agent, learning_agent) are opaque
+    # from the parent stream — only a single tool_call/tool_output pair is visible per sub-agent
+    # invocation. To get granular logging of what each sub-agent does internally (its own tool
+    # calls, outputs, messages), add a RunHooks or wrap each build_*_agent call with a custom
+    # Runner that streams its own events separately.
     async for event in result.stream_events():
         if event.type == "raw_response_event":
             continue
@@ -44,7 +83,7 @@ async def run_orchestrator(
             elif event.item.type == "tool_call_output_item":
                 output = str(event.item.output)
                 print(f"-- Tool output: {output[:200]}")
-                short_output = (output[:200] + '...') if len(output) > 200 else output
+                short_output = (output[:200] + "...") if len(output) > 200 else output
                 raw = event.item.raw_item
                 call_id = raw.call_id if hasattr(raw, "call_id") else raw.get("call_id", "")
                 yield {
@@ -62,12 +101,10 @@ async def run_orchestrator(
                 if content:
                     yield {
                         "type": "message",
-                        "content": content
+                        "content": content,
                     }
-            else:
-                pass
 
     yield {
         "type": "final_output",
-        "content": str(result.final_output)
+        "content": str(result.final_output),
     }

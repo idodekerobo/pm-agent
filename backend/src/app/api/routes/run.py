@@ -11,6 +11,7 @@ from app.agents.context import build_agent_run_payload
 from app.agents.orchestrator import run_orchestrator
 from app.db.supabase_client import get_supabase
 from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain, make_user_item, make_assistant_item
+from app.db.workspaces import set_workspace_agent_run_status
 from app.api.deps import auth_protect_route
 
 router = APIRouter()
@@ -60,6 +61,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
         if req.agent_session_id is None:
             yield f"data: {json.dumps({'type': 'session_created', 'agent_session_id': payload.agent_session_id})}\n\n"
         yield f"data: {json.dumps({'type': 'item_created', 'role': 'user', 'id': user_item_id})}\n\n"
+        set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="running")
         try:
             async for event in run_orchestrator(
                 input_items=history_items + [user_item],
@@ -94,5 +96,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 "content": f"An error occurred: {str(e)}"
             }
             yield f"data: {json.dumps(error_event)}\n\n"
+        finally:
+            set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="idle")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -50,6 +50,24 @@ def create_workspace(
     )
     return Workspace.model_validate(result.data[0])
 
+def set_workspace_agent_run_status(
+    supabase: Client,
+    *,
+    workspace_id: str,
+    status: str,
+) -> None:
+    """
+    Set the agent_run_status on a workspace row.
+
+    Call with status="running" when an agent run starts and status="idle" when it ends.
+    Used by both the web /run route and the Slack dispatcher so the frontend can
+    surface a warning when the agent is actively processing.
+    """
+    supabase.table("workspaces").update(
+        {"agent_run_status": status}
+    ).eq("id", workspace_id).execute()
+
+
 def update_workspace_sandbox_id(
     supabase: Client,
     *,

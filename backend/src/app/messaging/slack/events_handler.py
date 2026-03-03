@@ -228,6 +228,7 @@ async def _run_agent_for_message(
     from app.db.agent_sessions import find_session_by_thread_id
     from app.db.conversations import append_conversation_item, make_user_item, make_assistant_item
     from app.db.supabase_client import get_supabase
+    from app.db.workspaces import set_workspace_agent_run_status
 
     bot_token = installation.bot_token
     user_id = str(installation.user_id)
@@ -251,6 +252,7 @@ async def _run_agent_for_message(
             max_age_hours=36,
         )
 
+    workspace_id_to_reset: str | None = None
     await add_reaction(bot_token, channel, ts, "hourglass_flowing_sand")
     try:
         payload = build_agent_run_payload(
@@ -266,6 +268,8 @@ async def _run_agent_for_message(
                 "is_in_thread": is_in_thread,
             } if is_mention else None,
         )
+        workspace_id_to_reset = str(payload.workspace_id)
+        set_workspace_agent_run_status(supabase, workspace_id=workspace_id_to_reset, status="running")
 
         user_item = make_user_item(prompt_text)
 
@@ -336,6 +340,8 @@ async def _run_agent_for_message(
             )
 
     finally:
+        if workspace_id_to_reset:
+            set_workspace_agent_run_status(supabase, workspace_id=workspace_id_to_reset, status="idle")
         await remove_reaction(bot_token, channel, ts, "hourglass_flowing_sand")
 
 

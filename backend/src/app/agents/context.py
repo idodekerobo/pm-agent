@@ -210,6 +210,35 @@ async def deprovision_skills_for_provider(
 # Instruction builder
 # ---------------------------------------------------------------------------
 
+def build_skill_section(payload: AgentRunPayload) -> str:
+    """Return the available skills block for injection into any agent's instructions.
+
+    Shared by the orchestrator and all sub-agents so every agent knows which
+    skills are available and how to load them from the workspace volume.
+    Returns an empty string when no skills are active.
+    """
+    all_skills_by_name = {s["name"]: s for s in _load_skills_from_disk()}
+    skill_index = []
+    for provider in payload.active_providers:
+        for skill_name in PROVIDER_SKILL_MAP.get(provider, []):
+            if skill_name in all_skills_by_name:
+                skill_index.append(all_skills_by_name[skill_name])
+
+    if not skill_index:
+        return ""
+
+    skill_list = "\n".join(
+        [f"- **{s['name']}**: {s['description']}" for s in skill_index]
+    )
+    return (
+        "\n## Available Skills\n"
+        "Skills contain detailed instructions for working with integrated services. "
+        "Before performing any action with an integration, read the relevant skill first "
+        "using `fs_read(\".skills/<name>/SKILL.md\")` — the name matches exactly the skill name listed below.\n\n"
+        + skill_list
+    )
+
+
 def build_agent_instructions(payload: AgentRunPayload) -> str:
     """Build the full system prompt for the PM agent.
 

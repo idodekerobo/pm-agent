@@ -1,6 +1,7 @@
 """
 Database helpers for managing workspace metadata (Modal volumes, sandbox IDs, etc).
 """
+import asyncio
 from supabase import Client
 from app.schemas.workspace import Workspace
 
@@ -71,3 +72,30 @@ def update_workspace_sandbox_id(
             "sandbox_status": "running",
         }
     ).eq("id", workspace_id).execute()
+
+
+def update_workspace_sandbox_status(
+    supabase: Client,
+    *,
+    workspace_id: str,
+    status: str,
+) -> None:
+    """
+    Fire-and-forget update of sandbox_status for a workspace.
+
+    Schedules the DB write in a background thread and returns immediately —
+    the caller is never blocked waiting for it.
+
+    Args:
+        supabase: Supabase client
+        workspace_id: Workspace identifier
+        status: New status string (e.g. "stopped", "running")
+    """
+    asyncio.create_task(
+        asyncio.to_thread(
+            lambda: supabase.table("workspaces")
+            .update({"sandbox_status": status})
+            .eq("id", workspace_id)
+            .execute()
+        )
+    )

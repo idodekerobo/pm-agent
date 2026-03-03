@@ -1,7 +1,7 @@
 import modal
 from .modal_app import get_modal_app
 from app.db.supabase_client import get_supabase
-from app.db.workspaces import get_workspace, update_workspace_sandbox_id
+from app.db.workspaces import get_workspace, update_workspace_sandbox_id, update_workspace_sandbox_status
 
 WORKSPACE_MOUNT = "/workspace"
 
@@ -61,6 +61,9 @@ async def get_or_create_sandbox(
         sb = await _try_reconnect(db_sandbox_id)
         if sb:
             return sb
+
+    if workspace_row.sandbox_status == "running":
+        update_workspace_sandbox_status(supabase, workspace_id=workspace_id, status="stopped")
 
     vol = get_or_create_volume(user_id, organization_id, workspace_id)
     app = await get_modal_app()

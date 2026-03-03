@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
 from app.db.projects import get_or_create_default_project
-from app.db.agent_sessions import get_or_create_agent_session, list_sessions_for_user, update_session_display_name, delete_session
+from app.db.agent_sessions import create_agent_session, list_sessions_for_user, update_session_display_name, delete_session
 from app.db.conversations import get_conversation_items
 
 router = APIRouter()
@@ -31,18 +31,18 @@ def create_session(user_id: str = Depends(auth_protect_route)):
 
     organization_id = user_row.data.get("organization_id") or "local"
 
-    project_id, _ = get_or_create_default_project(
+    project_id, workspace_id = get_or_create_default_project(
         supabase,
         organization_id=organization_id,
         user_id=user_id,
     )
 
-    agent_session_id, workspace_id = get_or_create_agent_session(
+    agent_session_id = create_agent_session(
         supabase,
         organization_id=organization_id,
         user_id=user_id,
         project_id=project_id,
-        agent_session_id=None,
+        workspace_id=workspace_id,
     )
 
     return {"agent_session_id": agent_session_id, "workspace_id": workspace_id}

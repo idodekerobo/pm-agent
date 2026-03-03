@@ -2,37 +2,20 @@ from supabase import Client
 from app.schemas.agent_session import AgentSession
 
 
-def get_or_create_agent_session(
+def create_agent_session(
     supabase: Client,
     *,
     organization_id: str,
     user_id: str,
     project_id: str,
-    agent_session_id: str | None,
+    workspace_id: str,
     session_start_platform: str = "web",
     external_thread_id: str | None = None,
-) -> tuple[str, str]:
+) -> str:
     """
-    Gets or creates an agent session tied to a project.
-    The workspace_id comes from the project, not the session.
-    Returns (agent_session_id, workspace_id)
-
-    session_start_platform and external_thread_id are only used when creating a new
-    session — they are ignored on the resume (agent_session_id provided) path.
+    Creates a new agent session tied to a project.
+    Returns the new agent_session_id.
     """
-
-    project_res = (
-        supabase.table("projects")
-        .select("workspace_id")
-        .eq("id", project_id)
-        .single()
-        .execute()
-    )
-    workspace_id = project_res.data["workspace_id"]
-
-    if agent_session_id:
-        return agent_session_id, workspace_id
-
     insert_payload: dict = {
         "organization_id": organization_id,
         "user_id": user_id,
@@ -48,8 +31,7 @@ def get_or_create_agent_session(
         .insert(insert_payload)
         .execute()
     )
-    created_session = new_session.data[0]
-    return created_session["id"], created_session["workspace_id"]
+    return new_session.data[0]["id"]
 
 
 def find_session_by_thread_id(

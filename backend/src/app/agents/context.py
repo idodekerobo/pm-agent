@@ -311,19 +311,20 @@ def build_agent_run_payload(
             @-mention flows so the agent knows how to route its reply via tool_slack.
     """
     from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
-    from app.db.agent_sessions import get_or_create_agent_session
+    from app.db.agent_sessions import create_agent_session
 
     organization_id, project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
 
-    resolved_session_id, _ = get_or_create_agent_session(
-        supabase,
-        organization_id=organization_id,
-        user_id=user_id,
-        project_id=project_id,
-        agent_session_id=agent_session_id,
-        session_start_platform=session_start_platform,
-        external_thread_id=external_thread_id,
-    )
+    if agent_session_id is None:
+        agent_session_id = create_agent_session(
+            supabase,
+            organization_id=organization_id,
+            user_id=user_id,
+            project_id=project_id,
+            workspace_id=workspace_id,
+            session_start_platform=session_start_platform,
+            external_thread_id=external_thread_id,
+        )
 
     integrations_response = (
         supabase.table("integrations")
@@ -359,7 +360,7 @@ def build_agent_run_payload(
     return AgentRunPayload(
         organization_id=organization_id,
         user_id=user_id,
-        agent_session_id=resolved_session_id,
+        agent_session_id=agent_session_id,
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,
         agent_context=agent_context,

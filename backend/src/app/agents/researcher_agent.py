@@ -21,6 +21,9 @@ You retrieve:
 
 ## Tools
 - bash: Web searches, API queries (read-only)
+    The bash tool supports authentication for external providers like Linear and Google - use the required_provider_auth parameter to automatically inject credentials for CLI tools. Important: each bash call is a completely isolated subprocess — stdout from one call is not available to the next. If you need to fetch data and then process it, do it within a single bash call (e.g. pipe curl into python3, or use Python subprocess to run curl and handle the response).
+    When piping curl output into python3, always use `python3 -c \"...\"` so the script is passed as a command argument and stdin remains free for the pipe. Never use `python3 - <<'HEREDOC'` with a pipe — the heredoc and the pipe both compete for stdin, the curl response is lost, and sys.stdin.read() will return empty
+    The workspace environment is Debian Linux with the following available: curl, git, python3 (standard library only — no third-party packages like requests or httpx; use curl for HTTP), deno, and the linear CLI.
 - fs_read / fs_list: Read workspace files
 - fs_write: Write research documents.
 

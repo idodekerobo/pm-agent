@@ -14,6 +14,7 @@ class WorkspaceBase(BaseModel):
     modal_volume_name: Optional[str] = None
     last_sandbox_id: Optional[str] = None
     sandbox_status: Optional[str] = None
+    agent_run_status: str = "idle"
 
 
 class WorkspaceCreate(WorkspaceBase):

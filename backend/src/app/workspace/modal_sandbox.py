@@ -17,16 +17,6 @@ def get_or_create_volume(user_id: str, organization_id: str = None, workspace_id
         create_if_missing=True,
     )
 
-async def _try_reconnect(sandbox_id: str) -> modal.Sandbox | None:
-    """Helper to check if a specific sandbox ID is still running."""
-    try:
-        sb = await modal.Sandbox.from_id.aio(sandbox_id)
-        if await sb.poll.aio() is None:
-            return sb
-    except Exception:
-        pass
-    return None
-
 def get_agent_image() -> modal.Image:
     return (
         modal.Image.debian_slim()
@@ -37,34 +27,27 @@ def get_agent_image() -> modal.Image:
         )
     )
 
-async def get_or_create_sandbox(
-    organization_id: str,
+
+async def reconnect_sandbox(sandbox_id: str | None) -> modal.Sandbox | None:
+    """Return a live sandbox if sandbox_id is still running, else None."""
+    if not sandbox_id:
+        return None
+    try:
+        sb = await modal.Sandbox.from_id.aio(sandbox_id)
+        if await sb.poll.aio() is None:
+            return sb
+    except Exception:
+        pass
+    return None
+
+
+async def create_sandbox(
     workspace_id: str,
     user_id: str,
-    last_sandbox_id: str | None = None,
+    organization_id: str,
+    supabase,
 ) -> modal.Sandbox:
-    """
-    Try to reconnect to an existing running sandbox first.
-    If it's gone (timeout, crash, etc.), spin up a fresh one
-    mounting the same Volume — all files are preserved.
-    """
-    if last_sandbox_id:
-        sb = await _try_reconnect(last_sandbox_id)
-        if sb:
-            return sb
-
-    supabase = get_supabase()
-    workspace_row = get_workspace(supabase, workspace_id=workspace_id)
-    db_sandbox_id = workspace_row.last_sandbox_id
-
-    if db_sandbox_id and db_sandbox_id != last_sandbox_id:
-        sb = await _try_reconnect(db_sandbox_id)
-        if sb:
-            return sb
-
-    if workspace_row.sandbox_status == "running":
-        update_workspace_sandbox_status(supabase, workspace_id=workspace_id, status="stopped")
-
+    """Spin up a new Modal sandbox, persist its ID, and return it."""
     vol = get_or_create_volume(user_id, organization_id, workspace_id)
     app = await get_modal_app()
 
@@ -77,10 +60,37 @@ async def get_or_create_sandbox(
         idle_timeout=30 * 60,  # auto-terminate after 30 min idle
     )
 
-    update_workspace_sandbox_id(
-        supabase, 
-        workspace_id=workspace_id, 
-        sandbox_id=sb.object_id
-    )
-    
+    update_workspace_sandbox_id(supabase, workspace_id=workspace_id, sandbox_id=sb.object_id)
     return sb
+
+
+async def get_or_create_sandbox(
+    organization_id: str,
+    workspace_id: str,
+    user_id: str,
+    last_sandbox_id: str | None = None,
+) -> modal.Sandbox:
+    """
+    Return a running sandbox, reconnecting to an existing one if possible.
+
+    1. Fast path: try the in-memory sandbox_id hint — no DB read needed.
+    2. Fallback: read DB for a fresher ID (e.g. updated by a concurrent request).
+    3. Create: all reconnect attempts failed — mark old sandbox stopped, spin up a new one.
+    """
+    # 1. Fast path — no DB read needed
+    if sb := await reconnect_sandbox(last_sandbox_id):
+        return sb
+
+    # 2. Read DB for the most current sandbox ID
+    supabase = get_supabase()
+    workspace_row = get_workspace(supabase, workspace_id=workspace_id)
+
+    if workspace_row.last_sandbox_id != last_sandbox_id:
+        if sb := await reconnect_sandbox(workspace_row.last_sandbox_id):
+            return sb
+
+    # 3. All reconnect attempts failed — create a fresh sandbox
+    if workspace_row.sandbox_status == "running":
+        update_workspace_sandbox_status(supabase, workspace_id=workspace_id, status="stopped")
+
+    return await create_sandbox(workspace_id, user_id, organization_id, supabase)

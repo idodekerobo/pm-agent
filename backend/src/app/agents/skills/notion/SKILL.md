@@ -22,6 +22,8 @@ Use `tool_bash` with `required_provider_auth='notion'` to inject `$BEARER_TOKEN`
 
 **IDs:** All Notion IDs are UUIDs. They appear in URLs as 32-char hex strings (no dashes). The API accepts both formats.
 
+**Always check write responses.** Never discard the response from mutating requests (POST/PATCH/DELETE) with `> /dev/null`. Always capture and inspect the response for `"object": "error"` or a non-200 status. Use `curl -s -w "\nHTTP_STATUS:%{http_code}"` and check that the status is `200`. If the response body contains `"code"` and `"message"` fields, the request failed — surface the error before proceeding.
+
 ---
 
 ## 1. Search
@@ -244,7 +246,30 @@ curl -s -X PATCH \
 ```
 
 ### Append after a specific block (insert in the middle)
-Add `"after": "{BLOCK_ID}"` to the request body to insert after a specific block rather than at the end.
+Keep `{PAGE_ID}` in the URL — do NOT use the target block's ID in the path. Add `"after": "{BLOCK_ID}"` in the request body to position the new content after that block at the same level.
+
+```bash
+# Inserts as a sibling of {AFTER_BLOCK_ID}, right after it, at the page level
+curl -s -w "\nHTTP_STATUS:%{http_code}" -X PATCH \
+  -H "Authorization: Bearer $BEARER_TOKEN" \
+  -H "Notion-Version: 2022-06-28" \
+  -H "Content-Type: application/json" \
+  "https://api.notion.com/v1/blocks/{PAGE_ID}/children" \
+  -d '{
+    "after": "{AFTER_BLOCK_ID}",
+    "children": [
+      {
+        "object": "block",
+        "type": "paragraph",
+        "paragraph": {
+          "rich_text": [{ "type": "text", "text": { "content": "Inserted after the target block." } }]
+        }
+      }
+    ]
+  }'
+```
+
+**Common mistake:** calling `PATCH /blocks/{AFTER_BLOCK_ID}/children` adds the new block as a *nested child* of that block (hidden inside it), not as a sibling after it.
 
 ### Append markdown content (public integrations only)
 ```bash
@@ -562,3 +587,5 @@ curl -s -X POST \
 **Rich text array limit.** Arrays in rich text fields are capped at 100 items. Chunking long text across multiple blocks is required for large content.
 
 **Page size default is 10.** Always set `"page_size": 100` explicitly to avoid missing results on any paginated endpoint.
+
+**Always verify writes by reading back.** After appending or updating blocks, immediately fetch `GET /v1/blocks/{PAGE_ID}/children` to confirm the new block appears at the expected position. Silent success (`exit_code: 0`) from curl does not guarantee the Notion API accepted the change — network errors, auth issues, or invalid payloads can all result in a discarded error response.

@@ -8,7 +8,7 @@ from typing import Optional, AsyncGenerator
 from uuid import uuid4
 
 from app.agents.context import build_agent_run_payload
-from app.agents.orchestrator import run_orchestrator
+from app.agents.orchestrator_agent import run_orchestrator
 from app.db.supabase_client import get_supabase
 from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain, make_user_item, make_assistant_item
 from app.db.workspaces import set_workspace_agent_run_status

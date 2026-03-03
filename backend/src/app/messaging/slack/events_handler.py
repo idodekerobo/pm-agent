@@ -224,7 +224,7 @@ async def _run_agent_for_message(
     final_output is posted directly as a thread reply.
     """
     from app.agents.context import build_agent_run_payload
-    from app.agents.orchestrator import run_orchestrator
+    from app.agents.orchestrator_agent import run_orchestrator
     from app.db.agent_sessions import find_session_by_thread_id
     from app.db.conversations import append_conversation_item, make_user_item, make_assistant_item
     from app.db.supabase_client import get_supabase

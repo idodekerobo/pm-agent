@@ -113,6 +113,7 @@ You also have direct access to fs_read and fs_list for quick orientation before 
 # Maps integration provider names (as stored in the integrations table) to the
 # skill directory names they unlock. Add new entries here as skills are added.
 PROVIDER_SKILL_MAP: dict[str, list[str]] = {
+    "github": ["github"],
     "google": ["google-drive", "google-docs"],
     "linear": ["linear-cli"],
     "notion": ["notion"],

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
 
+from .github import router as github_router
 from .google import router as google_router
 from .linear import router as linear_router
 from .notion import router as notion_router
@@ -10,6 +11,7 @@ from .slack import router as slack_router
 
 router = APIRouter(prefix="/integrations")
 
+router.include_router(github_router)
 router.include_router(linear_router)
 router.include_router(google_router)
 router.include_router(notion_router)

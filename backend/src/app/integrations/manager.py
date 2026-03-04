@@ -45,6 +45,7 @@ async def get_valid_token(supabase, *, user_id: str, provider: str) -> str:
 async def _refresh_token(provider: str, refresh_token: str) -> dict:
     """Internal helper to refresh OAuth tokens."""
     providers = {
+        "github": refresh_github_token,
         "linear": refresh_linear_token,
         "google": refresh_google_token,
         "notion": refresh_notion_token,
@@ -55,6 +56,43 @@ async def _refresh_token(provider: str, refresh_token: str) -> dict:
         raise NotImplementedError(f"Refresh logic not implemented for: {provider}")
         
     return await refresh_func(refresh_token)
+
+async def refresh_github_token(installation_id: str) -> dict:
+    """Generate a new installation access token using a signed JWT.
+
+    The `refresh_token` field in the integrations table stores the installation_id
+    rather than a real refresh token, since installation tokens are regenerated
+    via JWT signing (not an OAuth refresh flow).
+    """
+    import time
+    import jwt as pyjwt
+
+    now = int(time.time())
+    private_key = settings.github_private_key.replace("\\n", "\n")
+    payload = {
+        "iat": now - 60,   # 60s buffer for clock drift
+        "exp": now + 600,  # JWT valid for 10 minutes
+        "iss": settings.github_app_id,
+    }
+    app_jwt = pyjwt.encode(payload, private_key, algorithm="RS256")
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"https://api.github.com/app/installations/{installation_id}/access_tokens",
+            headers={
+                "Authorization": f"Bearer {app_jwt}",
+                "Accept": "application/vnd.github+json",
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    return {
+        "access_token": data["token"],
+        "expires_at": data["expires_at"],
+        "refresh_token": installation_id,  # preserve installation_id for next refresh
+    }
+
 
 async def refresh_linear_token(refresh_token: str) -> dict:
     """Helper to refresh Linear token witht their OAuth structure."""

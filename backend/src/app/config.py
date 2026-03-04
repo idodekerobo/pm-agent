@@ -19,12 +19,18 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     notion_client_id: str = ""
     notion_client_secret: str = ""
-
+    notion_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
     slack_client_id: str = ""
     slack_client_secret: str = ""
     slack_signing_secret: str = ""
     slack_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
-    notion_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
+    github_app_id: str = ""
+    github_app_slug: str = ""
+    github_private_key: str = ""
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
+    github_webhook_secret: str = ""
 
     redis_url: str = ""
 

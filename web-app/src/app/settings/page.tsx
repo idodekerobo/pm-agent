@@ -14,13 +14,14 @@ interface Integration {
 }
 
 const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string }> = {
+  github: { name: "GitHub",       description: "Repos, issues & pull requests",        color: "#24292F", abbr: "GH" },
   linear: { name: "Linear",       description: "Issue tracking & project management", color: "#5E6AD2", abbr: "LN" },
   google: { name: "Google Drive", description: "Cloud storage & document sync",        color: "#34A853", abbr: "GD" },
   notion: { name: "Notion",       description: "Docs, notes & knowledge base",         color: "#191919", abbr: "NT" },
   slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL" },
 };
 
-const ALL_PROVIDERS = ["linear", "google", "notion", "slack"];
+const ALL_PROVIDERS = ["github", "linear", "google", "notion", "slack"];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

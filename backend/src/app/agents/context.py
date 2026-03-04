@@ -63,15 +63,15 @@ BASE_INSTRUCTIONS = [
     "- memory/: A single memory.md file loaded into every session. Use this for structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.",
     "- .skills/: Instruction files for integrations. Tell sub-agents which skill to read when delegating integration work.",
     "### Workspace details",
-    "- To update context/ or memory/, always delegate to learning_agent — do not write files directly.",
-    "- Each context/ file uses YAML frontmatter with fields: name, description, last_updated. The description must use YAML block scalar syntax (the `>` folded style) to avoid parse errors — never write description as an inline string. Example:",
-    "  ---",
-    "  name: product.md",
-    "  description: >",
-    "    Two or more sentences summarizing the file contents.",
-    "    Additional sentences go here, indented by 4 spaces.",
-    "  last_updated: 2026-03-03",
-    "  ---",
+    "- To update `context/` or `memory/`, always delegate to `learning_agent` — do not write files directly.",
+    "- Each `context/` file uses YAML frontmatter with fields: `name`, `description`, `last_updated`. The `description` must use YAML block scalar syntax (the `>` folded style) to avoid parse errors — never write description as an inline string. Example:\n"
+    "    ---\n"
+    "    name: product.md\n"
+    "    description: >\n"
+    "      Two or more sentences summarizing the file contents.\n"
+    "      Additional sentences go here, indented by 4 spaces.\n"
+    "    last_updated: 2026-03-03\n"
+    "    ---",
     "  Keep description and last_updated current whenever the file is updated. If a file is missing frontmatter or uses inline description, instruct learning_agent to rewrite the frontmatter block.",
     "- memory/memory.md should use clear markdown sections (e.g. ## Preferences, ## Goals, ## Patterns) so entries are easy to find and update.",
     "### When to update what",

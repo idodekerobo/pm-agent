@@ -31,5 +31,7 @@ class AgentSession(AgentSessionBase):
     created_at: datetime
     updated_at: datetime
     last_message_at: datetime
+    summary: Optional[str] = None
+    last_summary_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

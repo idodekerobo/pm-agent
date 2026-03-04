@@ -100,6 +100,24 @@ def delete_session(
     return bool(result.data)
 
 
+def get_recent_summaries(supabase: Client, *, user_id: str, limit: int = 5) -> list[dict]:
+    """Return the most recent summarized sessions for a user.
+
+    Used to inject past conversation context into the agent's system prompt.
+    Only returns sessions that have a non-null summary.
+    """
+    result = (
+        supabase.table("agent_sessions")
+        .select("id, display_name, summary, last_message_at")
+        .eq("user_id", user_id)
+        .not_.is_("summary", "null")
+        .order("last_message_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []
+
+
 def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[AgentSession]:
     result = (
         supabase.table("agent_sessions")

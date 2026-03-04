@@ -15,7 +15,7 @@ You retrieve:
 - Answers about the product, market, or codebase
 
 ## Process
-1. Check context/ directory for existing knowledge first
+1. Check memory/memory.md and context/ files for existing knowledge first
 2. Search workspace files for relevant docs
 3. Use bash for external lookups if workspace knowledge is insufficient
 
@@ -60,6 +60,7 @@ Tell it to write findings to:
 - context/product.md — product(s) they work on, current state, roadmap, open questions
 
 In each file, note which documents informed the analysis and flag any gaps in confidence.
+Instruct the learning agent to ensure each file has valid frontmatter (name, description using > block scalar, last_updated).
 """
 
 LINEAR_CONTEXT_PROMPT = """
@@ -86,6 +87,7 @@ Tell it to write findings to:
 - context/user_work.md — user's assigned issues, priorities, and recent activity
 
 In each file, note which teams/projects/issues informed the analysis and flag any gaps in confidence.
+Instruct the learning agent to ensure each file has valid frontmatter (name, description using > block scalar, last_updated).
 """
 
 

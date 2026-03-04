@@ -63,6 +63,33 @@ In each file, note which documents informed the analysis and flag any gaps in co
 Instruct the learning agent to ensure each file has valid frontmatter (name, description using > block scalar, last_updated).
 """
 
+GITHUB_CONTEXT_PROMPT = """
+Explore the user's GitHub account to discover and document their repositories, codebases, and engineering context.
+
+Read the GitHub CLI skill first: fs_read(".skills/github/SKILL.md")
+
+## Discovery process
+1. List the user's repositories to identify active projects and ownership
+2. For the 3-5 most recently active repos: view repo details, list open PRs, list open issues
+3. Look at repo topics, descriptions, and languages to understand the tech stack
+4. Identify which repos appear to be the user's primary product(s) vs tooling/side projects
+5. Synthesize findings into a coherent picture of their engineering work and open priorities
+
+## What to look for
+- Repositories: Names, descriptions, visibility, primary language, topics, activity level
+- Active work: Open PRs (what's being built), open issues (what's broken or planned)
+- Tech stack: Languages, frameworks inferred from repo names/languages/topics
+- Team signals: Org repos vs personal repos, collaborators, team ownership
+
+Once you have gathered sufficient context, hand off to the learning agent.
+Tell it to update the following context files:
+- context/user.md — add or update the user's engineering context: their repos, tech stack, and what they are actively building
+- context/product.md — if any repos clearly map to a product the user owns or works on, update this file with the repo name, language, open issues/PRs, and current state
+
+In each file, note which repos informed the analysis and flag any gaps in confidence.
+Instruct the learning agent to ensure each file has valid frontmatter (name, description using > block scalar, last_updated).
+"""
+
 LINEAR_CONTEXT_PROMPT = """
 Explore the user's Linear workspace to discover and document their team, projects, and current work context.
 

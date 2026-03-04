@@ -199,7 +199,7 @@ async def github_callback(
         }
     ).execute()
 
-    # queue.enqueue(gather_github_context, user_id) # TODO: enqueue github skill
+    queue.enqueue(gather_github_context, user_id)
     queue.enqueue(provision_skill, user_id, "github")
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/github/success")

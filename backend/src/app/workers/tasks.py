@@ -194,6 +194,30 @@ def deprovision_skill(user_id: str, provider: str):
         raise
 
 
+def gather_github_context(user_id: str, provider: str = "github"):
+    """
+    Enqueued after GitHub OAuth callback.
+    Fetches user context, creates agent session, and runs context gathering agent.
+    """
+    async def _run():
+        from app.agents.researcher_agent import run_research_and_learn, GITHUB_CONTEXT_PROMPT
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
+        await run_research_and_learn(payload, GITHUB_CONTEXT_PROMPT)
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "provider": provider,
+            "context_gathered_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"Error gathering GitHub context for user {user_id}: {str(e)}")
+        raise
+
+
 def gather_notion_context(user_id: str, provider: str = "notion"):
     """
     Fetches user context, creates agent session, and runs context gathering agent.

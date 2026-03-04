@@ -218,6 +218,30 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
         return index
 
 
+async def _load_recent_summaries(payload: "AgentRunPayload") -> str | None:
+    """Fetch the last 5 summarized sessions for this user and format them for injection.
+
+    Returns a formatted string ready to append to the system prompt, or None
+    if no summaries exist yet.
+    """
+    from app.db.supabase_client import get_supabase
+    from app.db.agent_sessions import get_recent_summaries
+
+    supabase = get_supabase()
+    rows = get_recent_summaries(supabase, user_id=payload.user_id)
+    if not rows:
+        return None
+
+    lines = []
+    for row in rows:
+        label = row.get("display_name") or "Session"
+        date = (row.get("last_message_at") or "")[:10]  # YYYY-MM-DD
+        summary = row.get("summary", "").strip()
+        lines.append(f"- **{label}** ({date}): {summary}")
+
+    return "\n".join(lines)
+
+
 async def _load_memory(payload: "AgentRunPayload") -> str | None:
     """Read memory/memory.md from the workspace volume in full, if it exists.
 
@@ -380,6 +404,15 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
             "The following has been remembered from previous sessions. "
             "Use this to inform how you respond and what you prioritize.\n\n"
             + memory
+        )
+
+    recent_summaries = await _load_recent_summaries(payload)
+    if recent_summaries:
+        instructions.append(
+            "\n## Recent Conversations\n"
+            "These are brief summaries of your last few sessions with this user. "
+            "Use them for continuity — reference past decisions or topics where relevant.\n\n"
+            + recent_summaries
         )
 
     context_index = await _load_context_index(payload)

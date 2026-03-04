@@ -46,7 +46,7 @@ def find_session_by_thread_id(
     Look up an existing agent_session by its external thread key.
     Returns the session id if found, None otherwise.
 
-    max_age_hours: when set, only return sessions whose updated_at is within
+    max_age_hours: when set, only return sessions whose last_message_at is within
     that window. Used for DM sessions to enforce a time-based cutoff.
     """
     query = (
@@ -55,13 +55,13 @@ def find_session_by_thread_id(
         .eq("user_id", user_id)
         .eq("session_start_platform", session_start_platform)
         .eq("external_thread_id", external_thread_id)
-        .order("updated_at", desc=True)
+        .order("last_message_at", desc=True)
         .limit(1)
     )
     if max_age_hours is not None:
         from datetime import datetime, timedelta, timezone
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=max_age_hours)).isoformat()
-        query = query.gt("updated_at", cutoff)
+        query = query.gt("last_message_at", cutoff)
 
     result = query.execute()
     return result.data[0]["id"] if result.data else None

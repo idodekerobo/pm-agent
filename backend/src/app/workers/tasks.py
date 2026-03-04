@@ -220,16 +220,14 @@ def gather_github_context(user_id: str, provider: str = "github"):
 
 def gather_notion_context(user_id: str, provider: str = "notion"):
     """
+    Enqueued after Notion OAuth callback.
     Fetches user context, creates agent session, and runs context gathering agent.
-    
-    Args:
-        user_id: User who connected the integration
-        provider: Integration provider name
     """
     async def _run():
-        print("RUNNING NOTION CONTEXT AGENT")
-        # TODO: Implement Notion context gathering agent
-        
+        from app.agents.researcher_agent import run_research_and_learn, NOTION_CONTEXT_PROMPT
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
+        await run_research_and_learn(payload, NOTION_CONTEXT_PROMPT)
         return {
             "status": "success",
             "user_id": user_id,

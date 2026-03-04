@@ -118,6 +118,33 @@ Instruct the learning agent to ensure each file has valid frontmatter (name, des
 """
 
 
+NOTION_CONTEXT_PROMPT = """
+Explore the user's Notion workspace to discover and document their company context, product work, and current priorities.
+
+Read the Notion skill first: fs_read(".skills/notion/SKILL.md")
+
+## Discovery process
+1. Search for high-signal pages by keyword — try: "roadmap", "strategy", "OKR", "product", "PRD", "spec", "meeting notes", "team"
+2. List all databases to understand how the workspace is structured (tasks, projects, docs, etc.)
+3. Read 3-5 representative pages — prioritize: roadmaps, product specs, strategy docs, OKRs, active project trackers
+4. If a task or project database exists, query it for in-progress or high-priority items
+5. Synthesize findings into a coherent picture of the company, product, and what the user is actively working on
+
+## What to look for
+- Company Context: Name, mission, business model, team structure, key stakeholders
+- Product Context: What product(s) exist, current state, roadmap, open questions, upcoming milestones
+- User Focus: What the user owns, current priorities, active projects or initiatives
+
+Once you have gathered sufficient context, hand off to the learning agent.
+Tell it to update the following context files:
+- context/company.md — company name, business, mission, structure, key stakeholders (if not already captured or if Notion adds new detail)
+- context/product.md — product(s) they work on, current state, roadmap, open questions, upcoming milestones
+- context/user.md — user's role, responsibilities, and current focus areas as surfaced by Notion content
+
+In each file, note which Notion pages or databases informed the analysis and flag any gaps in confidence.
+Instruct the learning agent to ensure each file has valid frontmatter (name, description using > block scalar, last_updated).
+"""
+
 def build_researcher_agent(payload: AgentRunPayload, handoffs: list | None = None) -> Agent:
     allowed = {"tool_bash", "tool_fs_read", "tool_fs_list", "tool_fs_write"}
     tools = [t for t in payload.tools if t.name in allowed]

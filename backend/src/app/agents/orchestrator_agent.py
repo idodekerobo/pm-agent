@@ -52,6 +52,7 @@ async def run_orchestrator(
         pm_agent,
         input=input_items,
         context=payload.agent_context,
+        max_turns=20,
     )
 
     # TODO: sub-agent tool calls (execution_agent, researcher_agent, learning_agent) are opaque

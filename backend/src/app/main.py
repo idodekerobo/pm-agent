@@ -7,6 +7,7 @@ from app.api.routes.health import router as health_router
 from app.api.routes.run import router as run_router
 from app.api.routes.integrations import router as integrations_router
 from app.api.routes.slack_routes import router as slack_router
+from app.api.routes.webhooks import router as webhooks_router
 from app.api.routes.sessions import router as sessions_router
 from app.api.routes.filesystem import router as filesystem_router
 
@@ -33,5 +34,6 @@ app.include_router(health_router)
 app.include_router(run_router)
 app.include_router(integrations_router)
 app.include_router(slack_router)
+app.include_router(webhooks_router)
 app.include_router(sessions_router)
 app.include_router(filesystem_router)

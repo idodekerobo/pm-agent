@@ -20,7 +20,7 @@ async def run_orchestrator(
 
     pm_agent = Agent(
         name="Product Manager Agent",
-        instructions=build_agent_instructions(payload),
+        instructions=await build_agent_instructions(payload),
         model="gpt-5.2",
         tools=[
             *read_tools,

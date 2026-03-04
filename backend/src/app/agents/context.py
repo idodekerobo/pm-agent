@@ -1,6 +1,8 @@
 import os
 from dataclasses import dataclass, field
 
+from app.config import settings
+
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -153,8 +155,6 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
     Uses the Modal Volume direct API in production and the local filesystem in dev.
     Returns a list of dicts with keys: name, description, path.
     """
-    from app.config import settings
-
     if settings.workspace_backend == "production":
         from pathlib import PurePosixPath
         from app.workspace.modal_sandbox import get_or_create_volume
@@ -215,8 +215,6 @@ async def provision_skills_for_provider(
     Called once from an RQ task when the user connects an integration —
     NOT on every agent run. Skills persist in the volume until removed.
     """
-    from app.config import settings
-
     skill_names = PROVIDER_SKILL_MAP.get(provider, [])
     if not skill_names:
         return
@@ -265,8 +263,6 @@ async def deprovision_skills_for_provider(
 
     Called once from an RQ task when the user disconnects an integration.
     """
-    from app.config import settings
-
     skill_names = PROVIDER_SKILL_MAP.get(provider, [])
     if not skill_names:
         return

@@ -59,6 +59,6 @@ def build_learning_agent(payload: AgentRunPayload) -> Agent:
     return Agent(
         name="Learning Agent",
         instructions=LEARNING_INSTRUCTIONS + build_skill_section(payload),
-        model="gpt-4.1",
+        model="gpt-5.2",
         tools=tools,
     )

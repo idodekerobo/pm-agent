@@ -97,7 +97,7 @@ def build_researcher_agent(payload: AgentRunPayload, handoffs: list | None = Non
     return Agent(
         name="Researcher Agent",
         instructions=RESEARCHER_INSTRUCTIONS + build_skill_section(payload),
-        model="gpt-4.1",
+        model="gpt-5.2",
         tools=tools,
         handoffs=handoffs or [],
     )

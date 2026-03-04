@@ -41,6 +41,6 @@ def build_execution_agent(payload: AgentRunPayload) -> Agent:
     return Agent(
         name="Execution Agent",
         instructions=EXECUTION_INSTRUCTIONS + build_skill_section(payload),
-        model="gpt-4.1",
+        model="gpt-5.2",
         tools=tools,
     )

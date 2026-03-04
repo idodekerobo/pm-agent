@@ -206,6 +206,30 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
         return index
 
 
+async def _load_memory(payload: "AgentRunPayload") -> str | None:
+    """Read memory/memory.md from the workspace volume in full, if it exists.
+
+    Unlike context files (index only), memory is always injected in full so the
+    agent starts every session with it already present.
+    """
+    if settings.workspace_backend == "production":
+        from app.workspace.modal_sandbox import get_or_create_volume
+        vol = get_or_create_volume(payload.user_id)
+        try:
+            chunks = []
+            async for chunk in vol.read_file.aio("/memory/memory.md"):
+                chunks.append(chunk)
+            return b"".join(chunks).decode("utf-8")
+        except Exception as e:
+            print(f"exception loading memory: {e}")
+            return None
+    else:
+        from app.workspace.local_workspace_runtime import ensure_workspace
+        root = ensure_workspace(payload.workspace_id, payload.organization_id)
+        path = root / "memory" / "memory.md"
+        return path.read_text(encoding="utf-8") if path.exists() else None
+
+
 async def provision_skills_for_provider(
     *,
     workspace_id: str,
@@ -336,6 +360,15 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
     directory. Actual skill and context files are loaded on demand by the agent.
     """
     instructions = list(BASE_INSTRUCTIONS)
+
+    memory = await _load_memory(payload)
+    if memory:
+        instructions.append(
+            "\n## Memory\n"
+            "The following has been remembered from previous sessions. "
+            "Use this to inform how you respond and what you prioritize.\n\n"
+            + memory
+        )
 
     context_index = await _load_context_index(payload)
     if context_index:

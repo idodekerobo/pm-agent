@@ -30,9 +30,10 @@ def custom_exc_handler(job, exc_type, exc_value, tb):
 
 def main():
     redis_conn = get_redis_connection()
-    queue = get_queue("default")
+    high_queue = get_queue("high")
+    default_queue = get_queue("default")
 
-    logger.info(f"Starting RQ worker on queue: {queue.name}")
+    logger.info(f"Starting RQ worker on queues: high, default")
     logger.info(f"Redis connection: {redis_conn.connection_pool.connection_kwargs.get('host', 'localhost')}")
 
     try:
@@ -43,7 +44,7 @@ def main():
         raise
 
     worker = Worker(
-        [queue],
+        [high_queue, default_queue],
         connection=redis_conn,
         exception_handlers=[custom_exc_handler]
     )

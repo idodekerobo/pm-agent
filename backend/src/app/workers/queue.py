@@ -7,7 +7,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _redis_connection = None
-_queue_instance = None
+_queue_instances: dict[str, Queue] = {}
 
 def get_redis_connection():
     """Get or create Redis connection with connection pooling."""
@@ -32,19 +32,18 @@ def get_redis_connection():
 
 def get_queue(name: str = "default"):
     """Get or create an RQ queue with lazy initialization."""
-    global _queue_instance
-    if _queue_instance is None:
+    global _queue_instances
+    if name not in _queue_instances:
         logger.info(f"Creating new RQ queue: {name}")
-        redis_conn = get_redis_connection()
-        _queue_instance = Queue(name, connection=redis_conn)
-    return _queue_instance
+        _queue_instances[name] = Queue(name, connection=get_redis_connection())
+    return _queue_instances[name]
 
 def reset_connection():
-    """Reset Redis connection and queue. Useful for testing or reconnection."""
-    global _redis_connection, _queue_instance
-    logger.info("Resetting Redis connection and queue")
+    """Reset Redis connection and queues. Useful for testing or reconnection."""
+    global _redis_connection, _queue_instances
+    logger.info("Resetting Redis connection and queues")
     _redis_connection = None
-    _queue_instance = None
+    _queue_instances = {}
 
 class _QueueProxy:
     """Proxy that lazily creates the queue on first access."""

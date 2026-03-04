@@ -8,7 +8,7 @@ from slack_sdk.signature import SignatureVerifier
 
 from app.config import settings
 from app.messaging.slack.installation_store import get_installation_by_team_id
-from app.workers.queue import queue
+from app.workers.queue import get_queue
 from app.workers.tasks import handle_slack_message
 
 router = APIRouter(prefix="/slack")
@@ -59,6 +59,6 @@ async def slack_events(request: Request):
         # Unknown workspace — installation may have been revoked; silently ack
         return JSONResponse({"ok": True})
 
-    queue.enqueue(handle_slack_message, payload, str(installation.id))
+    get_queue("high").enqueue(handle_slack_message, payload, str(installation.id))
 
     return JSONResponse({"ok": True})

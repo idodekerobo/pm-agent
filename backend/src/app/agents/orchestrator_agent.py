@@ -30,6 +30,7 @@ async def run_orchestrator(
                     "Performs concrete actions: writes documents, sends Slack messages, "
                     "creates Linear issues, runs integrations. Use when you need to DO something."
                 ),
+                max_turns=40,
             ),
             researcher.as_tool(
                 tool_name="researcher_agent",
@@ -37,6 +38,7 @@ async def run_orchestrator(
                     "Finds and retrieves information: searches workspace files, reads docs, "
                     "queries external APIs. Use when you need to KNOW something."
                 ),
+                max_turns=20,
             ),
             learner.as_tool(
                 tool_name="learning_agent",
@@ -52,7 +54,7 @@ async def run_orchestrator(
         pm_agent,
         input=input_items,
         context=payload.agent_context,
-        max_turns=20,
+        max_turns=40,
     )
 
     # TODO: sub-agent tool calls (execution_agent, researcher_agent, learning_agent) are opaque

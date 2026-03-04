@@ -162,7 +162,8 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
         vol = get_or_create_volume(payload.user_id)
         try:
             entries = await vol.listdir.aio("/context")
-        except Exception:
+        except Exception as e:
+            print(f"error getting context from modal volume: {e}")
             return []
 
         index = []
@@ -176,9 +177,11 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
                     chunks.append(chunk)
                 content = b"".join(chunks).decode("utf-8")
                 meta = _parse_frontmatter(content)
-                if meta.get("name") and meta.get("description"):
-                    index.append({"name": meta["name"], "description": meta["description"], "path": f"context/{name}"})
-            except Exception:
+                if meta.get("name"):
+                    description = meta.get("description") or "(no description yet)"
+                    index.append({"name": meta["name"], "description": description, "path": f"context/{name}"})
+            except Exception as e:
+                print(f"[context_index] failed to read/parse {name}: {e}", flush=True)
                 continue
         return index
 
@@ -195,8 +198,9 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
                 continue
             try:
                 meta = _parse_frontmatter(p.read_text(encoding="utf-8"))
-                if meta.get("name") and meta.get("description"):
-                    index.append({"name": meta["name"], "description": meta["description"], "path": str(p.relative_to(root))})
+                if meta.get("name"):
+                    description = meta.get("description") or "(no description yet)"
+                    index.append({"name": meta["name"], "description": description, "path": str(p.relative_to(root))})
             except Exception:
                 continue
         return index

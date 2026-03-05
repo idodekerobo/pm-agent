@@ -7,6 +7,7 @@ import sys
 from rq import Worker
 from rq.logutils import setup_loghandlers
 from app.workers.queue import get_redis_connection, get_queue
+from app.errors import log_error_sync
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,12 +21,14 @@ rq_logger = logging.getLogger('rq.worker')
 rq_logger.setLevel(logging.DEBUG)
 
 def custom_exc_handler(job, exc_type, exc_value, tb):
-    """Custom exception handler that logs failures prominently."""
-    logger.error("=" * 80)
-    logger.error(f"❌ JOB FAILED: {job.func_name}")
-    logger.error(f"   Job ID: {job.id}")
-    logger.error(f"   Exception: {exc_type.__name__}: {exc_value}")
-    logger.error("=" * 80)
+    """Custom exception handler that logs failures prominently and persists to DB."""
+    logger.error(f"❌ JOB FAILED: {job.func_name} | {exc_type.__name__}: {exc_value} | job_id={job.id}")
+    # All task functions receive user_id as their first positional argument.
+    user_id = job.args[0] if job.args else None
+    log_error_sync(user_id, "worker", exc_value, context={
+        "job_id": job.id,
+        "job_func": job.func_name,
+    })
     return False
 
 def main():

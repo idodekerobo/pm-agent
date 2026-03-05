@@ -13,6 +13,7 @@ from app.db.supabase_client import get_supabase
 from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain, make_user_item, make_assistant_item
 from app.db.workspaces import set_workspace_agent_run_status
 from app.api.deps import auth_protect_route
+from app.errors import log_error
 
 router = APIRouter()
 
@@ -90,12 +91,10 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 )
                 yield f"data: {json.dumps({'type': 'item_created', 'role': 'assistant', 'id': assistant_item_id})}\n\n"
         except Exception as e:
-            print(f"Error in stream: {e}")
-            error_event = {
-                "type": "error",
-                "content": f"An error occurred: {str(e)}"
-            }
-            yield f"data: {json.dumps(error_event)}\n\n"
+            await log_error(user_id, "agent", e, context={
+                "session_id": payload.agent_session_id,
+            })
+            yield f"data: {json.dumps({'type': 'error', 'content': f'An error occurred: {str(e)}'})}\n\n"
         finally:
             set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="idle")
 

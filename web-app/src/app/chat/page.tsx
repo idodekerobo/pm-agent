@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
+import { logError } from "@/lib/errorLogger";
 
 interface Message {
   id: string;
@@ -80,6 +81,7 @@ export default function ChatPage() {
       }
     } catch (e) {
       console.error("Failed to fetch sessions:", e);
+      logError(getToken, "Failed to fetch sessions", { action: "fetchSessions" });
     }
   };
 
@@ -131,6 +133,7 @@ export default function ChatPage() {
       }
     } catch (e) {
       console.error("Failed to load session:", e);
+      logError(getToken, "Failed to load session", { action: "loadSession", sessionId });
     }
   };
 
@@ -298,6 +301,10 @@ export default function ChatPage() {
       }
     } catch (error) {
       console.error("Error sending message:", error);
+      logError(getToken, error instanceof Error ? error.message : "Error sending message", {
+        action: "sendMessage",
+        session_id: activeSessionId,
+      });
       setMessages((prev) => [
         ...prev,
         {

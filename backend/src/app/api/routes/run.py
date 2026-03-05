@@ -19,10 +19,16 @@ router = APIRouter()
 
 MAX_HISTORY_ITEMS = 50
 
+class SessionMetadata(BaseModel):
+    timezone: Optional[str] = None
+    location: Optional[str] = None
+
+
 class RunRequest(BaseModel):
     prompt: str
     agent_session_id: Optional[str] = None
     parent_item_id: Optional[str] = None
+    session_metadata: Optional[SessionMetadata] = None
 
 class RunResponse(BaseModel):
     agent_session_id: str
@@ -57,6 +63,10 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
         parent_id=req.parent_item_id,
     )
 
+    # Build ephemeral system context — prepended every turn, never saved to DB
+    system_item = _build_web_system_item(req.session_metadata)
+    input_items = ([system_item] if system_item else []) + history_items + [user_item]
+
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
         if req.agent_session_id is None:
@@ -65,7 +75,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
         set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="running")
         try:
             async for event in run_orchestrator(
-                input_items=history_items + [user_item],
+                input_items=input_items,
                 payload=payload,
             ):
                 if event["type"] == "final_output":
@@ -99,3 +109,25 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="idle")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+def _build_web_system_item(metadata: Optional[SessionMetadata]) -> Optional[dict]:
+    if not metadata:
+        return None
+    from datetime import datetime
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    tz_name = metadata.timezone or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, KeyError):
+        tz = ZoneInfo("UTC")
+
+    now = datetime.now(tz)
+    time_str = now.strftime("%A, %B %-d %Y, %I:%M %p") + f" ({tz_name})"
+
+    parts = ["[Session Context]", "Platform: Web App", f"Time: {time_str}"]
+    if metadata.location:
+        parts.append(f"Location: {metadata.location} (approximate)")
+
+    return {"type": "message", "role": "system", "content": [{"type": "input_text", "text": "\n".join(parts)}]}

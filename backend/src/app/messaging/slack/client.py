@@ -163,6 +163,13 @@ async def list_channels(
     return channels[:limit]
 
 
+async def get_user_info(bot_token: str, user_id: str) -> dict:
+    """Fetch a Slack user's profile, including tz, tz_label, tz_offset."""
+    client = AsyncWebClient(token=bot_token)
+    response = await client.users_info(user=user_id)
+    return response.data.get("user", {})
+
+
 async def get_thread_history(
     bot_token: str,
     channel: str,

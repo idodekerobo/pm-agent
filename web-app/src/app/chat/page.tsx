@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sessionMetadata, setSessionMetadata] = useState<{ timezone: string; location?: string } | null>(null);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
@@ -52,6 +53,14 @@ export default function ChatPage() {
     if (!session || hasInitialized.current) return;
     hasInitialized.current = true;
     fetchSessions();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    fetch("https://ipapi.co/json/")
+      .then((r) => r.json())
+      .then((data) => {
+        const loc = [data.city, data.region_code, data.country_code].filter(Boolean).join(", ");
+        setSessionMetadata({ timezone: tz, location: loc || undefined });
+      })
+      .catch(() => setSessionMetadata({ timezone: tz }));
   }, [session]);
 
   // Close dropdown when clicking outside
@@ -203,8 +212,9 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const body: Record<string, string> = { prompt: input };
+      const body: Record<string, unknown> = { prompt: input };
       if (activeSessionId) body.agent_session_id = activeSessionId;
+      if (sessionMetadata) body.session_metadata = sessionMetadata;
 
       const response = await fetch(`${apiBaseUrl}/run`, {
         method: "POST",

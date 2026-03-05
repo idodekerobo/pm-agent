@@ -101,6 +101,7 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         prompt_text=prompt_text,
         context_history=context_history,
         installation=installation,
+        slack_user_id=event["user"],
     )
 
 
@@ -131,6 +132,7 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         prompt_text=prompt_text,
         context_history=None,
         installation=installation,
+        slack_user_id=event["user"],
     )
 
 
@@ -209,19 +211,25 @@ async def _run_agent_for_message(
     prompt_text: str,
     context_history: list[dict] | None,
     installation: SlackInstallation,
+    slack_user_id: str,
 ) -> None:
     """Core orchestrator flow shared by handle_app_mention and handle_im_message.
 
+    Both paths prepend an ephemeral system context item (platform, current time in the
+    user's timezone) to input_items every turn. This item is never saved to the DB.
+
     For @-mentions (is_mention=True):
     1. Add :hourglass_flowing_sand: reaction
-    2. Inject Slack context as the first input_item so the agent knows where it was mentioned
+    2. Prepend system context item (includes tool_slack instructions)
     3. Run the orchestrator — the agent decides to call tool_slack(action_type="reply")
        with reply_in_thread=True/False to control placement
     4. Fallback: if the agent didn't call tool_slack, post final_output in the channel
     5. Save conversation items + remove reaction
 
-    For DMs (is_mention=False): runs the old auto-post flow — no context injection,
-    final_output is posted directly as a thread reply.
+    For DMs (is_mention=False):
+    1. Prepend system context item
+    2. Run the orchestrator
+    3. Auto-post final_output as a thread reply
     """
     from app.agents.context import build_agent_run_payload
     from app.agents.orchestrator_agent import run_orchestrator
@@ -273,30 +281,18 @@ async def _run_agent_for_message(
 
         user_item = make_user_item(prompt_text)
 
-        if is_mention:
-            # Inject Slack context as first input_item so the agent knows where it was
-            # mentioned and how to use tool_slack to post its reply.
-            thread_info = (
-                f"This mention is inside an existing thread (thread_ts: {thread_ts})."
-                if is_in_thread
-                else "This is a top-level channel message (not inside a thread)."
-            )
-            slack_context_item: dict = {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": (
-                    f"[Slack Context]\n"
-                    f"You were @-mentioned in Slack channel {channel}.\n"
-                    f"{thread_info}\n"
-                    f"Use tool_slack with action_type=\"reply\" to post your response.\n"
-                    f"Set reply_in_thread=True to reply inside the thread, or "
-                    f"reply_in_thread=False to post directly in the channel.\n"
-                    f"Only omit calling tool_slack if no reply is needed."
-                )}],
-            }
-            input_items = [slack_context_item] + (context_history or []) + [user_item]
-        else:
-            input_items = (context_history or []) + [user_item]
+        # Fetch user timezone — cheap call, gives always-current time in user's tz
+        user_info: dict = {}
+        try:
+            from app.messaging.slack.client import get_user_info
+            user_info = await get_user_info(bot_token, slack_user_id)
+        except Exception:
+            pass  # non-fatal — falls back to UTC
+
+        system_context_item = _build_slack_system_item(
+            user_info, channel, is_mention
+        )
+        input_items = [system_context_item] + (context_history or []) + [user_item]
 
         user_item_id = append_conversation_item(
             supabase,
@@ -374,6 +370,43 @@ def _build_conversation_history(messages: list[dict], bot_user_id: str) -> list[
             "content": [{"type": content_type, "text": text}],
         })
     return items
+
+def _build_slack_system_item(
+    user_info: dict,
+    channel: str,
+    is_mention: bool,
+) -> dict:
+    """Build an ephemeral system context item with platform, current time, and tool instructions.
+
+    Never saved to DB — prepended to input_items on every Slack turn.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    tz_name = user_info.get("tz") or "UTC"
+    tz_label = user_info.get("tz_label") or tz_name
+    try:
+        tz = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, KeyError):
+        tz = ZoneInfo("UTC")
+
+    now = datetime.now(tz)
+    time_str = now.strftime("%A, %B %-d %Y, %I:%M %p") + f" ({tz_label})"
+
+    if is_mention:
+        platform = f"Slack channel {channel}"
+        tool_instructions = (
+            "\nUse tool_slack with action_type=\"reply\" to post your response. "
+            "Set reply_in_thread=True to reply inside the thread, or reply_in_thread=False "
+            "to post directly in the channel. Only omit calling tool_slack if no reply is needed."
+        )
+    else:
+        platform = f"Slack DM (channel: {channel})"
+        tool_instructions = ""
+
+    text = f"[Session Context]\nPlatform: {platform}\nTime: {time_str}{tool_instructions}"
+    return {"type": "message", "role": "system", "content": [{"type": "input_text", "text": text}]}
+
 
 # TODO: prefix the thread messages so the llm will know what messages are from channel and what is from the thread
 # TODO: see if its possible to send timestamps for each message so the the llm has that context

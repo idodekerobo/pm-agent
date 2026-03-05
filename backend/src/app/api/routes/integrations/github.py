@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 from app.api.deps import auth_protect_route
 from app.config import settings
 from app.db.supabase_client import get_supabase
-from app.integrations.crypto import decrypt_token, encrypt_token
+from app.integrations.crypto import encrypt_token
 from app.workers.queue import queue
 from app.workers.tasks import deprovision_skill, gather_github_context, provision_skill
 
@@ -136,7 +136,6 @@ async def github_callback(
     if code:
         token_data = await _exchange_user_code(code, redirect_uri)
         if "error" in token_data:
-            # Non-fatal: we still have the installation token. Log and continue.
             print(f"[github] user OAuth failed (continuing with bot token only): {token_data}")
         else:
             user_token = token_data.get("access_token")
@@ -145,7 +144,6 @@ async def github_callback(
                 ts = datetime.now(timezone.utc).timestamp() + token_data["expires_in"]
                 user_token_expires_at = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
 
-    # --- Fetch GitHub account info ---
     # Prefer user token for user info; fall back to app JWT with installation context
     auth_token_for_user_fetch = user_token or bot_token
     try:
@@ -166,7 +164,6 @@ async def github_callback(
     supabase = get_supabase()
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # --- Persist to github_installations ---
     supabase.table("github_installations").upsert(
         {
             "user_id": user_id,
@@ -183,7 +180,6 @@ async def github_callback(
         on_conflict="installation_id",
     ).execute()
 
-    # --- Persist to integrations (central record for UI + tool_bash token injection) ---
     # access_token = bot token (refreshed automatically via JWT every hour)
     # refresh_token = installation_id (used by manager.py to regenerate bot token)
     supabase.table("integrations").upsert(

@@ -233,15 +233,28 @@ async def _run_agent_for_message(
     """
     from app.agents.context import build_agent_run_payload
     from app.agents.orchestrator_agent import run_orchestrator
+    from app.db.billing import deduct_credit
+    from app.billing import get_billing_account_and_balance
     from app.db.agent_sessions import find_session_by_thread_id
     from app.db.conversations import append_conversation_item, make_user_item, make_assistant_item
     from app.db.supabase_client import get_supabase
     from app.db.workspaces import set_workspace_agent_run_status
+    from app.errors import log_error
 
     bot_token = installation.bot_token
     user_id = str(installation.user_id)
 
     supabase = get_supabase()
+
+    billing_account, balance = get_billing_account_and_balance(supabase, user_id=user_id)
+    if not billing_account or balance <= 0:
+        await post_message(
+            bot_token,
+            channel,
+            "You're out of credits for this period. Please upgrade your plan to continue.",
+            thread_ts=thread_ts or ts,
+        )
+        return
     if is_mention:
         external_thread_id = f"{channel}:{thread_ts or ts}"
         existing_session_id = find_session_by_thread_id(
@@ -334,6 +347,14 @@ async def _run_agent_for_message(
                 source_platform="slack",
                 source_channel_id=channel,
             )
+            try:
+                deduct_credit(
+                    supabase,
+                    billing_account_id=str(billing_account.id),
+                    agent_session_id=payload.agent_session_id,
+                )
+            except Exception as e:
+                await log_error(user_id, "billing", e, context={"session_id": payload.agent_session_id})
 
     finally:
         if workspace_id_to_reset:

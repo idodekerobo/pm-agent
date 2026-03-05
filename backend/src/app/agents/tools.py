@@ -1,11 +1,13 @@
+import asyncio
 from typing import Any, Optional
 
 from agents import RunContextWrapper, function_tool
 from app.agents.context import AgentContext
 from app.config import settings
 from app.db.supabase_client import get_supabase
+from app.errors import log_error
 from app.integrations.manager import get_valid_token
-from app.messaging.slack.dispatcher import dispatch_slack_action
+from app.messaging.slack import dispatch_slack_action
 
 if settings.workspace_backend == "production":
     from app.workspace.workspace_runtime import bash as ws_bash
@@ -22,15 +24,22 @@ async def tool_fs_write(context: RunContextWrapper[AgentContext], path: str, con
         path: Relaive path inside the workspace (no ..).
         content: File contents.
     """
-    await fs_write(
-        context.context.workspace_id,
-        path,
-        content,
-        organization_id=context.context.organization_id,
-        user_id=context.context.user_id,
-        sandbox_id=context.context.sandbox_id,
-    )
-    return f"Wrote '{path}'."
+    try:
+        await fs_write(
+            context.context.workspace_id,
+            path,
+            content,
+            organization_id=context.context.organization_id,
+            user_id=context.context.user_id,
+            sandbox_id=context.context.sandbox_id,
+        )
+        return f"Wrote '{path}'."
+    except Exception as e:
+        asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_fs_write", "path": path,
+            "error_category": "infrastructure",
+        }))
+        raise
 
 @function_tool
 async def tool_fs_read(context: RunContextWrapper[AgentContext], path: str) -> str:
@@ -38,13 +47,20 @@ async def tool_fs_read(context: RunContextWrapper[AgentContext], path: str) -> s
     Args:
       path: Relative path inside the workspace (no ..).
     """
-    return await fs_read(
-        context.context.workspace_id,
-        path,
-        organization_id=context.context.organization_id,
-        user_id=context.context.user_id,
-        sandbox_id=context.context.sandbox_id,
-    )
+    try:
+        return await fs_read(
+            context.context.workspace_id,
+            path,
+            organization_id=context.context.organization_id,
+            user_id=context.context.user_id,
+            sandbox_id=context.context.sandbox_id,
+        )
+    except Exception as e:
+        asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_fs_read", "path": path,
+            "error_category": "infrastructure",
+        }))
+        raise
 
 @function_tool
 async def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = ".") -> list[str]:
@@ -52,13 +68,20 @@ async def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = "."
     Args:
       path: Relative path inside the workspace.
     """
-    return await fs_list(
-        context.context.workspace_id,
-        path=path,
-        organization_id=context.context.organization_id,
-        user_id=context.context.user_id,
-        sandbox_id=context.context.sandbox_id,
-    )
+    try:
+        return await fs_list(
+            context.context.workspace_id,
+            path=path,
+            organization_id=context.context.organization_id,
+            user_id=context.context.user_id,
+            sandbox_id=context.context.sandbox_id,
+        )
+    except Exception as e:
+        asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_fs_list", "path": path,
+            "error_category": "infrastructure",
+        }))
+        raise
 
 @function_tool
 async def tool_bash(
@@ -99,24 +122,35 @@ async def tool_bash(
                 env_vars["GITHUB_TOKEN"] = token
 
         except Exception as e:
+            asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+                "origin": "agent_tool", "tool": "tool_bash", "provider": required_provider_auth,
+                "error_category": "infrastructure",
+            }))
             return {
                 "stdout": "",
-                "stderr": f"Authentication failed for {required_provider_auth}: {str(e)}", 
+                "stderr": f"Authentication failed for {required_provider_auth}: {str(e)}",
                 "exit_code": 1
             }
 
-    result = await ws_bash(
-        context.context.workspace_id,
-        command=command,
-        cwd=cwd,
-        timeout_s=timeout_s,
-        organization_id=context.context.organization_id, # TODO: do i need this?? 
-        user_id=context.context.user_id,
-        sandbox_id=context.context.sandbox_id,
-        env=env_vars,
-        header=header_string,
-    )
-    return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}
+    try:
+        result = await ws_bash(
+            context.context.workspace_id,
+            command=command,
+            cwd=cwd,
+            timeout_s=timeout_s,
+            organization_id=context.context.organization_id, # TODO: do i need this??
+            user_id=context.context.user_id,
+            sandbox_id=context.context.sandbox_id,
+            env=env_vars,
+            header=header_string,
+        )
+        return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}
+    except Exception as e:
+        asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_bash", "command": command,
+            "error_category": "infrastructure",
+        }))
+        raise
 
 
 @function_tool
@@ -153,12 +187,19 @@ async def tool_slack(
     - If the user has multiple Slack workspaces connected and hasn't specified which one to use,
       ask them which workspace to post to before proceeding.
     """
-    return await dispatch_slack_action(
-        ctx=context.context,
-        action_type=action_type,
-        message=message,
-        reply_in_thread=reply_in_thread,
-        channel=channel,
-        thread_ts=thread_ts,
-        slack_user_id=slack_user_id,
-    )
+    try:
+        return await dispatch_slack_action(
+            ctx=context.context,
+            action_type=action_type,
+            message=message,
+            reply_in_thread=reply_in_thread,
+            channel=channel,
+            thread_ts=thread_ts,
+            slack_user_id=slack_user_id,
+        )
+    except Exception as e:
+        asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_slack", "action_type": action_type,
+            "error_category": "infrastructure",
+        }))
+        raise

@@ -11,9 +11,11 @@ Layers:
                         └── Slack Web API
 """
 
+import asyncio
 from typing import Optional
 
 from app.agents.context import AgentContext
+from app.errors import log_error
 from app.messaging.slack.client import list_channels, post_message, send_dm
 from app.messaging.slack.installation_store import get_installation_by_user_id
 from app.schemas.slack import SlackInstallation
@@ -44,6 +46,12 @@ async def dispatch_slack_action(
     """
     installation = get_installation_by_user_id(ctx.user_id)
     if not installation:
+        asyncio.create_task(log_error(
+            ctx.user_id, "agent",
+            Exception("Slack installation not found"),
+            context={"origin": "agent_tool", "tool": "tool_slack", "action_type": action_type,
+                     "error_category": "infrastructure"},
+        ))
         return (
             "Slack is not connected for this account. "
             "Ask the user to install the Slack app from the integrations settings page."
@@ -51,13 +59,22 @@ async def dispatch_slack_action(
 
     bot_token = installation.bot_token  # already decrypted by installation_store
 
+    _missing_params_ctx = {"origin": "agent_tool", "tool": "tool_slack",
+                           "action_type": action_type, "error_category": "missing_params"}
+
     if action_type == "reply":
         if not message:
+            asyncio.create_task(log_error(ctx.user_id, "agent",
+                Exception("tool_slack reply called without 'message'"), context=_missing_params_ctx))
             return "reply requires 'message'."
         if reply_in_thread is None:
+            asyncio.create_task(log_error(ctx.user_id, "agent",
+                Exception("tool_slack reply called without 'reply_in_thread'"), context=_missing_params_ctx))
             return "reply requires 'reply_in_thread' (True or False)."
         mention_ctx = ctx.slack_mention_context
         if not mention_ctx:
+            asyncio.create_task(log_error(ctx.user_id, "agent",
+                Exception("tool_slack reply called outside of a Slack mention context"), context=_missing_params_ctx))
             return "reply can only be used when responding to a Slack @-mention."
         post_thread_ts = mention_ctx["thread_ts"] if reply_in_thread else None
         await post_message(bot_token, mention_ctx["channel_id"], message, thread_ts=post_thread_ts)
@@ -67,9 +84,17 @@ async def dispatch_slack_action(
 
     elif action_type == "post_message":
         if not channel or not message:
+            asyncio.create_task(log_error(ctx.user_id, "agent",
+                Exception("tool_slack post_message called without 'channel' or 'message'"), context=_missing_params_ctx))
             return "post_message requires both 'channel' and 'message'."
         channel_id = await _resolve_channel(str(installation.id), channel, bot_token)
         if channel_id is None:
+            asyncio.create_task(log_error(
+                ctx.user_id, "agent",
+                Exception(f"Channel #{channel} not accessible"),
+                context={"origin": "agent_tool", "tool": "tool_slack", "action_type": action_type,
+                         "channel": channel, "error_category": "infrastructure"},
+            ))
             return (
                 f"Channel #{channel} is not accessible. "
                 f"Make sure @PM Agent has been added to #{channel} in Slack first."
@@ -79,9 +104,17 @@ async def dispatch_slack_action(
 
     elif action_type == "post_reply":
         if not channel or not message or not thread_ts:
+            asyncio.create_task(log_error(ctx.user_id, "agent",
+                Exception("tool_slack post_reply called without 'channel', 'message', or 'thread_ts'"), context=_missing_params_ctx))
             return "post_reply requires 'channel', 'message', and 'thread_ts'."
         channel_id = await _resolve_channel(str(installation.id), channel, bot_token)
         if channel_id is None:
+            asyncio.create_task(log_error(
+                ctx.user_id, "agent",
+                Exception(f"Channel #{channel} not accessible"),
+                context={"origin": "agent_tool", "tool": "tool_slack", "action_type": action_type,
+                         "channel": channel, "error_category": "infrastructure"},
+            ))
             return (
                 f"Channel #{channel} is not accessible. "
                 f"Make sure @PM Agent has been added to #{channel} in Slack first."
@@ -91,11 +124,17 @@ async def dispatch_slack_action(
 
     elif action_type == "send_dm":
         if not slack_user_id or not message:
+            asyncio.create_task(log_error(ctx.user_id, "agent",
+                Exception("tool_slack send_dm called without 'slack_user_id' or 'message'"), context=_missing_params_ctx))
             return "send_dm requires both 'slack_user_id' and 'message'."
         await send_dm(bot_token, slack_user_id, message)
         return f"Sent DM to Slack user {slack_user_id} successfully."
 
     else:
+        asyncio.create_task(log_error(ctx.user_id, "agent",
+            Exception(f"tool_slack called with unknown action_type '{action_type}'"),
+            context={**_missing_params_ctx, "error_category": "missing_params"},
+        ))
         return (
             f"Unknown action_type '{action_type}'. "
             f"Valid options: reply, post_message, post_reply, send_dm."

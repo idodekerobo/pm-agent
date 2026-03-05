@@ -4,10 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
-from app.messaging.slack.installation_store import (
-    get_channels,
-    get_installation_by_user_id,
-)
+from app.messaging.slack import get_channels, get_installation_by_user_id
 from app.schemas.slack import SlackChannel, SlackChannelUpdate
 
 router = APIRouter()

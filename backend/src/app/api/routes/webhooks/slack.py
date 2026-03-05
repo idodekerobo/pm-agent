@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from slack_sdk.signature import SignatureVerifier
 
 from app.config import settings
-from app.messaging.slack.installation_store import get_installation_by_team_id
+from app.messaging.slack import get_installation_by_team_id
 from app.workers.queue import get_queue
 from app.workers.tasks import handle_slack_message
 

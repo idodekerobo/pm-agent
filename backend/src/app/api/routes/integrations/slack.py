@@ -9,7 +9,7 @@ from app.api.deps import auth_protect_route
 from app.config import settings
 from app.db.supabase_client import get_supabase
 from app.integrations.crypto import decrypt_token, encrypt_token
-from app.messaging.slack.installation_store import save_installation
+from app.messaging.slack import save_installation
 
 router = APIRouter(prefix="/slack")
 

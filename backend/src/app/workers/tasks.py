@@ -128,8 +128,7 @@ def handle_slack_message(event_payload: dict, installation_id: str):
     sys.stdout.flush()
 
     async def _run():
-        from app.messaging.slack.installation_store import get_installation_by_id
-        from app.messaging.slack.events_handler import dispatch_event
+        from app.messaging.slack import get_installation_by_id, dispatch_event
 
         installation = get_installation_by_id(installation_id)
         if not installation:

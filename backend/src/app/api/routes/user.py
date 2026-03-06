@@ -64,7 +64,9 @@ async def _upsert_profile(user_id: str, body: ProfilePayload, enqueue_context: b
 
     if enqueue_context:
         from app.workers.queue import get_queue
-        from app.workers.tasks import gather_onboarding_context
-        get_queue("default").enqueue(gather_onboarding_context, user_id, update_data)
+        from app.workers.tasks import gather_onboarding_context, seed_workspace
+        q = get_queue("default")
+        q.enqueue(seed_workspace, user_id)
+        q.enqueue(gather_onboarding_context, user_id, update_data)
 
     return {"status": "ok"}

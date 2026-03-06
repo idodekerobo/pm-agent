@@ -48,7 +48,7 @@ type Tab = 'integrations' | 'agent-files' | 'profile';
 export default function SettingsPage() {
   const router = useRouter();
   const { user, session, signOut } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('integrations');
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

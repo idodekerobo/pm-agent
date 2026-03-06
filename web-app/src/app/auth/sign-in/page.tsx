@@ -67,7 +67,10 @@ export default function SignInPage() {
               <label htmlFor="password" className="block text-sm font-medium text-zinc-700">
                 Password
               </label>
-              <Link href="/auth/forgot-password" className="text-xs text-zinc-500 hover:text-zinc-900 hover:underline">
+              <Link
+                href={searchParams.get('redirect') ? `/auth/forgot-password?redirect=${encodeURIComponent(searchParams.get('redirect')!)}` : '/auth/forgot-password'}
+                className="text-xs text-zinc-500 hover:text-zinc-900 hover:underline"
+              >
                 Forgot password?
               </Link>
             </div>

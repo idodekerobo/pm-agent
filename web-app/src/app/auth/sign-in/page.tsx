@@ -20,7 +20,7 @@ export default function SignInPage() {
 
     try {
       await signIn(email, password);
-      router.push('/onboarding');
+      router.push('/chat');
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
     } finally {

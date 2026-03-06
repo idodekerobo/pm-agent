@@ -45,7 +45,7 @@ export default function ResetPasswordPage() {
     setLoading(true);
     try {
       await updatePassword(password);
-      router.push('/auth/sign-in');
+      router.push('/chat');
     } catch (err: any) {
       setError(err.message || 'Failed to update password');
     } finally {

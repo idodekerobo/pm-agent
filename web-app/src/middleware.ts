@@ -48,7 +48,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isPublicRoute && user) {
-    return NextResponse.redirect(new URL('/onboarding', request.url));
+    return NextResponse.redirect(new URL('/chat', request.url));
   }
 
   return response;

@@ -1,4 +1,4 @@
-from agents import Agent, Runner
+from agents import Agent, Runner, RunResult
 
 from app.agents.context import AgentRunPayload, build_skill_section
 
@@ -157,7 +157,7 @@ def build_researcher_agent(payload: AgentRunPayload, handoffs: list | None = Non
     )
 
 
-async def run_research_and_learn(payload: AgentRunPayload, prompt: str) -> None:
+async def run_research_and_learn(payload: AgentRunPayload, prompt: str) -> RunResult:
     """Run a research task and hand off findings to the learning agent to persist.
 
     The researcher explores and gathers information per the given prompt, then
@@ -170,8 +170,9 @@ async def run_research_and_learn(payload: AgentRunPayload, prompt: str) -> None:
     learner = build_learning_agent(payload)
     researcher = build_researcher_agent(payload, handoffs=[learner])
 
-    await Runner.run(
+    result = await Runner.run(
         researcher,
         input=prompt,
         context=payload.agent_context,
     )
+    return result

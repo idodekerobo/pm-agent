@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
+import { useBilling } from "@/lib/BillingContext";
 import { logError } from "@/lib/errorLogger";
 
 interface Message {
@@ -22,9 +23,11 @@ interface Session {
 export default function ChatPage() {
   const router = useRouter();
   const { session, signOut } = useAuth();
+  const { creditsRemaining, planName, refetch: refetchBilling } = useBilling();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -197,6 +200,34 @@ export default function ChatPage() {
     }
   };
 
+  const handleUpgrade = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/billing/checkout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error();
+      const { checkout_url } = await res.json();
+      window.location.href = checkout_url;
+    } catch {
+      console.error("Failed to create checkout session");
+    }
+  };
+
+  const handlePortal = async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/billing/portal`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!res.ok) throw new Error();
+      const { portal_url } = await res.json();
+      window.location.href = portal_url;
+    } catch {
+      console.error("Failed to create portal session");
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -225,6 +256,10 @@ export default function ChatPage() {
         body: JSON.stringify(body),
       });
 
+      if (response.status === 402) {
+        setShowUpgradeBanner(true);
+        return;
+      }
       if (!response.ok) throw new Error("Failed to get response from server");
 
       const reader = response.body?.getReader();
@@ -309,6 +344,7 @@ export default function ChatPage() {
           }
         }
       }
+      refetchBilling();
     } catch (error) {
       console.error("Error sending message:", error);
       logError(getToken, error instanceof Error ? error.message : "Error sending message", {
@@ -547,6 +583,12 @@ export default function ChatPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {creditsRemaining !== null && (
+              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm">
+                <span className="text-zinc-500">Credits</span>
+                <span className="ml-1.5 font-medium text-zinc-900">{creditsRemaining}</span>
+              </div>
+            )}
             <Link
               href="/settings"
               className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
@@ -642,6 +684,42 @@ export default function ChatPage() {
             <div ref={messagesEndRef} />
           </div>
         </div>
+
+        {/* Upgrade Banner */}
+        {showUpgradeBanner && (
+          <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-6 py-4">
+            <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-amber-900">You&apos;ve used all your credits for this period.</p>
+                <p className="mt-0.5 text-xs text-amber-700">Upgrade to Pro for 50 credits per month.</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                {planName !== 'pro' ? (
+                  <button
+                    onClick={handleUpgrade}
+                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                  >
+                    Upgrade to Pro
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePortal}
+                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                  >
+                    Manage Billing
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowUpgradeBanner(false)}
+                  className="text-xs text-amber-600 hover:text-amber-900"
+                  aria-label="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Input Area */}
         <div className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">

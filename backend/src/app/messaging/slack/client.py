@@ -14,14 +14,16 @@ async def post_message(
     channel: str,
     text: str,
     thread_ts: str | None = None,
+    blocks: list[dict] | None = None,
 ) -> dict:
     """Post a message to a channel, optionally inside a thread.
 
     Args:
         bot_token: Decrypted xoxb- bot token for the workspace.
         channel: Slack channel ID (e.g. 'C0123ABCD').
-        text: Message body.
+        text: Message body (also used as fallback text for notifications).
         thread_ts: Timestamp of the parent message to reply in-thread.
+        blocks: Optional Block Kit blocks for rich formatting.
 
     Returns:
         The Slack API response data dict.
@@ -33,6 +35,8 @@ async def post_message(
     kwargs: dict = {"channel": channel, "text": text}
     if thread_ts:
         kwargs["thread_ts"] = thread_ts
+    if blocks:
+        kwargs["blocks"] = blocks
     response = await client.chat_postMessage(**kwargs)
     return response.data
 

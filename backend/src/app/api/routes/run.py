@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import json
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, AsyncGenerator
-from uuid import uuid4
 
 from app.agents.context import build_agent_run_payload
 from app.agents.orchestrator_agent import run_orchestrator
 from app.db.supabase_client import get_supabase
 from app.db.conversations import append_conversation_item, get_conversation_items, get_conversation_chain, make_user_item, make_assistant_item
 from app.db.workspaces import set_workspace_agent_run_status
+from app.db.billing import deduct_credit
+from app.billing import get_billing_account_and_balance, record_model_usage
 from app.api.deps import auth_protect_route
 from app.errors import log_error
 
@@ -39,6 +40,10 @@ class RunResponse(BaseModel):
 @router.post("/run")
 async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
+
+    billing_account, balance = get_billing_account_and_balance(supabase, user_id=user_id)
+    if not billing_account or balance <= 0:
+        raise HTTPException(status_code=402, detail="Insufficient credits.")
 
     payload = build_agent_run_payload(
         supabase,
@@ -69,6 +74,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
+        usage_data: dict | None = None
         if req.agent_session_id is None:
             yield f"data: {json.dumps({'type': 'session_created', 'agent_session_id': payload.agent_session_id})}\n\n"
         yield f"data: {json.dumps({'type': 'item_created', 'role': 'user', 'id': user_item_id})}\n\n"
@@ -78,6 +84,10 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                 input_items=input_items,
                 payload=payload,
             ):
+                if event["type"] == "run_usage":
+                    usage_data = event  # capture for telemetry; never stream to client
+                    continue
+
                 if event["type"] == "final_output":
                     final_output = event["content"]
 
@@ -100,6 +110,27 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
                     parent_id=user_item_id,
                 )
                 yield f"data: {json.dumps({'type': 'item_created', 'role': 'assistant', 'id': assistant_item_id})}\n\n"
+                ledger_id: str | None = None
+                try:
+                    ledger_id = deduct_credit(
+                        supabase,
+                        billing_account_id=str(billing_account.id),
+                        agent_session_id=payload.agent_session_id,
+                    )
+                except Exception as e:
+                    await log_error(user_id, "billing", e, context={"session_id": payload.agent_session_id})
+                if usage_data:
+                    try:
+                        record_model_usage(
+                            supabase,
+                            billing_account=billing_account,
+                            agent_session_id=payload.agent_session_id,
+                            organization_id=payload.organization_id,
+                            usage_data=usage_data,
+                            ledger_id=ledger_id,
+                        )
+                    except Exception as e:
+                        await log_error(user_id, "billing", e, context={"session_id": payload.agent_session_id})
         except Exception as e:
             await log_error(user_id, "agent", e, context={
                 "session_id": payload.agent_session_id,

@@ -17,11 +17,11 @@ async def run_orchestrator(
     learner = build_learning_agent(payload)
 
     read_tools = [t for t in payload.tools if t.name in {"tool_fs_read", "tool_fs_list"}]
-
+    model_id = "gpt-5.2"
     pm_agent = Agent(
         name="Product Manager Agent",
         instructions=await build_agent_instructions(payload),
-        model="gpt-5.2",
+        model=model_id,
         tools=[
             *read_tools,
             execution.as_tool(
@@ -106,6 +106,26 @@ async def run_orchestrator(
                         "type": "message",
                         "content": content,
                     }
+
+    try:
+        usage = result.context_wrapper.usage
+        yield {
+            "type": "run_usage",
+            "provider": "openai",
+            "model": model_id,
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cached_input_tokens": (
+                usage.input_tokens_details.cached_tokens
+                if usage.input_tokens_details else 0
+            ),
+            "reasoning_tokens": (
+                usage.output_tokens_details.reasoning_tokens
+                if usage.output_tokens_details else 0
+            ),
+        }
+    except Exception:
+        pass  # best-effort — never block final_output
 
     yield {
         "type": "final_output",

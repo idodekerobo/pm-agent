@@ -11,6 +11,7 @@ RQ jobs must be synchronous functions. The worker task handles:
 """
 import asyncio
 from datetime import datetime, timezone
+from agents import RunResult
 from app.db.supabase_client import get_supabase
 from app.agents.context import build_agent_run_payload
 from app.agents.researcher_agent import (
@@ -18,6 +19,42 @@ from app.agents.researcher_agent import (
     GDRIVE_CONTEXT_PROMPT,
     LINEAR_CONTEXT_PROMPT,
 )
+
+
+def _record_context_task_usage(supabase, user_id: str, payload, result: RunResult) -> None:
+    """
+    Best-effort model usage recording for background context gathering tasks.
+    No credit deduction (these are free system runs) so ledger_id is always None.
+    """
+    try:
+        from app.billing import get_billing_account_and_balance, record_model_usage
+        billing_account, _ = get_billing_account_and_balance(supabase, user_id=user_id)
+        if not billing_account:
+            return
+        usage = result.context_wrapper.usage
+        record_model_usage(
+            supabase,
+            billing_account=billing_account,
+            agent_session_id=payload.agent_session_id,
+            organization_id=payload.organization_id,
+            usage_data={
+                "provider": "openai",
+                "model": "gpt-5.2",
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "cached_input_tokens": (
+                    usage.input_tokens_details.cached_tokens
+                    if usage.input_tokens_details else 0
+                ),
+                "reasoning_tokens": (
+                    usage.output_tokens_details.reasoning_tokens
+                    if usage.output_tokens_details else 0
+                ),
+            },
+            ledger_id=None,
+        )
+    except Exception as e:
+        print(f"[billing] failed to record context task usage: {e}", flush=True)
 
 
 def gather_google_drive_context(user_id: str, provider: str = "google"):
@@ -44,7 +81,8 @@ def gather_google_drive_context(user_id: str, provider: str = "google"):
         supabase = get_supabase()
         payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
 
-        await run_research_and_learn(payload, GDRIVE_CONTEXT_PROMPT)
+        result = await run_research_and_learn(payload, GDRIVE_CONTEXT_PROMPT)
+        _record_context_task_usage(supabase, user_id, payload, result)
 
         # TODO: save session tool calls and result
 
@@ -86,7 +124,8 @@ def gather_linear_context(user_id: str, provider: str = "linear"):
         supabase = get_supabase()
         payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
 
-        await run_research_and_learn(payload, LINEAR_CONTEXT_PROMPT)
+        result = await run_research_and_learn(payload, LINEAR_CONTEXT_PROMPT)
+        _record_context_task_usage(supabase, user_id, payload, result)
 
         # TODO: save session tool calls and result
 
@@ -319,7 +358,8 @@ def gather_github_context(user_id: str, provider: str = "github"):
         from app.agents.researcher_agent import run_research_and_learn, GITHUB_CONTEXT_PROMPT
         supabase = get_supabase()
         payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
-        await run_research_and_learn(payload, GITHUB_CONTEXT_PROMPT)
+        result = await run_research_and_learn(payload, GITHUB_CONTEXT_PROMPT)
+        _record_context_task_usage(supabase, user_id, payload, result)
         return {
             "status": "success",
             "user_id": user_id,
@@ -343,7 +383,8 @@ def gather_notion_context(user_id: str, provider: str = "notion"):
         from app.agents.researcher_agent import run_research_and_learn, NOTION_CONTEXT_PROMPT
         supabase = get_supabase()
         payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
-        await run_research_and_learn(payload, NOTION_CONTEXT_PROMPT)
+        result = await run_research_and_learn(payload, NOTION_CONTEXT_PROMPT)
+        _record_context_task_usage(supabase, user_id, payload, result)
         return {
             "status": "success",
             "user_id": user_id,

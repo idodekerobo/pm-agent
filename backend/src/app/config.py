@@ -9,8 +9,10 @@ class Settings(BaseSettings):
     supabase_secret_key: str
     workspace_backend: str
 
+    # LLM Providers
     openai_api_key: str
 
+    # Integrations
     oauth_encryption_key: str
     session_secret: str
     linear_client_id: str = ""
@@ -31,6 +33,10 @@ class Settings(BaseSettings):
     github_client_secret: str = ""
     github_redirect_uri: str = ""  # set to ngrok URL in local dev, prod URL in production
     github_webhook_secret: str = ""
+
+    # Payments
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
 
     redis_url: str = ""
 

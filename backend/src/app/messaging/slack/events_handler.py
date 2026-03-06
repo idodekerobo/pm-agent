@@ -6,6 +6,7 @@ verified the Slack signature and ACK'd the 200 response.
 
 import re
 
+from app.config import settings
 from app.messaging.slack.client import (
     add_reaction,
     get_channel_history,
@@ -233,15 +234,49 @@ async def _run_agent_for_message(
     """
     from app.agents.context import build_agent_run_payload
     from app.agents.orchestrator_agent import run_orchestrator
+    from app.db.billing import deduct_credit
+    from app.billing import get_billing_account_and_balance, record_model_usage
     from app.db.agent_sessions import find_session_by_thread_id
     from app.db.conversations import append_conversation_item, make_user_item, make_assistant_item
     from app.db.supabase_client import get_supabase
     from app.db.workspaces import set_workspace_agent_run_status
+    from app.errors import log_error
 
     bot_token = installation.bot_token
     user_id = str(installation.user_id)
 
     supabase = get_supabase()
+
+    billing_account, balance = get_billing_account_and_balance(supabase, user_id=user_id)
+    if not billing_account or balance <= 0:
+        upgrade_url = f"{settings.client_app_base_url}/upgrade"
+        await post_message(
+            bot_token,
+            channel,
+            "You're out of credits for this period. PLease upgrade your account.",
+            thread_ts=thread_ts or ts,
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "You're out of credits for this period. Upgrade your account for more credits.",
+                    },
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Upgrade"},
+                            "url": upgrade_url,
+                            "style": "primary",
+                        }
+                    ],
+                },
+            ],
+        )
+        return
     if is_mention:
         external_thread_id = f"{channel}:{thread_ts or ts}"
         existing_session_id = find_session_by_thread_id(
@@ -304,10 +339,14 @@ async def _run_agent_for_message(
         )
 
         final_output = ""
+        usage_data: dict | None = None
         async for chunk in run_orchestrator(
             input_items=input_items,
             payload=payload,
         ):
+            if chunk["type"] == "run_usage":
+                usage_data = chunk
+                continue
             if chunk["type"] == "final_output":
                 final_output = chunk["content"]
 
@@ -334,6 +373,27 @@ async def _run_agent_for_message(
                 source_platform="slack",
                 source_channel_id=channel,
             )
+            ledger_id: str | None = None
+            try:
+                ledger_id = deduct_credit(
+                    supabase,
+                    billing_account_id=str(billing_account.id),
+                    agent_session_id=payload.agent_session_id,
+                )
+            except Exception as e:
+                await log_error(user_id, "billing", e, context={"session_id": payload.agent_session_id})
+            if usage_data:
+                try:
+                    record_model_usage(
+                        supabase,
+                        billing_account=billing_account,
+                        agent_session_id=payload.agent_session_id,
+                        organization_id=payload.organization_id,
+                        usage_data=usage_data,
+                        ledger_id=ledger_id,
+                    )
+                except Exception as e:
+                    await log_error(user_id, "billing", e, context={"session_id": payload.agent_session_id})
 
     finally:
         if workspace_id_to_reset:

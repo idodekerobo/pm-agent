@@ -13,7 +13,7 @@ export default function SignInPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn } = useAuth();
-  const redirect = searchParams.get('redirect') || '/onboarding';
+  const redirect = searchParams.get('redirect') || '/chat';
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();

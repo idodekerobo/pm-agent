@@ -1,7 +1,10 @@
 """Billing routes: status, Stripe Checkout, Stripe Customer Portal."""
 
 import stripe
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.billing import get_billing_account_and_balance
@@ -13,7 +16,22 @@ from app.db.billing import (
     update_billing_account_stripe_customer,
 )
 from app.db.supabase_client import get_supabase
-from app.schemas.billing import BillingStatus, CheckoutResponse, PortalResponse
+
+
+class BillingStatus(BaseModel):
+    plan_name: str
+    monthly_credits: int
+    credits_remaining: int
+    current_period_end: Optional[datetime] = None
+
+
+class CheckoutResponse(BaseModel):
+    checkout_url: str
+
+
+class PortalResponse(BaseModel):
+    portal_url: str
+
 
 router = APIRouter(prefix="/billing")
 
@@ -38,6 +56,7 @@ async def billing_status(user_id: str = Depends(auth_protect_route)):
 
     return BillingStatus(
         plan_name=plan.name,
+        monthly_credits=plan.monthly_credits,
         credits_remaining=balance,
         current_period_end=subscription.current_period_end,
     )

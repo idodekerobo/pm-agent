@@ -108,22 +108,3 @@ class ModelUsage(ModelUsageBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ============================================================
-# API response schemas
-# ============================================================
-
-class BillingStatus(BaseModel):
-    """Response for GET /billing/status."""
-    plan_name: str
-    credits_remaining: int
-    current_period_end: Optional[datetime] = None  # None for free plan
-
-
-class CheckoutResponse(BaseModel):
-    """Response for POST /billing/checkout."""
-    checkout_url: str
-
-
-class PortalResponse(BaseModel):
-    """Response for POST /billing/portal."""
-    portal_url: str

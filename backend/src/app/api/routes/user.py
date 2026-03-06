@@ -38,7 +38,7 @@ async def save_profile(body: ProfilePayload, user_id: str = Depends(auth_protect
 
 @router.patch("/profile", status_code=200)
 async def update_profile(body: ProfilePayload, user_id: str = Depends(auth_protect_route)):
-    return await _upsert_profile(user_id, body, enqueue_context=False)
+    return await _upsert_profile(user_id, body, enqueue_context=False) # TODO: make this update context, but have it use a cheaper/smaller llm
 
 
 async def _upsert_profile(user_id: str, body: ProfilePayload, enqueue_context: bool):

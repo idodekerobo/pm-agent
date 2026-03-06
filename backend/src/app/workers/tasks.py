@@ -193,6 +193,57 @@ def deprovision_skill(user_id: str, provider: str):
         raise
 
 
+def gather_onboarding_context(user_id: str, profile: dict):
+    """
+    Enqueued after onboarding profile submission.
+    Seeds the agent's context files with the user-provided profile data directly,
+    bypassing the researcher since we already have the information.
+    """
+    async def _run():
+        from app.agents.learning_agent import run_learning_agent
+
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
+
+        full_name = profile.get("full_name") or "Not provided"
+        role = profile.get("role") or "Not provided"
+        company_name = profile.get("company_name") or "Not provided"
+        company_url = profile.get("company_url") or "Not provided"
+        product_description = profile.get("product_description") or "Not provided"
+        use_case = profile.get("use_case") or "Not provided"
+
+        prompt = f"""Write the following user-provided onboarding information to the appropriate workspace context files.
+This information was entered directly by the user during onboarding — treat it as authoritative.
+
+Full name: {full_name}
+Role: {role}
+Company: {company_name}
+Company URL: {company_url}
+Product description: {product_description}
+How they plan to use PM Agent: {use_case}
+
+Write to:
+- context/user.md — full name, role, and how they plan to use PM Agent
+- context/company.md — company name and URL
+- context/product.md — product description and what they are building
+
+Ensure each file has valid YAML frontmatter (name, description using > block scalar, last_updated).
+Read each file before writing so you merge rather than overwrite any existing content."""
+
+        await run_learning_agent(payload, prompt)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+        }
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"Error gathering onboarding context for user {user_id}: {str(e)}")
+        raise
+
+
 def gather_github_context(user_id: str, provider: str = "github"):
     """
     Enqueued after GitHub OAuth callback.

@@ -12,6 +12,7 @@ interface ProfileData {
   company_url: string;
   product_description: string;
   use_case: string;
+  use_case_context: string;
 }
 
 export default function ProfileTab() {
@@ -25,6 +26,7 @@ export default function ProfileTab() {
     company_url: '',
     product_description: '',
     use_case: '',
+    use_case_context: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,13 +42,17 @@ export default function ProfileTab() {
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
+        const allParts = (data.use_case ?? '').split(', ').filter(Boolean);
+        const knownParts = allParts.filter((p: string) => USE_CASE_OPTIONS.includes(p));
+        const contextParts = allParts.filter((p: string) => !USE_CASE_OPTIONS.includes(p));
         setProfile({
           full_name: data.full_name ?? '',
           role: data.role ?? '',
           company_name: data.company_name ?? '',
           company_url: data.company_url ?? '',
           product_description: data.product_description ?? '',
-          use_case: data.use_case ?? '',
+          use_case: knownParts.join(', '),
+          use_case_context: contextParts.join(', '),
         });
       } catch {
         setError('Could not load profile. Please refresh.');
@@ -84,7 +90,10 @@ export default function ProfileTab() {
           company_name: profile.company_name || null,
           company_url: profile.company_url || null,
           product_description: profile.product_description || null,
-          use_case: profile.use_case || null,
+          use_case: [
+            ...profile.use_case.split(', ').filter(Boolean),
+            ...(profile.use_case_context.trim() ? [profile.use_case_context.trim()] : []),
+          ].join(', ') || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -199,6 +208,13 @@ export default function ProfileTab() {
               );
             })}
           </div>
+          <textarea
+            value={profile.use_case_context}
+            onChange={(e) => setProfile({ ...profile, use_case_context: e.target.value })}
+            rows={3}
+            className="mt-3 block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
+            placeholder="Anything else?"
+          />
         </div>
 
         {/* Feedback */}

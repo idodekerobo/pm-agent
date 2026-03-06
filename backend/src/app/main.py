@@ -17,6 +17,8 @@ from app.api.routes.errors import router as errors_router
 from app.errors import log_error
 
 os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+import stripe
+stripe.api_key = settings.stripe_secret_key
 
 app = FastAPI()
 

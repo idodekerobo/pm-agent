@@ -21,6 +21,7 @@ dependencies = [
     "rq>=1.16.0",
     "rq-scheduler>=0.13.1",
     "slack-sdk>=3.40.1",
+    "stripe>=10.0.0",
     "supabase>=2.28.0",
     "uvicorn>=0.40.0",
 ]

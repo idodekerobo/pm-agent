@@ -252,3 +252,36 @@ def get_plan_id_by_name(
         .execute()
     )
     return result.data["id"] if result.data else None
+
+
+def get_plan_by_id(
+    supabase: Client,
+    *,
+    plan_id: str,
+) -> "Plan | None":
+    """Returns the full Plan row for a given plan UUID."""
+    from app.schemas.billing import Plan
+    result = (
+        supabase.table("plans")
+        .select("*")
+        .eq("id", plan_id)
+        .maybe_single()
+        .execute()
+    )
+    return Plan.model_validate(result.data) if result.data else None
+
+
+def get_plan_id_by_stripe_price_id(
+    supabase: Client,
+    *,
+    stripe_price_id: str,
+) -> str | None:
+    """Returns the plan UUID that maps to a given Stripe Price ID."""
+    result = (
+        supabase.table("plans")
+        .select("id")
+        .eq("stripe_price_id", stripe_price_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data["id"] if result.data else None

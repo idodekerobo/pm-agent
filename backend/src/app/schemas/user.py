@@ -25,6 +25,17 @@ class UserCreate(UserBase):
     pass
 
 
+class UserProfile(BaseModel):
+    """Writable profile fields for POST/PATCH /user/profile."""
+
+    full_name: str
+    role: str
+    company_name: Optional[str] = None
+    company_url: Optional[str] = None
+    product_description: Optional[str] = None
+    use_case: Optional[str] = None
+
+
 class User(UserBase):
     """Full user schema for read responses."""
 

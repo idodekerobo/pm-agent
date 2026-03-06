@@ -1,27 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
+from app.schemas.user import User, UserProfile
 
 router = APIRouter(prefix="/user", tags=["user"])
 
 
-class ProfilePayload(BaseModel):
-    full_name: str
-    role: str
-    company_name: str | None = None
-    company_url: str | None = None
-    product_description: str | None = None
-    use_case: str | None = None
-
-
-@router.get("/profile")
+@router.get("/profile", response_model=User)
 async def get_profile(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     row = (
         supabase.table("users")
-        .select("full_name, role, company_name, company_url, product_description, use_case")
+        .select("id, email, created_at, organization_id, full_name, role, company_name, company_url, product_description, use_case")
         .eq("id", user_id)
         .single()
         .execute()
@@ -32,16 +23,16 @@ async def get_profile(user_id: str = Depends(auth_protect_route)):
 
 
 @router.post("/profile", status_code=200)
-async def save_profile(body: ProfilePayload, user_id: str = Depends(auth_protect_route)):
+async def save_profile(body: UserProfile, user_id: str = Depends(auth_protect_route)):
     return await _upsert_profile(user_id, body, enqueue_context=True)
 
 
 @router.patch("/profile", status_code=200)
-async def update_profile(body: ProfilePayload, user_id: str = Depends(auth_protect_route)):
+async def update_profile(body: UserProfile, user_id: str = Depends(auth_protect_route)):
     return await _upsert_profile(user_id, body, enqueue_context=False) # TODO: make this update context, but have it use a cheaper/smaller llm
 
 
-async def _upsert_profile(user_id: str, body: ProfilePayload, enqueue_context: bool):
+async def _upsert_profile(user_id: str, body: UserProfile, enqueue_context: bool):
     supabase = get_supabase()
 
     update_data = {

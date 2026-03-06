@@ -11,6 +11,12 @@ class UserBase(BaseModel):
 
     email: str
     organization_id: Optional[str] = None
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    company_name: Optional[str] = None
+    company_url: Optional[str] = None
+    product_description: Optional[str] = None
+    use_case: Optional[str] = None
 
 
 class UserCreate(UserBase):

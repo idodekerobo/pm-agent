@@ -10,6 +10,7 @@ ErrorPlatform = Literal["server", "worker", "agent", "web_app"]
 class ErrorBase(BaseModel):
     user_id: Optional[UUID] = None
     platform: ErrorPlatform
+    environment: Optional[str] = None
     error_type: Optional[str] = None
     message: str
     stack_trace: Optional[str] = None

@@ -31,6 +31,9 @@ class AgentRunPayload:
     agent_context: AgentContext
     tools: list = field(default_factory=list)
     active_providers: list[str] = field(default_factory=list)
+    full_name: str | None = None
+    role: str | None = None
+    company_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +63,7 @@ BASE_INSTRUCTIONS = [
     "",
     "## Workspace layout",
     "- context/: Structured knowledge files about specific topics (company, product, user). Each file covers one domain and needs to be loaded on demand if you need to access it, though you will get a short summary for each session.",
-    "- memory/: A single memory.md file loaded into every session. Use this for structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.",
+    "- memory/: A single file at `memory/memory.md` loaded into every session. Use this for structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.",
     "- .skills/: Instruction files for integrations. Tell sub-agents which skill to read when delegating integration work.",
     "### Workspace details",
     "- To update `context/` or `memory/`, always delegate to `learning_agent` — do not write files directly.",
@@ -98,8 +101,21 @@ You have three specialized agents as tools. Use them instead of acting directly.
   in the workspace, query Linear or Google Drive. Always use this before execution if context
   is missing.
 
-- **learning_agent**: Use when you have learned something worth remembering — user preferences,
-  company details, product decisions. Call it after a meaningful discovery so it persists.
+- **learning_agent**: Use when you have learned something worth persisting. Call it to write to:
+  - `context/` — factual info about the company, product, or user (role, team, stack, roadmap)
+  - `memory/memory.md` — user preferences, working style, recurring patterns, and goals
+
+  *Call learning_agent to update `memory/memory.md` when:*
+  - The user states a preference, habit, or working style — e.g. "I always want...", "I prefer...",
+    "I don't like...", "can you always do X".
+
+  *Call learning_agent to update relevant `context/` markdown files when any of these are true:*
+  - The user corrects you or clarifies something about themselves, their company, or product.
+  - You learn the company name, product description, team size, business model, or tech stack.
+  - A meaningful product or team decision is made in this session.
+
+  **Before writing your final response**, ask yourself: "Did I learn anything new or durable today?"
+  If yes, call learning_agent first.
 
 You also have direct access to fs_read and fs_list for quick orientation before delegating.
 
@@ -138,6 +154,14 @@ def _parse_frontmatter(content: str) -> dict:
         return {}
 
 
+def _has_body_content(raw: str) -> bool:
+    """Return True if the file has any non-whitespace content after the frontmatter block."""
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        return bool(raw.strip())
+    return bool(parts[2].strip())
+
+
 def _load_skills_from_disk() -> list[dict]:
     """Read every SKILL.md under the skills/ directory.
 
@@ -165,7 +189,9 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
     """Scan context/ in the workspace volume and return frontmatter metadata for each .md file.
 
     Uses the Modal Volume direct API in production and the local filesystem in dev.
-    Returns a list of dicts with keys: name, description, path.
+    Returns a list of dicts with keys: name, description, path, has_content.
+    has_content is False when the file has frontmatter but no body — i.e. a seeded template
+    that has not yet been filled in by the learning agent.
     """
     if settings.workspace_backend == "production":
         from pathlib import PurePosixPath
@@ -191,7 +217,12 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
                 meta = _parse_frontmatter(content)
                 if meta.get("name"):
                     description = meta.get("description") or "(no description yet)"
-                    index.append({"name": meta["name"], "description": description, "path": f"context/{name}"})
+                    index.append({
+                        "name": meta["name"],
+                        "description": description,
+                        "path": f"context/{name}",
+                        "has_content": _has_body_content(content),
+                    })
             except Exception as e:
                 print(f"[context_index] failed to read/parse {name}: {e}", flush=True)
                 continue
@@ -209,10 +240,16 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
             if not p.name.endswith(".md"):
                 continue
             try:
-                meta = _parse_frontmatter(p.read_text(encoding="utf-8"))
+                raw = p.read_text(encoding="utf-8")
+                meta = _parse_frontmatter(raw)
                 if meta.get("name"):
                     description = meta.get("description") or "(no description yet)"
-                    index.append({"name": meta["name"], "description": description, "path": str(p.relative_to(root))})
+                    index.append({
+                        "name": meta["name"],
+                        "description": description,
+                        "path": str(p.relative_to(root)),
+                        "has_content": _has_body_content(raw),
+                    })
             except Exception:
                 continue
         return index
@@ -397,7 +434,22 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
     """
     instructions = list(BASE_INSTRUCTIONS)
 
+    identity_parts = []
+    if payload.full_name:
+        identity_parts.append(f"Name: {payload.full_name}")
+    if payload.role:
+        identity_parts.append(f"Role: {payload.role}")
+    if payload.company_name:
+        identity_parts.append(f"Company: {payload.company_name}")
+    if identity_parts:
+        instructions.append(
+            "\n## About This User\n"
+            + "\n".join(identity_parts)
+        )
+
     memory = await _load_memory(payload)
+    context_index = await _load_context_index(payload)
+
     if memory:
         instructions.append(
             "\n## Memory\n"
@@ -415,7 +467,6 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
             + recent_summaries
         )
 
-    context_index = await _load_context_index(payload)
     if context_index:
         context_list = "\n".join(
             [f"- **{c['name']}** (`{c['path']}`): {c['description']}" for c in context_index]
@@ -426,6 +477,33 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
             "Use `fs_read` to load the full content of any file relevant to the current task.\n\n"
             + context_list
         )
+
+    # Inject a directive when context files exist but have no recorded content yet,
+    # or when memory is missing. Tells the agent to write proactively without interviewing.
+    empty_context_files = [c["name"] for c in context_index if not c.get("has_content", True)]
+    sparse_parts = []
+    if empty_context_files:
+        sparse_parts.append(f"context files with no recorded content yet: {', '.join(empty_context_files)}")
+    if not memory:
+        sparse_parts.append("`memory/memory.md` (no memory recorded yet)")
+
+    if sparse_parts or not context_index:
+        if not context_index:
+            body = (
+                "Context files are being initialized for this workspace. "
+                "As this conversation unfolds, extract and record what you learn about the user, "
+                "their company, and product — without prompting them for info. "
+                "Memory goes to `memory/memory.md`. Context goes to `context/<topic>.md`."
+            )
+        else:
+            body = (
+                f"The following are empty: {'; '.join(sparse_parts)}.\n"
+                "As this conversation unfolds, record what you learn naturally — "
+                "do not prompt the user for info. "
+                "Memory goes to `memory/memory.md`. "
+                "Context goes to the matching `context/<topic>.md`."
+            )
+        instructions.append("\n## Workspace — record what you learn\n" + body)
 
     if payload.active_providers:
         formatted_providers = "\n".join([f"- {p}" for p in payload.active_providers])
@@ -445,10 +523,13 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
     return "\n".join(instructions)
 
 
-def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, str | None]:
+def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, str | None, dict]:
     """Resolve organization, project, workspace, and sandbox for a user.
 
-    Returns (organization_id, project_id, workspace_id, sandbox_id).
+    Returns (organization_id, project_id, workspace_id, sandbox_id, user_profile).
+
+    user_profile is a dict with keys: full_name, role, company_name.
+    Fetched in the same query as organization_id to avoid a second DB round-trip.
 
     Used by both build_agent_run_payload and background tasks (e.g. skill
     provisioning) that need workspace access without creating an agent session.
@@ -457,7 +538,7 @@ def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, st
     from app.db.workspaces import get_workspace
     user_row = (
         supabase.table("users")
-        .select("organization_id")
+        .select("organization_id, full_name, role, company_name")
         .eq("id", user_id)
         .single()
         .execute()
@@ -465,7 +546,13 @@ def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, st
     if not user_row.data:
         raise ValueError(f"User {user_id} not found in DB")
 
-    organization_id = user_row.data.get("organization_id") or "local"
+    data = user_row.data
+    organization_id = data.get("organization_id") or "local"
+    user_profile = {
+        "full_name": data.get("full_name"),
+        "role": data.get("role"),
+        "company_name": data.get("company_name"),
+    }
 
     project_id, workspace_id = get_or_create_default_project(
         supabase,
@@ -476,7 +563,7 @@ def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, st
     workspace_row = get_workspace(supabase, workspace_id=workspace_id)
     sandbox_id = workspace_row.last_sandbox_id
 
-    return organization_id, project_id, workspace_id, sandbox_id
+    return organization_id, project_id, workspace_id, sandbox_id, user_profile
 
 
 # ---------------------------------------------------------------------------
@@ -508,7 +595,7 @@ def build_agent_run_payload(
     from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
     from app.db.agent_sessions import create_agent_session
 
-    organization_id, project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
+    organization_id, project_id, workspace_id, sandbox_id, profile = resolve_workspace_context(supabase, user_id)
 
     if agent_session_id is None:
         agent_session_id = create_agent_session(
@@ -561,4 +648,7 @@ def build_agent_run_payload(
         agent_context=agent_context,
         tools=tools,
         active_providers=active_providers,
+        full_name=profile.get("full_name"),
+        role=profile.get("role"),
+        company_name=profile.get("company_name"),
     )

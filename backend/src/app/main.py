@@ -15,6 +15,7 @@ from app.api.routes.sessions import router as sessions_router
 from app.api.routes.filesystem import router as filesystem_router
 from app.api.routes.errors import router as errors_router
 from app.api.routes.billing import router as billing_router
+from app.api.routes.user import router as user_router
 from app.errors import log_error
 
 os.environ["OPENAI_API_KEY"] = settings.openai_api_key
@@ -68,3 +69,4 @@ app.include_router(sessions_router)
 app.include_router(filesystem_router)
 app.include_router(errors_router)
 app.include_router(billing_router)
+app.include_router(user_router)

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
 import AgentFilesTab from "./AgentFilesTab";
+import ProfileTab from "./ProfileTab";
 
 interface Integration {
   provider: string;
@@ -43,14 +44,14 @@ function ProviderIcon({ provider }: { provider: string }) {
   );
 }
 
-type Tab = 'integrations' | 'agent-files' | 'billing';
+type Tab = 'integrations' | 'agent-files' | 'billing' | 'profile';
 
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, session, signOut } = useAuth();
   const { creditsRemaining, monthlyCredits, planName, currentPeriodEnd, loading: billingLoading } = useBilling();
-  const [activeTab, setActiveTab] = useState<Tab>('integrations');
+  const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +218,20 @@ export default function SettingsPage() {
             </p>
             <nav className="flex flex-col gap-1">
               <button
+                onClick={() => setActiveTab('profile')}
+                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  activeTab === 'profile'
+                    ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+                Profile
+              </button>
+              <button
                 onClick={() => setActiveTab('integrations')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'integrations'
@@ -298,6 +313,7 @@ export default function SettingsPage() {
                 </button>
               </div>
             )}
+            {activeTab === 'profile' && <ProfileTab />}
 
             {activeTab === 'agent-files' && (
               <div className="flex h-full flex-col">

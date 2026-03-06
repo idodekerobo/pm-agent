@@ -192,7 +192,7 @@ def provision_skill(user_id: str, provider: str):
     async def _run():
         from app.agents.context import resolve_workspace_context, provision_skills_for_provider
         supabase = get_supabase()
-        organization_id, _project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
+        organization_id, _project_id, workspace_id, sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
         await provision_skills_for_provider(
             workspace_id=workspace_id,
             organization_id=organization_id,
@@ -216,7 +216,7 @@ def deprovision_skill(user_id: str, provider: str):
     async def _run():
         from app.agents.context import resolve_workspace_context, deprovision_skills_for_provider
         supabase = get_supabase()
-        organization_id, _project_id, workspace_id, sandbox_id = resolve_workspace_context(supabase, user_id)
+        organization_id, _project_id, workspace_id, sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
         await deprovision_skills_for_provider(
             workspace_id=workspace_id,
             organization_id=organization_id,
@@ -229,6 +229,123 @@ def deprovision_skill(user_id: str, provider: str):
         return asyncio.run(_run())
     except Exception as e:
         print(f"Error deprovisioning skill for provider={provider} user={user_id}: {e}")
+        raise
+
+
+def seed_workspace(user_id: str):
+    """Write template context and memory files into the user's workspace if they don't exist yet.
+
+    Enqueued after profile creation so the agent always has a set of context files
+    to work with, even before any context-gathering tasks have run.
+
+    Defensive: skips any file that already exists in the volume, so it is safe to
+    run concurrently with gather_onboarding_context or any other task.
+    """
+    async def _run():
+        from app.agents.context import resolve_workspace_context
+        from app.config import settings
+        from pathlib import Path
+
+        supabase = get_supabase()
+        organization_id, _project_id, workspace_id, _sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
+
+        templates_dir = Path(__file__).parent.parent / "workspace" / "templates"
+        template_files = list(templates_dir.rglob("*.md"))
+
+        if settings.workspace_backend == "production":
+            import io
+            from pathlib import PurePosixPath
+            from app.workspace.modal_sandbox import get_or_create_volume
+
+            vol = get_or_create_volume(user_id)
+
+            # Collect paths already in the volume so we only write what's missing
+            existing = set()
+            for check_dir in ("/context", "/memory"):
+                try:
+                    entries = await vol.listdir.aio(check_dir)
+                    for entry in (entries or []):
+                        existing.add(PurePosixPath(entry.path).as_posix())
+                except Exception:
+                    pass  # directory doesn't exist yet — all files in it are missing
+
+            missing = [
+                f for f in template_files
+                if f"/{f.relative_to(templates_dir).as_posix()}" not in existing
+            ]
+
+            if missing:
+                def _do_seed():
+                    with vol.batch_upload(force=True) as batch:
+                        for f in missing:
+                            rel = f.relative_to(templates_dir).as_posix()
+                            batch.put_file(io.BytesIO(f.read_bytes()), f"/{rel}")
+
+                await asyncio.to_thread(_do_seed)
+                print(f"[seed_workspace] wrote {len(missing)} template files for user {user_id}", flush=True)
+            else:
+                print(f"[seed_workspace] all template files already exist for user {user_id} — skipping", flush=True)
+
+        else:
+            from app.workspace.local_workspace_runtime import ensure_workspace, seed_workspace_if_empty
+            root = ensure_workspace(workspace_id, organization_id)
+            seed_workspace_if_empty(root)
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"[seed_workspace] error for user {user_id}: {e}")
+        raise
+
+
+def gather_onboarding_context(user_id: str, profile: dict):
+    """
+    Enqueued after onboarding profile submission.
+    Seeds the agent's context files with the user-provided profile data directly,
+    bypassing the researcher since we already have the information.
+    """
+    async def _run():
+        from app.agents.learning_agent import run_learning_agent
+
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
+
+        full_name = profile.get("full_name") or "Not provided"
+        role = profile.get("role") or "Not provided"
+        company_name = profile.get("company_name") or "Not provided"
+        company_url = profile.get("company_url") or "Not provided"
+        product_description = profile.get("product_description") or "Not provided"
+        use_case = profile.get("use_case") or "Not provided"
+
+        prompt = f"""Write the following user-provided onboarding information to the appropriate workspace context files.
+This information was entered directly by the user during onboarding — treat it as authoritative.
+
+Full name: {full_name}
+Role: {role}
+Company: {company_name}
+Company URL: {company_url}
+Product description: {product_description}
+How they plan to use PM Agent: {use_case}
+
+Write to:
+- context/user.md — full name, role, and how they plan to use PM Agent
+- context/company.md — company name and URL
+- context/product.md — product description and what they are building
+
+Ensure each file has valid YAML frontmatter (name, description using > block scalar, last_updated).
+Read each file before writing so you merge rather than overwrite any existing content."""
+
+        await run_learning_agent(payload, prompt)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+        }
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"Error gathering onboarding context for user {user_id}: {str(e)}")
         raise
 
 

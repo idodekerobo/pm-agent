@@ -62,3 +62,15 @@ def build_learning_agent(payload: AgentRunPayload) -> Agent:
         model="gpt-5.2",
         tools=tools,
     )
+
+
+async def run_learning_agent(payload: AgentRunPayload, prompt: str) -> None:
+    """Run the learning agent directly with a prompt.
+
+    The agent reads existing files, merges in the new
+    data, and writes the updated context files.
+    """
+    from agents import Runner
+
+    learner = build_learning_agent(payload)
+    await Runner.run(learner, input=prompt, context=payload.agent_context)

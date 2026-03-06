@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+
 class UnsafePathError(ValueError):
     pass
 
@@ -23,6 +25,20 @@ def _workspace_root(workspace_id: str, organization_id: str = "local") -> Path:
         / workspace_id
         / "workspace"
     )
+
+def seed_workspace_if_empty(root: Path) -> None:
+    """Write template context and memory files into a new workspace.
+
+    Idempotent — skips any file that already exists.
+    Called on first use when no context files are present.
+    """
+    for template_file in _TEMPLATES_DIR.rglob("*.md"):
+        rel = template_file.relative_to(_TEMPLATES_DIR)
+        target = root / rel
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(template_file.read_text(encoding="utf-8"), encoding="utf-8")
+
 
 def ensure_workspace(workspace_id: str, organization_id: str) -> Path:
     root = _workspace_root(workspace_id, organization_id)

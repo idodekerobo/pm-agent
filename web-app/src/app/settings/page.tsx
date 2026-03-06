@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import AgentFilesTab from "./AgentFilesTab";
+import ProfileTab from "./ProfileTab";
 
 interface Integration {
   provider: string;
@@ -42,7 +43,7 @@ function ProviderIcon({ provider }: { provider: string }) {
   );
 }
 
-type Tab = 'integrations' | 'agent-files';
+type Tab = 'integrations' | 'agent-files' | 'profile';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -173,6 +174,20 @@ export default function SettingsPage() {
             </p>
             <nav className="flex flex-col gap-1">
               <button
+                onClick={() => setActiveTab('profile')}
+                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  activeTab === 'profile'
+                    ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                </svg>
+                Profile
+              </button>
+              <button
                 onClick={() => setActiveTab('integrations')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'integrations'
@@ -206,6 +221,8 @@ export default function SettingsPage() {
 
           {/* Main content */}
           <main className="flex-1 overflow-y-auto px-10 py-8">
+
+            {activeTab === 'profile' && <ProfileTab />}
 
             {activeTab === 'agent-files' && (
               <div className="flex h-full flex-col">

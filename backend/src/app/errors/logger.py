@@ -20,6 +20,7 @@ import logging
 import traceback
 from typing import Any
 
+from app.config import settings
 from app.db.supabase_client import get_supabase
 from app.schemas.error import ErrorPlatform
 
@@ -39,6 +40,7 @@ async def log_error(
         supabase.table("errors").insert({
             "user_id": str(user_id) if user_id else None,
             "platform": platform,
+            "environment": settings.app_environment,
             "error_type": type(error).__name__,
             "message": str(error),
             "stack_trace": tb or None,

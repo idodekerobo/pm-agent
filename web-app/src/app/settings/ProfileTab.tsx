@@ -125,7 +125,7 @@ export default function ProfileTab() {
               type="text"
               value={profile.full_name}
               onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
               placeholder="Ada Lovelace"
             />
           </div>
@@ -135,7 +135,7 @@ export default function ProfileTab() {
             <select
               value={profile.role}
               onChange={(e) => setProfile({ ...profile, role: e.target.value })}
-              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
             >
               <option value="">Select your role</option>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
@@ -148,7 +148,7 @@ export default function ProfileTab() {
               type="text"
               value={profile.company_name}
               onChange={(e) => setProfile({ ...profile, company_name: e.target.value })}
-              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
               placeholder="Acme Inc."
             />
           </div>
@@ -159,7 +159,7 @@ export default function ProfileTab() {
               type="url"
               value={profile.company_url}
               onChange={(e) => setProfile({ ...profile, company_url: e.target.value })}
-              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
               placeholder="https://acme.com"
             />
           </div>
@@ -172,7 +172,7 @@ export default function ProfileTab() {
             value={profile.product_description}
             onChange={(e) => setProfile({ ...profile, product_description: e.target.value })}
             rows={4}
-            className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
+            className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
             placeholder="We build a B2B SaaS platform that helps logistics teams track shipments in real time..."
           />
         </div>

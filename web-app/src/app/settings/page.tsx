@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
 import AgentFilesTab from "./AgentFilesTab";
@@ -47,6 +47,7 @@ type Tab = 'integrations' | 'agent-files' | 'billing';
 
 export default function SettingsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, session, signOut } = useAuth();
   const { creditsRemaining, monthlyCredits, planName, currentPeriodEnd, loading: billingLoading } = useBilling();
   const [activeTab, setActiveTab] = useState<Tab>('integrations');
@@ -55,8 +56,19 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<Record<string, boolean>>({});
   const [availableOpen, setAvailableOpen] = useState(false);
+  const [billingBanner, setBillingBanner] = useState<'success' | 'canceled' | null>(null);
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  // Read ?billing= query param on mount, show banner, then clear the URL
+  useEffect(() => {
+    const billing = searchParams.get('billing');
+    if (billing === 'success' || billing === 'canceled') {
+      setBillingBanner(billing);
+      setActiveTab('billing');
+      router.replace('/settings', { scroll: false });
+    }
+  }, []);
 
   const fetchIntegrations = useCallback(async () => {
     try {
@@ -252,6 +264,40 @@ export default function SettingsPage() {
 
           {/* Main content */}
           <main className="flex-1 overflow-y-auto px-10 py-8">
+
+            {/* Stripe redirect banners */}
+            {billingBanner === 'success' && (
+              <div className="mb-6 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-green-600">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-green-900">You&apos;re now on Pro!</p>
+                    <p className="text-xs text-green-700">Your credits have been added. You can manage your subscription below.</p>
+                  </div>
+                </div>
+                <button onClick={() => setBillingBanner(null)} className="ml-4 shrink-0 text-green-500 hover:text-green-800" aria-label="Dismiss">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                </button>
+              </div>
+            )}
+            {billingBanner === 'canceled' && (
+              <div className="mb-6 flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-400">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-700">Checkout canceled</p>
+                    <p className="text-xs text-zinc-500">No changes were made. You&apos;re still on your current plan.</p>
+                  </div>
+                </div>
+                <button onClick={() => setBillingBanner(null)} className="ml-4 shrink-0 text-zinc-400 hover:text-zinc-700" aria-label="Dismiss">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                </button>
+              </div>
+            )}
 
             {activeTab === 'agent-files' && (
               <div className="flex h-full flex-col">

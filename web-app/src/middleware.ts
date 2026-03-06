@@ -44,10 +44,17 @@ export async function middleware(request: NextRequest) {
   );
 
   if (isProtectedRoute && !user) {
-    return NextResponse.redirect(new URL('/auth/sign-in', request.url));
+    const signInUrl = new URL('/auth/sign-in', request.url);
+    signInUrl.searchParams.set('redirect', request.nextUrl.pathname);
+    return NextResponse.redirect(signInUrl);
   }
 
-  if (isPublicRoute && user) {
+  // Allow authenticated users through auth-flow pages so PKCE reset-password
+  // works (callback sets session then redirects here — user is now logged in).
+  const authFlowRoutes = ['/auth/reset-password', '/auth/callback'];
+  const isAuthFlowRoute = authFlowRoutes.some((r) => request.nextUrl.pathname.startsWith(r));
+
+  if (isPublicRoute && !isAuthFlowRoute && user) {
     return NextResponse.redirect(new URL('/chat', request.url));
   }
 

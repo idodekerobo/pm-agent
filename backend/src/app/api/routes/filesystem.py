@@ -245,7 +245,7 @@ def _delete_local(organization_id: str, workspace_id: str, rel_path: str) -> Non
 def get_workspace_status(user_id: str = Depends(auth_protect_route)):
     """Return the current workspace ID and agent_run_status for the authenticated user."""
     supabase = get_supabase()
-    _, _, workspace_id, _ = resolve_workspace_context(supabase, user_id)
+    _, _, workspace_id, _, _profile = resolve_workspace_context(supabase, user_id)
     workspace = get_workspace(supabase, workspace_id=workspace_id)
     return WorkspaceStatusResponse(
         workspace_id=workspace_id,
@@ -261,7 +261,7 @@ async def list_directory(
     """List the contents of a directory in the agent's workspace volume."""
     rel = _safe_rel_path(path)
     supabase = get_supabase()
-    organization_id, _, workspace_id, _ = resolve_workspace_context(supabase, user_id)
+    organization_id, _, workspace_id, _, _profile = resolve_workspace_context(supabase, user_id)
 
     if settings.workspace_backend == "production":
         entries = await _list_modal(user_id, rel)
@@ -279,7 +279,7 @@ async def read_file(
     """Read a text file from the agent's workspace volume."""
     rel = _safe_rel_path(path)
     supabase = get_supabase()
-    organization_id, _, workspace_id, _ = resolve_workspace_context(supabase, user_id)
+    organization_id, _, workspace_id, _, _profile = resolve_workspace_context(supabase, user_id)
 
     if settings.workspace_backend == "production":
         content = await _read_modal(user_id, rel)
@@ -297,7 +297,7 @@ async def write_file(
     """Create or overwrite a text file in the agent's workspace volume."""
     rel = _safe_rel_path(body.path)
     supabase = get_supabase()
-    organization_id, _, workspace_id, _ = resolve_workspace_context(supabase, user_id)
+    organization_id, _, workspace_id, _, _profile = resolve_workspace_context(supabase, user_id)
 
     if settings.workspace_backend == "production":
         await _write_modal(user_id, rel, body.content)
@@ -315,7 +315,7 @@ async def delete_file(
     """Delete a file from the agent's workspace volume."""
     rel = _safe_rel_path(path)
     supabase = get_supabase()
-    organization_id, _, workspace_id, _ = resolve_workspace_context(supabase, user_id)
+    organization_id, _, workspace_id, _, _profile = resolve_workspace_context(supabase, user_id)
 
     if settings.workspace_backend == "production":
         await _delete_modal(user_id, rel)

@@ -6,6 +6,7 @@ verified the Slack signature and ACK'd the 200 response.
 
 import re
 
+from app.config import settings
 from app.messaging.slack.client import (
     add_reaction,
     get_channel_history,
@@ -248,11 +249,32 @@ async def _run_agent_for_message(
 
     billing_account, balance = get_billing_account_and_balance(supabase, user_id=user_id)
     if not billing_account or balance <= 0:
+        upgrade_url = f"{settings.client_app_base_url}/upgrade"
         await post_message(
             bot_token,
             channel,
-            "You're out of credits for this period. Please upgrade your plan to continue.",
+            "You're out of credits for this period. PLease upgrade your account.",
             thread_ts=thread_ts or ts,
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "You're out of credits for this period. Upgrade your account for more credits.",
+                    },
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "Upgrade"},
+                            "url": upgrade_url,
+                            "style": "primary",
+                        }
+                    ],
+                },
+            ],
         )
         return
     if is_mention:

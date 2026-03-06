@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -11,7 +11,9 @@ export default function SignInPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn } = useAuth();
+  const redirect = searchParams.get('redirect') || '/onboarding';
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +22,7 @@ export default function SignInPage() {
 
     try {
       await signIn(email, password);
-      router.push('/onboarding');
+      router.push(redirect);
     } catch (err: any) {
       setError(err.message || 'Failed to sign in');
     } finally {

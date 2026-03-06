@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import auth_protect_route
+from app.errors.logger import log_error
 from app.config import settings
 from app.db.supabase_client import get_supabase
-from app.integrations.crypto import encrypt_token
+from app.integrations.crypto import decrypt_token, encrypt_token
 from app.workers.queue import queue
 from app.workers.tasks import deprovision_skill, gather_github_context, provision_skill
 
@@ -203,12 +204,12 @@ async def github_callback(
 
 @router.delete("")
 async def github_disconnect(user_id: str = Depends(auth_protect_route)):
-    """Uninstall the GitHub App and remove all stored tokens."""
+    """Revoke user OAuth token, uninstall the GitHub App, and remove all stored tokens."""
     supabase = get_supabase()
 
     row = (
         supabase.table("github_installations")
-        .select("installation_id")
+        .select("installation_id, user_token")
         .eq("user_id", user_id)
         .maybe_single()
         .execute()
@@ -216,6 +217,21 @@ async def github_disconnect(user_id: str = Depends(auth_protect_route)):
 
     if row and row.data:
         installation_id = row.data["installation_id"]
+
+        if row.data.get("user_token"):
+            try:
+                user_token = decrypt_token(row.data["user_token"])
+                async with httpx.AsyncClient() as client:
+                    await client.delete(
+                        f"https://api.github.com/applications/{settings.github_client_id}/token",
+                        auth=(settings.github_client_id, settings.github_client_secret),
+                        json={"access_token": user_token},
+                        headers={"Accept": "application/vnd.github+json"},
+                    )
+            except Exception as e:
+                print(f"[github] user token revocation failed (continuing disconnect): {e}")
+                await log_error(user_id, "server", e, context={"route": "DELETE /integrations/github", "step": "user_token_revocation"})
+
         try:
             app_jwt = _generate_app_jwt()
             async with httpx.AsyncClient() as client:
@@ -228,6 +244,7 @@ async def github_disconnect(user_id: str = Depends(auth_protect_route)):
                 )
         except Exception as e:
             print(f"[github] installation deletion failed (continuing disconnect): {e}")
+            await log_error(user_id, "server", e, context={"route": "DELETE /integrations/github", "step": "installation_deletion", "installation_id": installation_id})
 
     supabase.table("github_installations").delete().eq("user_id", user_id).execute()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "github").execute()

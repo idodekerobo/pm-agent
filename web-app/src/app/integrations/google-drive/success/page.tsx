@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function GoogleDriveSuccessPage() {
+function GoogleDriveSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -83,5 +83,13 @@ export default function GoogleDriveSuccessPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function GoogleDriveSuccessPage() {
+  return (
+    <Suspense>
+      <GoogleDriveSuccessContent />
+    </Suspense>
   );
 }

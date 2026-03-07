@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
@@ -46,7 +46,7 @@ function ProviderIcon({ provider }: { provider: string }) {
 
 type Tab = 'integrations' | 'agent-files' | 'billing' | 'profile';
 
-export default function SettingsPage() {
+function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, session, signOut } = useAuth();
@@ -592,5 +592,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense>
+      <SettingsContent />
+    </Suspense>
   );
 }

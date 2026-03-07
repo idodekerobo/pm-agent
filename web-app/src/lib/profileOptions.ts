@@ -4,6 +4,7 @@ export const ROLES = [
   'Founder / CEO',
   'Engineer',
   'Designer',
+  'Data Scientist',
   'Other',
 ];
 
@@ -12,6 +13,7 @@ export const USE_CASE_OPTIONS = [
   'Manage backlog & issues',
   'Competitive research',
   'Stakeholder updates',
-  'Draft communications',
+  'Ideate on products',
+  'Draft & send communications',
   'Technical planning',
 ];

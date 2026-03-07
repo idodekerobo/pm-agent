@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import auth_protect_route
@@ -27,30 +27,19 @@ _SLACK_BOT_SCOPES = [
 ]
 
 
-def _get_redirect_uri(request: Request) -> str:
-    """Return the OAuth redirect URI.
-
-    Uses SLACK_REDIRECT_URI from config when set (required for local dev via ngrok,
-    and for production where the canonical URL differs from the request origin).
-    Falls back to url_for only when the config value is empty.
-    """
-    if settings.slack_redirect_uri:
-        return settings.slack_redirect_uri
-    return str(request.url_for("slack_callback"))
-
-
 @router.get("/connect")
-async def slack_connect(request: Request, user_id: str):
+async def slack_connect(user_id: str):
     """Redirect the user to Slack's OAuth v2 consent page.
 
     Passes user_id as the OAuth state parameter so the callback can identify
     the PM Agent user without relying on a session cookie. This is required
     when connect and callback land on different domains (e.g. localhost vs ngrok).
     """
+    redirect_uri = f"{settings.api_base_url}/integrations/slack/callback"
     params = urlencode({
         "client_id": settings.slack_client_id,
         "scope": " ".join(_SLACK_BOT_SCOPES),
-        "redirect_uri": _get_redirect_uri(request),
+        "redirect_uri": redirect_uri,
         "state": user_id,
     })
     return RedirectResponse(f"https://slack.com/oauth/v2/authorize?{params}")
@@ -58,7 +47,6 @@ async def slack_connect(request: Request, user_id: str):
 
 @router.get("/callback", name="slack_callback")
 async def slack_callback(
-    request: Request,
     code: str | None = None,
     error: str | None = None,
     state: str | None = None,
@@ -86,7 +74,7 @@ async def slack_callback(
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://slack.com/api/oauth.v2.access",
-            data={"code": code, "redirect_uri": _get_redirect_uri(request)},
+            data={"code": code, "redirect_uri": f"{settings.api_base_url}/integrations/slack/callback"},
             # Slack requires client credentials as HTTP Basic Auth
             auth=(settings.slack_client_id, settings.slack_client_secret),
         )

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import auth_protect_route
@@ -16,8 +16,8 @@ router = APIRouter(prefix="/notion")
 
 
 @router.get("/connect")
-async def notion_connect(request: Request, user_id: str):
-    redirect_uri = settings.notion_redirect_uri or str(request.url_for("notion_callback"))
+async def notion_connect(user_id: str):
+    redirect_uri = f"{settings.api_base_url}/integrations/notion/callback"
     params = urlencode({
         "client_id": settings.notion_client_id,
         "redirect_uri": redirect_uri,
@@ -30,7 +30,6 @@ async def notion_connect(request: Request, user_id: str):
 
 @router.get("/callback", name="notion_callback")
 async def notion_callback(
-    request: Request,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -43,7 +42,7 @@ async def notion_callback(
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code from Notion.")
 
-    redirect_uri = settings.notion_redirect_uri or str(request.url_for("notion_callback"))
+    redirect_uri = f"{settings.api_base_url}/integrations/notion/callback"
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.notion.com/v1/oauth/token",

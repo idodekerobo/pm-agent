@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from app.api.deps import auth_protect_route
@@ -77,7 +77,7 @@ async def _exchange_user_code(code: str, redirect_uri: str) -> dict:
 # ---------------------------------------------------------------------------
 
 @router.get("/connect")
-async def github_connect(request: Request, user_id: str):
+async def github_connect(user_id: str):
     """Redirect the user to the GitHub App installation page.
 
     The state parameter carries user_id through the installation and OAuth
@@ -91,7 +91,6 @@ async def github_connect(request: Request, user_id: str):
 
 @router.get("/callback", name="github_callback")
 async def github_callback(
-    request: Request,
     installation_id: int | None = None,
     code: str | None = None,
     state: str | None = None,
@@ -116,7 +115,7 @@ async def github_callback(
     if not installation_id:
         raise HTTPException(status_code=400, detail="Missing installation_id from GitHub.")
 
-    redirect_uri = settings.github_redirect_uri or str(request.url_for("github_callback"))
+    redirect_uri = f"{settings.api_base_url}/integrations/github/callback"
 
     # --- Installation (bot) token ---
     try:

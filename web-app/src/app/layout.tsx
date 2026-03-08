@@ -15,8 +15,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Product Manager Agent",
-  description: "AI product manager.",
+  title: {
+    default: "Draft AI, Product Manager Agent",
+    template: "%s | Draft AI, Product Manager Agent",
+  },
+  description: "Draft AI is your AI-powered Product Manager Agent. Spec features, research markets, and ship better products faster.",
 };
 
 export default function RootLayout({

@@ -45,7 +45,7 @@ const INTEGRATIONS = [
   },
 ];
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 interface ProfileData {
   fullName: string;
@@ -61,10 +61,12 @@ interface IntegrationStatus {
   [key: string]: boolean;
 }
 
+const STORAGE_KEY = 'onboarding_profile';
+
 function StepIndicator({ current }: { current: Step }) {
   return (
     <div className="flex items-center gap-2">
-      {([1, 2, 3] as Step[]).map((s) => (
+      {([1, 2, 3, 4] as Step[]).map((s) => (
         <div key={s} className="flex items-center gap-2">
           <div
             className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium transition-colors ${
@@ -83,7 +85,7 @@ function StepIndicator({ current }: { current: Step }) {
               s
             )}
           </div>
-          {s < 3 && <div className={`h-px w-6 ${s < current ? 'bg-zinc-300' : 'bg-zinc-100'}`} />}
+          {s < 4 && <div className={`h-px w-6 ${s < current ? 'bg-zinc-300' : 'bg-zinc-100'}`} />}
         </div>
       ))}
     </div>
@@ -93,7 +95,8 @@ function StepIndicator({ current }: { current: Step }) {
 const STEP_LABELS: Record<Step, { title: string; subtitle: string; note?: string }> = {
   1: { title: 'About You', subtitle: 'Help your agent understand who you are.' },
   2: { title: 'Your Product', subtitle: 'This helps the agent give you more personalized answers.' },
-  3: {
+  3: { title: 'Create Your Account', subtitle: 'Save your progress and activate your workspace.' },
+  4: {
     title: 'Connect Your Tools',
     subtitle: 'Extend all the places your agent can help you work.',
     note: 'All integrations are optional — you can connect more later in Settings.',
@@ -115,10 +118,68 @@ export default function OnboardingPage() {
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  const [resuming, setResuming] = useState(false);
 
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  // When user returns after confirming their email, this effect fires.
+  // AuthContext sets `user` once the session is established from the
+  // /auth/callback exchange, then redirects back to /onboarding.
+  // We pick up the saved profile from localStorage, submit it, and
+  // advance to step 4 (integrations).
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+
+    let parsed: ProfileData;
+    try {
+      parsed = JSON.parse(saved) as ProfileData;
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+
+    localStorage.removeItem(STORAGE_KEY);
+    setProfile(parsed);
+    setResuming(true);
+
+    const submitAndAdvance = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token ?? '';
+
+        await fetch(`${apiBase}/user/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            full_name: parsed.fullName,
+            role: parsed.role,
+            company_name: parsed.companyName || null,
+            company_url: parsed.companyUrl || null,
+            product_description: parsed.productDescription || null,
+            use_case: [
+              ...parsed.useCases,
+              ...(parsed.useCaseContext.trim() ? [parsed.useCaseContext.trim()] : []),
+            ].join(', ') || null,
+          }),
+        });
+      } finally {
+        setResuming(false);
+        setStep(4);
+      }
+    };
+
+    submitAndAdvance();
+  }, [user, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -143,8 +204,7 @@ export default function OnboardingPage() {
   const handleConnect = (providerKey: string) => {
     if (!user?.id) return;
     setConnectingProvider(providerKey);
-    const providerParam = providerKey === 'google' ? 'google' : providerKey;
-    window.open(`${apiBase}/integrations/${providerParam}/connect?user_id=${user.id}`, '_blank', 'width=600,height=700');
+    window.open(`${apiBase}/integrations/${providerKey}/connect?user_id=${user.id}`, '_blank', 'width=600,height=700');
   };
 
   const validateStep1 = () => {
@@ -160,17 +220,61 @@ export default function OnboardingPage() {
     return '';
   };
 
+  const validateStep3 = () => {
+    if (!email.trim()) return 'Email is required.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
+    if (password.length < 8) return 'Password must be at least 8 characters.';
+    return '';
+  };
+
+  const handleSignUp = async () => {
+    const err = validateStep3();
+    if (err) { setError(err); return; }
+    setError('');
+    setSubmitting(true);
+    try {
+      // Persist profile so we can recover it after email confirmation redirect
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+
+      const supabase = createClient();
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          // /auth/callback defaults next to /onboarding, which is where we
+          // want users to land so the useEffect above can pick up from localStorage.
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_WEB_APP_BASE_URL}/auth/callback`,
+        },
+      });
+
+      if (signUpError) throw signUpError;
+      setAwaitingConfirmation(true);
+    } catch (e: unknown) {
+      localStorage.removeItem(STORAGE_KEY);
+      setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleNext = () => {
     setError('');
     if (step === 1) {
       const err = validateStep1();
       if (err) { setError(err); return; }
+      setStep(2);
+      return;
     }
     if (step === 2) {
       const err = validateStep2();
       if (err) { setError(err); return; }
+      setStep(3);
+      return;
     }
-    setStep((s) => (s + 1) as Step);
+    if (step === 3) {
+      handleSignUp();
+      return;
+    }
   };
 
   const handleBack = () => {
@@ -178,36 +282,57 @@ export default function OnboardingPage() {
     setStep((s) => (s - 1) as Step);
   };
 
-  const handleFinish = async () => {
-    setError('');
-    setSubmitting(true);
-    try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
-
-      await fetch(`${apiBase}/user/profile`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          full_name: profile.fullName,
-          role: profile.role,
-          company_name: profile.companyName || null,
-          company_url: profile.companyUrl || null,
-          product_description: profile.productDescription || null,
-          use_case: [
-            ...profile.useCases,
-            ...(profile.useCaseContext.trim() ? [profile.useCaseContext.trim()] : []),
-          ].join(', ') || null,
-        }),
-      });
-
-      router.push('/chat');
-    } catch {
-      setError('Something went wrong. Please try again.');
-      setSubmitting(false);
-    }
+  const handleFinish = () => {
+    router.push('/chat');
   };
+
+  // Resuming state: user just returned from email confirmation, submitting profile
+  if (resuming) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 font-sans text-zinc-900">
+        <div className="w-full max-w-xl bg-white border border-zinc-200 shadow-sm rounded-xl px-8 py-12 flex flex-col items-center gap-4">
+          <svg className="animate-spin h-6 w-6 text-zinc-400" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm text-zinc-500">Setting up your workspace…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Awaiting email confirmation state
+  if (awaitingConfirmation) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 font-sans text-zinc-900">
+        <div className="w-full max-w-xl bg-white border border-zinc-200 shadow-sm rounded-xl overflow-hidden">
+          <div className="px-8 py-6 border-b border-zinc-100">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Check your email</h1>
+                <p className="mt-1 text-sm text-zinc-500">We sent a confirmation link to <span className="font-medium text-zinc-800">{email}</span>.</p>
+              </div>
+              <StepIndicator current={3} />
+            </div>
+          </div>
+          <div className="px-8 py-10 flex flex-col items-center gap-4 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="m2 7 10 7 10-7" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-zinc-700 max-w-xs">
+                Click the link in your email to confirm your account. Once confirmed, you&apos;ll be brought right back here to finish setup.
+              </p>
+              <p className="mt-3 text-xs text-zinc-400">Didn&apos;t receive it? Check your spam folder.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const { title, subtitle, note } = STEP_LABELS[step];
 
@@ -332,8 +457,42 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 3 — Connect Tools */}
+        {/* Step 3 — Create Account */}
         {step === 3 && (
+          <div className="px-8 py-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                placeholder="ada@acme.com"
+                autoComplete="email"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                placeholder="At least 8 characters"
+                autoComplete="new-password"
+              />
+            </div>
+            <p className="text-xs text-zinc-400">
+              Already have an account?{' '}
+              <a href="/auth/sign-in" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">
+                Sign in
+              </a>
+            </p>
+          </div>
+        )}
+
+        {/* Step 4 — Connect Tools */}
+        {step === 4 && (
           <div className="px-8 py-6 space-y-2.5">
             {INTEGRATIONS.map((integration) => {
               const connected = !!integrations[integration.key];
@@ -406,18 +565,10 @@ export default function OnboardingPage() {
             ← Back
           </button>
 
-          {step < 3 ? (
+          {step < 4 ? (
             <button
               type="button"
               onClick={handleNext}
-              className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
-            >
-              Continue →
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleFinish}
               disabled={submitting}
               className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:bg-zinc-400 disabled:cursor-not-allowed transition-colors"
             >
@@ -427,11 +578,21 @@ export default function OnboardingPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Finishing...
+                  {step === 3 ? 'Creating account…' : 'Loading…'}
                 </span>
+              ) : step === 3 ? (
+                'Create Account →'
               ) : (
-                'Finish Setup'
+                'Continue →'
               )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleFinish}
+              className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
+            >
+              Finish Setup
             </button>
           )}
         </div>

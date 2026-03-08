@@ -96,7 +96,7 @@ export default function Nav() {
           ))}
 
           <a
-            href={`${APP_URL}/signin`}
+            href={`${APP_URL}/auth/sign-in`}
             style={{
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",

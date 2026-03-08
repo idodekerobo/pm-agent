@@ -114,7 +114,7 @@ export default function Footer() {
               Account
             </span>
             {[
-              { label: "Sign in", href: `${APP_URL}/signin` },
+              { label: "Sign in", href: `${APP_URL}/auth/sign-in` },
               { label: "Get started", href: `${APP_URL}/onboarding` },
             ].map((l) => (
               <a

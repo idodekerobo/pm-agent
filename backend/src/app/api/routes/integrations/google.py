@@ -72,8 +72,9 @@ async def google_callback(request: Request):
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
 
-    queue.enqueue(gather_google_drive_context, user_id)
+    # runs syncrhonously as long as there is one worker, gather_*_context task depends on the skill
     queue.enqueue(provision_skill, user_id, "google")
+    queue.enqueue(gather_google_drive_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/google-drive/success")
 

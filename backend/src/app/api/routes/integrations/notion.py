@@ -65,8 +65,9 @@ async def notion_callback(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
 
-    queue.enqueue(gather_notion_context, user_id)
+    # runs syncrhonously as long as there is one worker, gather_*_context task depends on the skill
     queue.enqueue(provision_skill, user_id, "notion")
+    queue.enqueue(gather_notion_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/notion/success")
 

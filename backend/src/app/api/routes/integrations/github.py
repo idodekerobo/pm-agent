@@ -195,8 +195,9 @@ async def github_callback(
         }
     ).execute()
 
-    queue.enqueue(gather_github_context, user_id)
+    # runs syncrhonously as long as there is one worker, gather_*_context task depends on the skill
     queue.enqueue(provision_skill, user_id, "github")
+    queue.enqueue(gather_github_context, user_id)
 
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/github/success")
 

@@ -123,78 +123,24 @@ export default function OnboardingPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
-  const [resuming, setResuming] = useState(false);
 
   const router = useRouter();
   const { user, loading } = useAuth();
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  // When user returns after confirming their email, this effect fires.
-  // AuthContext sets `user` once the session is established from the
-  // /auth/callback exchange, then redirects back to /onboarding.
-  // We pick up the saved profile from localStorage, submit it, and
-  // advance to step 4 (integrations).
+  // When the user confirms their email in the /auth/confirmed tab, that tab
+  // handles profile submission and clears localStorage. This tab just needs to
+  // detect that a session now exists (via onAuthStateChange) and advance to step 4.
   useEffect(() => {
     if (loading) return;
     if (!user) return;
 
-    const saved = localStorage.getItem(STORAGE_KEY);
     const awaiting = localStorage.getItem('onboarding_awaiting') === 'true';
+    if (!awaiting) return;
 
-    // Profile was already submitted by the new tab that handled the email callback — just clear the flag and jump to step 4.
-    if (!saved && awaiting) {
-      localStorage.removeItem('onboarding_awaiting');
-      setAwaitingConfirmation(false);
-      setStep(4);
-      return;
-    }
-
-    if (!saved) return;
-
-    let parsed: ProfileData;
-    try {
-      parsed = JSON.parse(saved) as ProfileData;
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem('onboarding_awaiting');
-      return;
-    }
-
-    localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem('onboarding_awaiting');
-    setProfile(parsed);
-    setResuming(true);
-
-    const submitAndAdvance = async () => {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token ?? '';
-
-        await fetch(`${apiBase}/user/profile`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            full_name: parsed.fullName,
-            role: parsed.role,
-            company_name: parsed.companyName || null,
-            company_url: parsed.companyUrl || null,
-            product_name: parsed.productName || null,
-            product_description: parsed.productDescription || null,
-            use_case: [
-              ...parsed.useCases,
-              ...(parsed.useCaseContext.trim() ? [parsed.useCaseContext.trim()] : []),
-            ].join(', ') || null,
-          }),
-        });
-      } finally {
-        setResuming(false);
-        setAwaitingConfirmation(false);
-        setStep(4);
-      }
-    };
-
-    submitAndAdvance();
+    setAwaitingConfirmation(false);
+    setStep(4);
   }, [user, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -302,21 +248,6 @@ export default function OnboardingPage() {
   const handleFinish = () => {
     router.push('/chat');
   };
-
-  // Resuming state: user just returned from email confirmation, submitting profile
-  if (resuming) {
-    return (
-      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 font-sans text-zinc-900">
-        <div className="w-full max-w-xl bg-white border border-zinc-200 shadow-sm rounded-xl px-8 py-12 flex flex-col items-center gap-4">
-          <svg className="animate-spin h-6 w-6 text-zinc-400" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          <p className="text-sm text-zinc-500">Setting up your workspace…</p>
-        </div>
-      </div>
-    );
-  }
 
   // Awaiting email confirmation state
   if (awaitingConfirmation) {

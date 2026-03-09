@@ -24,7 +24,7 @@ def get_billing_account_by_user_id(
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         return None
     return BillingAccount.model_validate(result.data)
 
@@ -41,7 +41,7 @@ def get_billing_account_by_stripe_customer_id(
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         return None
     return BillingAccount.model_validate(result.data)
 

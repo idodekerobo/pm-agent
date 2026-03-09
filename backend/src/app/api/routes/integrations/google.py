@@ -33,10 +33,10 @@ oauth.register(
 @router.get("/connect")
 async def google_connect(request: Request, user_id: str):
     request.session["connecting_user_id"] = user_id
-    redirect_uri = request.url_for("google_callback")
+    redirect_uri = f"{settings.api_base_url}/integrations/google/callback"
     return await oauth.google.authorize_redirect(
         request,
-        str(redirect_uri),
+        redirect_uri,
         access_type="offline",
         prompt="consent",
     )

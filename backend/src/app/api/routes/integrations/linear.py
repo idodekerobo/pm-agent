@@ -28,8 +28,8 @@ oauth.register(
 @router.get("/connect")
 async def linear_connect(request: Request, user_id: str):
     request.session["connecting_user_id"] = user_id
-    redirect_uri = request.url_for("linear_callback")
-    return await oauth.linear.authorize_redirect(request, str(redirect_uri), actor="app")
+    redirect_uri = f"{settings.api_base_url}/integrations/linear/callback"
+    return await oauth.linear.authorize_redirect(request, redirect_uri, actor="app")
 
 
 # TODO: wrap in try/except

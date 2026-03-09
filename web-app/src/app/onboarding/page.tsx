@@ -21,6 +21,7 @@ const INTEGRATIONS = [
     abbr: 'SL',
     color: '#E01E5A',
     value: 'Get updates and trigger tasks from Slack. Your agent meets your team where they already work.',
+    note: 'After connecting, invite the bot to any Slack channels you want it active in.',
   },
   {
     key: 'notion',
@@ -487,6 +488,9 @@ export default function OnboardingPage() {
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{integration.value}</p>
+                    {'note' in integration && integration.note && (
+                      <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{integration.note}</p>
+                    )}
                   </div>
 
                   <button

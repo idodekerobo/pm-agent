@@ -16,12 +16,12 @@ interface Integration {
   created_at: string;
 }
 
-const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean }> = {
+const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean; note?: string }> = {
   github: { name: "GitHub",       description: "Repos, issues & pull requests",        color: "#24292F", abbr: "GH" },
   linear: { name: "Linear",       description: "Issue tracking & project management", color: "#5E6AD2", abbr: "LN" },
   google: { name: "Google Drive", description: "Cloud storage & document sync",        color: "#34A853", abbr: "GD" },
   notion: { name: "Notion",       description: "Docs, notes & knowledge base",         color: "#191919", abbr: "NT", requiresManualRevoke: true },
-  slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL" },
+  slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL", note: "After connecting, invite the bot to any Slack channels you want it active in." },
 };
 
 const ALL_PROVIDERS = ["github", "linear", "google", "notion", "slack"];
@@ -557,6 +557,9 @@ function SettingsContent() {
                                 <div className="flex-1">
                                   <p className="text-sm font-medium text-zinc-800">{meta.name}</p>
                                   <p className="mt-0.5 text-xs text-zinc-400">{meta.description}</p>
+                                  {meta.note && (
+                                    <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
+                                  )}
                                 </div>
                                 <button
                                   onClick={() => handleConnect(provider)}

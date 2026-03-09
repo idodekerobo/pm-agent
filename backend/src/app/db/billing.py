@@ -74,7 +74,7 @@ def get_active_subscription(
         .maybe_single()
         .execute()
     )
-    if not result.data:
+    if not result or not result.data:
         return None
     return Subscription.model_validate(result.data)
 
@@ -251,7 +251,7 @@ def get_plan_id_by_name(
         .maybe_single()
         .execute()
     )
-    return result.data["id"] if result.data else None
+    return result.data["id"] if (result and result.data) else None
 
 
 def get_plan_by_id(
@@ -268,7 +268,7 @@ def get_plan_by_id(
         .maybe_single()
         .execute()
     )
-    return Plan.model_validate(result.data) if result.data else None
+    return Plan.model_validate(result.data) if (result and result.data) else None
 
 
 def get_plan_id_by_stripe_price_id(
@@ -284,4 +284,4 @@ def get_plan_id_by_stripe_price_id(
         .maybe_single()
         .execute()
     )
-    return result.data["id"] if result.data else None
+    return result.data["id"] if (result and result.data) else None

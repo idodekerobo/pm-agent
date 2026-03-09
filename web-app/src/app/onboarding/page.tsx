@@ -139,6 +139,16 @@ export default function OnboardingPage() {
     if (!user) return;
 
     const saved = localStorage.getItem(STORAGE_KEY);
+    const awaiting = localStorage.getItem('onboarding_awaiting') === 'true';
+
+    // Profile was already submitted by the new tab that handled the email callback — just clear the flag and jump to step 4.
+    if (!saved && awaiting) {
+      localStorage.removeItem('onboarding_awaiting');
+      setAwaitingConfirmation(false);
+      setStep(4);
+      return;
+    }
+
     if (!saved) return;
 
     let parsed: ProfileData;
@@ -146,10 +156,12 @@ export default function OnboardingPage() {
       parsed = JSON.parse(saved) as ProfileData;
     } catch {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('onboarding_awaiting');
       return;
     }
 
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('onboarding_awaiting');
     setProfile(parsed);
     setResuming(true);
 
@@ -177,6 +189,7 @@ export default function OnboardingPage() {
         });
       } finally {
         setResuming(false);
+        setAwaitingConfirmation(false);
         setStep(4);
       }
     };
@@ -239,6 +252,7 @@ export default function OnboardingPage() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
 
       const supabase = createClient();
+      localStorage.setItem('onboarding_awaiting', 'true');
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -253,6 +267,7 @@ export default function OnboardingPage() {
       setAwaitingConfirmation(true);
     } catch (e: unknown) {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem('onboarding_awaiting');
       setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);

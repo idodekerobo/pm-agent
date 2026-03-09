@@ -15,11 +15,11 @@ interface Integration {
   created_at: string;
 }
 
-const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string }> = {
+const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean }> = {
   github: { name: "GitHub",       description: "Repos, issues & pull requests",        color: "#24292F", abbr: "GH" },
   linear: { name: "Linear",       description: "Issue tracking & project management", color: "#5E6AD2", abbr: "LN" },
   google: { name: "Google Drive", description: "Cloud storage & document sync",        color: "#34A853", abbr: "GD" },
-  notion: { name: "Notion",       description: "Docs, notes & knowledge base",         color: "#191919", abbr: "NT" },
+  notion: { name: "Notion",       description: "Docs, notes & knowledge base",         color: "#191919", abbr: "NT", requiresManualRevoke: true },
   slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL" },
 };
 
@@ -58,6 +58,7 @@ function SettingsContent() {
   const [disconnecting, setDisconnecting] = useState<Record<string, boolean>>({});
   const [availableOpen, setAvailableOpen] = useState(false);
   const [billingBanner, setBillingBanner] = useState<'success' | 'canceled' | null>(null);
+  const [notionRevokeNotice, setNotionRevokeNotice] = useState(false);
 
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -100,6 +101,7 @@ function SettingsContent() {
       });
       if (!res.ok) throw new Error();
       setIntegrations((p) => p.filter((i) => i.provider !== provider));
+      if (INTEGRATION_META[provider]?.requiresManualRevoke) setNotionRevokeNotice(true);
     } catch {
       /* TODO: show error toast */
     } finally {
@@ -326,6 +328,25 @@ function SettingsContent() {
               <p className="mt-1.5 text-sm text-zinc-500">
                 Manage the tools and services your PM agent can access.
               </p>
+
+              {notionRevokeNotice && (
+                <div className="mt-6 flex items-start justify-between rounded-lg border border-amber-200 bg-amber-50 px-5 py-3.5">
+                  <div className="flex items-start gap-3">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 text-amber-500">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-medium text-amber-900">Notion disconnected — one more step</p>
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Notion doesn&apos;t support automatic revocation. To fully remove access, open Notion → click your profile photo → <span className="font-medium">Settings</span> → <span className="font-medium">Connections</span> → find this app and remove it.
+                      </p>
+                    </div>
+                  </div>
+                  <button onClick={() => setNotionRevokeNotice(false)} className="ml-4 shrink-0 text-amber-400 hover:text-amber-700" aria-label="Dismiss">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+              )}
 
               <div className="mt-8">
 

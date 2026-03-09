@@ -79,7 +79,6 @@ async def sync_notion(user_id: str = Depends(auth_protect_route)):
 
 
 @router.delete("")
-# TODO: tell the user that they have to disconnect notion manually
 async def notion_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "notion").execute()

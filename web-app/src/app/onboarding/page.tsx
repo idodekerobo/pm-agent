@@ -52,6 +52,7 @@ interface ProfileData {
   role: string;
   companyName: string;
   companyUrl: string;
+  productName: string;
   productDescription: string;
   useCases: string[];
   useCaseContext: string;
@@ -110,6 +111,7 @@ export default function OnboardingPage() {
     role: '',
     companyName: '',
     companyUrl: '',
+    productName: '',
     productDescription: '',
     useCases: [],
     useCaseContext: '',
@@ -165,6 +167,7 @@ export default function OnboardingPage() {
             role: parsed.role,
             company_name: parsed.companyName || null,
             company_url: parsed.companyUrl || null,
+            product_name: parsed.productName || null,
             product_description: parsed.productDescription || null,
             use_case: [
               ...parsed.useCases,
@@ -210,7 +213,6 @@ export default function OnboardingPage() {
   const validateStep1 = () => {
     if (!profile.fullName.trim()) return 'Full name is required.';
     if (!profile.role) return 'Please select your role.';
-    if (!profile.companyName.trim()) return 'Company name is required.';
     if (profile.companyUrl && !/^https?:\/\/.+/.test(profile.companyUrl)) return 'Please enter a valid URL (starting with https://).';
     return '';
   };
@@ -387,7 +389,7 @@ export default function OnboardingPage() {
               </div>
 
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company Name</label>
+                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company Name <span className="text-zinc-400 font-normal">(optional)</span></label>
                 <input
                   type="text"
                   value={profile.companyName}
@@ -415,7 +417,17 @@ export default function OnboardingPage() {
         {step === 2 && (
           <div className="px-8 py-6 space-y-5">
             <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1.5">What does your product do?</label>
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">Product Name(s)</label>
+              <input
+                type="text"
+                value={profile.productName}
+                onChange={(e) => setProfile({ ...profile, productName: e.target.value })}
+                className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                placeholder="Acme Shipment Tracker"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 mb-1.5">What does your product(s) do?</label>
               <textarea
                 value={profile.productDescription}
                 onChange={(e) => setProfile({ ...profile, productDescription: e.target.value })}

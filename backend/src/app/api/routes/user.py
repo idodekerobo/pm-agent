@@ -13,6 +13,7 @@ class ProfilePayload(BaseModel):
     role: str
     company_name: str | None = None
     company_url: str | None = None
+    product_name: str | None = None
     product_description: str | None = None
     use_case: str | None = None
 
@@ -22,7 +23,7 @@ async def get_profile(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     row = (
         supabase.table("users")
-        .select("id, email, created_at, organization_id, full_name, role, company_name, company_url, product_description, use_case")
+        .select("id, email, created_at, organization_id, full_name, role, company_name, company_url, product_name, product_description, use_case")
         .eq("id", user_id)
         .single()
         .execute()
@@ -50,6 +51,7 @@ async def _upsert_profile(user_id: str, body: ProfilePayload, enqueue_context: b
         "role": body.role,
         "company_name": body.company_name,
         "company_url": body.company_url,
+        "product_name": body.product_name,
         "product_description": body.product_description,
         "use_case": body.use_case,
     }

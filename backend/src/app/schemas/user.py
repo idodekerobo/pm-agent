@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     role: Optional[str] = None
     company_name: Optional[str] = None
     company_url: Optional[str] = None
+    product_name: Optional[str] = None
     product_description: Optional[str] = None
     use_case: Optional[str] = None
 

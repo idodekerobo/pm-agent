@@ -10,6 +10,7 @@ interface ProfileData {
   role: string;
   company_name: string;
   company_url: string;
+  product_name: string;
   product_description: string;
   use_case: string;
   use_case_context: string;
@@ -24,6 +25,7 @@ export default function ProfileTab() {
     role: '',
     company_name: '',
     company_url: '',
+    product_name: '',
     product_description: '',
     use_case: '',
     use_case_context: '',
@@ -50,6 +52,7 @@ export default function ProfileTab() {
           role: data.role ?? '',
           company_name: data.company_name ?? '',
           company_url: data.company_url ?? '',
+          product_name: data.product_name ?? '',
           product_description: data.product_description ?? '',
           use_case: knownParts.join(', '),
           use_case_context: contextParts.join(', '),
@@ -89,6 +92,7 @@ export default function ProfileTab() {
           role: profile.role,
           company_name: profile.company_name || null,
           company_url: profile.company_url || null,
+          product_name: profile.product_name || null,
           product_description: profile.product_description || null,
           use_case: [
             ...profile.use_case.split(', ').filter(Boolean),
@@ -152,7 +156,7 @@ export default function ProfileTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company Name</label>
+            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company Name <span className="text-zinc-400 font-normal">(optional)</span></label>
             <input
               type="text"
               value={profile.company_name}
@@ -176,7 +180,17 @@ export default function ProfileTab() {
 
         {/* Product */}
         <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1.5">What does your product do?</label>
+          <label className="block text-sm font-medium text-zinc-700 mb-1.5">Product Name(s)</label>
+          <input
+            type="text"
+            value={profile.product_name}
+            onChange={(e) => setProfile({ ...profile, product_name: e.target.value })}
+            className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+            placeholder="Acme Shipment Tracker"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 mb-1.5">What does your product(s) do?</label>
           <textarea
             value={profile.product_description}
             onChange={(e) => setProfile({ ...profile, product_description: e.target.value })}

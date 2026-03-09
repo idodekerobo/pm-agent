@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
 import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
+import FeedbackModal from "@/components/FeedbackModal";
 
 interface Message {
   id: string;
@@ -34,6 +35,7 @@ export default function ChatPage() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionMetadata, setSessionMetadata] = useState<{ timezone: string; location?: string } | null>(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
@@ -591,6 +593,12 @@ export default function ChatPage() {
                 <span className="ml-1.5 font-medium text-zinc-900">{creditsRemaining}</span>
               </div>
             )}
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
+            >
+              Feedback
+            </button>
             <Link
               href="/settings"
               className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
@@ -763,6 +771,10 @@ export default function ChatPage() {
           </form>
         </div>
       </div>
+
+      {showFeedbackModal && (
+        <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
+      )}
     </div>
   );
 }

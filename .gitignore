@@ -14,4 +14,4 @@ dump.rdb
 # Cursor IDE configuration (auto-managed by Portcullis)
 .cursorrules
 .cursor/
-.claude/
+.claude/CLAUDE.md

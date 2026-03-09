@@ -93,7 +93,7 @@ export default function HowItWorks() {
       >
         Set up in minutes.
         <span style={{ color: "var(--color-accent)", fontStyle: "italic" }}>
-          {" "}Ship in days.
+          {" "}Ship in hours.
         </span>
       </h2>
 

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prebuild": "cp ../assets/icon.png src/app/icon.png",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

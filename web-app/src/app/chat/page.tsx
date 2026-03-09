@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
 import { logError } from "@/lib/errorLogger";
+import { useProfileComplete } from "@/lib/useProfileComplete";
 
 interface Message {
   id: string;
@@ -24,6 +25,7 @@ export default function ChatPage() {
   const router = useRouter();
   const { session, signOut } = useAuth();
   const { creditsRemaining, planName, refetch: refetchBilling } = useBilling();
+  const profileComplete = useProfileComplete();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -684,6 +686,23 @@ export default function ChatPage() {
             <div ref={messagesEndRef} />
           </div>
         </div>
+
+        {/* Incomplete profile banner */}
+        {profileComplete === false && (
+          <div className="shrink-0 border-t border-blue-200 bg-blue-50 px-6 py-3">
+            <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
+              <p className="text-sm text-blue-800">
+                Your profile isn&apos;t set up yet — your agent won&apos;t have context about you or your product.
+              </p>
+              <Link
+                href="/onboarding"
+                className="shrink-0 rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+              >
+                Complete setup →
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Upgrade Banner */}
         {showUpgradeBanner && (

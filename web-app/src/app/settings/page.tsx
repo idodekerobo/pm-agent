@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
+import { useProfileComplete } from "@/lib/useProfileComplete";
 import AgentFilesTab from "./AgentFilesTab";
 import ProfileTab from "./ProfileTab";
 
@@ -51,6 +52,7 @@ function SettingsContent() {
   const searchParams = useSearchParams();
   const { user, session, signOut } = useAuth();
   const { creditsRemaining, monthlyCredits, planName, currentPeriodEnd, loading: billingLoading } = useBilling();
+  const profileComplete = useProfileComplete();
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -281,6 +283,26 @@ function SettingsContent() {
 
           {/* Main content */}
           <main className="flex-1 overflow-y-auto px-10 py-8">
+
+            {/* Incomplete profile banner */}
+            {profileComplete === false && (
+              <div className="mb-6 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-blue-500">
+                    <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <p className="text-sm text-blue-800">
+                    Your profile isn&apos;t set up — your agent won&apos;t have context about you or your product.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="ml-4 shrink-0 rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                >
+                  Complete profile
+                </button>
+              </div>
+            )}
 
             {/* Stripe redirect banners */}
             {billingBanner === 'success' && (

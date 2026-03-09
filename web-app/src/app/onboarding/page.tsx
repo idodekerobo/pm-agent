@@ -172,7 +172,10 @@ export default function OnboardingPage() {
   const validateStep1 = () => {
     if (!profile.fullName.trim()) return 'Full name is required.';
     if (!profile.role) return 'Please select your role.';
-    if (profile.companyUrl && !/^https?:\/\/.+/.test(profile.companyUrl)) return 'Please enter a valid URL (starting with https://).';
+    if (profile.companyUrl) {
+      try { new URL(`https://${profile.companyUrl.replace(/^https?:\/\//, '')}`); }
+      catch { return 'Please enter a valid company URL (e.g. acme.com).'; }
+    }
     return '';
   };
 
@@ -347,13 +350,16 @@ export default function OnboardingPage() {
 
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company URL <span className="text-zinc-400 font-normal">(optional)</span></label>
-                <input
-                  type="url"
-                  value={profile.companyUrl}
-                  onChange={(e) => setProfile({ ...profile, companyUrl: e.target.value })}
-                  className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                  placeholder="https://acme.com"
-                />
+                <div className="flex items-center rounded-md border border-zinc-300 bg-zinc-50/50 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900">
+                  <span className="flex items-center self-stretch pl-3 pr-2 text-sm text-zinc-400 select-none bg-zinc-100 border-r border-zinc-300 rounded-l-md">https://</span>
+                  <input
+                    type="text"
+                    value={(profile.companyUrl || '').replace(/^https?:\/\//, '')}
+                    onChange={(e) => setProfile({ ...profile, companyUrl: e.target.value })}
+                    className="flex-1 bg-transparent py-2.5 pl-3 pr-3 text-sm text-zinc-900 focus:outline-none"
+                    placeholder="acme.com"
+                  />
+                </div>
               </div>
             </div>
           </div>

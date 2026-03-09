@@ -91,7 +91,9 @@ export default function ProfileTab() {
           full_name: profile.full_name,
           role: profile.role,
           company_name: profile.company_name || null,
-          company_url: profile.company_url || null,
+          company_url: profile.company_url
+            ? `https://${profile.company_url.replace(/^https?:\/\//, '')}`
+            : null,
           product_name: profile.product_name || null,
           product_description: profile.product_description || null,
           use_case: [
@@ -167,14 +169,17 @@ export default function ProfileTab() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company URL</label>
-            <input
-              type="url"
-              value={profile.company_url}
-              onChange={(e) => setProfile({ ...profile, company_url: e.target.value })}
-              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-              placeholder="https://acme.com"
-            />
+            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company URL <span className="text-zinc-400 font-normal">(optional)</span></label>
+            <div className="flex items-center rounded-md border border-zinc-300 bg-zinc-50/50 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900">
+              <span className="flex items-center self-stretch pl-3 pr-2 text-sm text-zinc-400 select-none bg-zinc-100 border-r border-zinc-300 rounded-l-md">https://</span>
+              <input
+                type="text"
+                value={(profile.company_url || '').replace(/^https?:\/\//, '')}
+                onChange={(e) => setProfile({ ...profile, company_url: e.target.value })}
+                className="flex-1 bg-transparent py-2.5 pl-3 pr-3 text-sm text-zinc-900 focus:outline-none"
+                placeholder="acme.com"
+              />
+            </div>
           </div>
         </div>
 

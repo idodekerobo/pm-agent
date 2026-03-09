@@ -47,7 +47,9 @@ export default function ConfirmedPage() {
             full_name: profile.fullName,
             role: profile.role,
             company_name: profile.companyName || null,
-            company_url: profile.companyUrl || null,
+            company_url: profile.companyUrl
+              ? `https://${profile.companyUrl.replace(/^https?:\/\//, '')}`
+              : null,
             product_name: profile.productName || null,
             product_description: profile.productDescription || null,
             use_case: [

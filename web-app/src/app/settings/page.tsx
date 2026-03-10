@@ -16,15 +16,16 @@ interface Integration {
   created_at: string;
 }
 
-const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean; note?: string }> = {
-  github: { name: "GitHub",       description: "Repos, issues & pull requests",        color: "#24292F", abbr: "GH" },
-  linear: { name: "Linear",       description: "Issue tracking & project management", color: "#5E6AD2", abbr: "LN" },
-  google: { name: "Google Drive", description: "Cloud storage & document sync",        color: "#34A853", abbr: "GD" },
-  notion: { name: "Notion",       description: "Docs, notes & knowledge base",         color: "#191919", abbr: "NT", requiresManualRevoke: true },
-  slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL", note: "After connecting, invite the agent to any Slack channels you want it active in." },
+const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean; note?: string; isByok?: boolean }> = {
+  github:       { name: "GitHub",       description: "Repos, issues & pull requests",        color: "#24292F", abbr: "GH" },
+  linear:       { name: "Linear",       description: "Issue tracking & project management",   color: "#5E6AD2", abbr: "LN" },
+  google:       { name: "Google Drive", description: "Cloud storage & document sync",         color: "#34A853", abbr: "GD" },
+  notion:       { name: "Notion",       description: "Docs, notes & knowledge base",          color: "#191919", abbr: "NT", requiresManualRevoke: true },
+  slack:        { name: "Slack",        description: "Team messaging & channel alerts",        color: "#E01E5A", abbr: "SL", note: "After connecting, invite the agent to any Slack channels you want it active in." },
+  "claude-code": { name: "Claude Code", description: "AI coding assistant via your own token", color: "#D97756", abbr: "CC", isByok: true },
 };
 
-const ALL_PROVIDERS = ["github", "linear", "google", "notion", "slack"];
+const ALL_PROVIDERS = ["github", "linear", "google", "notion", "slack", "claude-code"];
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -61,6 +62,10 @@ function SettingsContent() {
   const [availableOpen, setAvailableOpen] = useState(false);
   const [billingBanner, setBillingBanner] = useState<'success' | 'canceled' | null>(null);
   const [notionRevokeNotice, setNotionRevokeNotice] = useState(false);
+  const [byokExpanded, setByokExpanded] = useState(false);
+  const [byokToken, setByokToken] = useState('');
+  const [byokSaving, setByokSaving] = useState(false);
+  const [byokError, setByokError] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
@@ -117,7 +122,40 @@ function SettingsContent() {
 
   const handleConnect = (provider: string) => {
     if (!user) return;
+    if (provider === "claude-code") {
+      setByokExpanded(true);
+      setByokError(null);
+      return;
+    }
     window.open(`${apiBase}/integrations/${provider}/connect?user_id=${user.id}`, "_blank");
+  };
+
+  const handleSaveClaudeCodeToken = async () => {
+    if (!byokToken.trim()) {
+      setByokError("Token is required.");
+      return;
+    }
+    setByokSaving(true);
+    setByokError(null);
+    try {
+      const token = session?.access_token ?? "";
+      const res = await fetch(`${apiBase}/integrations/claude-code/connect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ token: byokToken.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setIntegrations((prev) => [
+        ...prev.filter((i) => i.provider !== "claude-code"),
+        { provider: "claude-code", account_label: "Claude Code Enabled", scopes: [], created_at: new Date().toISOString() },
+      ]);
+      setByokExpanded(false);
+      setByokToken("");
+    } catch {
+      setByokError("Failed to save token. Please try again.");
+    } finally {
+      setByokSaving(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -546,27 +584,75 @@ function SettingsContent() {
                         <div className="overflow-hidden rounded-lg border border-zinc-200">
                           {available.map((provider, idx) => {
                             const meta = INTEGRATION_META[provider];
+                            const isLast = idx === available.length - 1;
+                            const isByokExpanded = provider === "claude-code" && byokExpanded;
                             return (
-                              <div
-                                key={provider}
-                                className={`row-hover flex items-center gap-4 px-5 py-4 ${
-                                  idx < available.length - 1 ? "border-b border-zinc-100" : ""
-                                }`}
-                              >
-                                <ProviderIcon provider={provider} />
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-zinc-800">{meta.name}</p>
-                                  <p className="mt-0.5 text-xs text-zinc-400">{meta.description}</p>
-                                  {meta.note && (
-                                    <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
+                              <div key={provider} className={!isLast ? "border-b border-zinc-100" : ""}>
+                                <div className={`row-hover flex items-center gap-4 px-5 py-4`}>
+                                  <ProviderIcon provider={provider} />
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium text-zinc-800">{meta.name}</p>
+                                    <p className="mt-0.5 text-xs text-zinc-400">{meta.description}</p>
+                                    {meta.note && (
+                                      <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
+                                    )}
+                                  </div>
+                                  {meta.isByok ? (
+                                    <button
+                                      onClick={() => { setByokExpanded((o) => !o); setByokError(null); }}
+                                      className="flex-shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"
+                                    >
+                                      {isByokExpanded ? "Cancel" : "Connect →"}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleConnect(provider)}
+                                      className="flex-shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"
+                                    >
+                                      Connect →
+                                    </button>
                                   )}
                                 </div>
-                                <button
-                                  onClick={() => handleConnect(provider)}
-                                  className="flex-shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"
-                                >
-                                  Connect →
-                                </button>
+
+                                {/* Inline BYOK token form */}
+                                {isByokExpanded && (
+                                  <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4 space-y-3">
+                                    <div>
+                                      <p className="text-xs font-medium text-zinc-700 mb-2">How to get your token:</p>
+                                      <ol className="space-y-1 text-xs text-zinc-500 list-none">
+                                        <li className="flex items-start gap-2">
+                                          <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
+                                          Install Claude Code: <code className="ml-1 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">npm install -g @anthropic-ai/claude-code</code>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                          <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">2</span>
+                                          Run <code className="ml-1 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">claude setup-token</code> in your terminal
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                          <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">3</span>
+                                          Copy and paste the token below
+                                        </li>
+                                      </ol>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="password"
+                                        value={byokToken}
+                                        onChange={(e) => setByokToken(e.target.value)}
+                                        placeholder="Paste your Claude Code token"
+                                        className="flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                      />
+                                      <button
+                                        onClick={handleSaveClaudeCodeToken}
+                                        disabled={byokSaving}
+                                        className="flex-shrink-0 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                                      >
+                                        {byokSaving ? "Saving..." : "Save"}
+                                      </button>
+                                    </div>
+                                    {byokError && <p className="text-xs text-red-600">{byokError}</p>}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

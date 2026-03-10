@@ -33,6 +33,16 @@ def auth_protect_route(
         request.state.user_id = user_id
         return user_id
     except ExpiredSignatureError:
+        try:
+            unverified = decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256", "ES256"],
+                options={"verify_aud": False, "verify_exp": False},
+            )
+            request.state.user_id = unverified.get("sub")
+        except Exception:
+            pass
         raise HTTPException(status_code=401, detail="Token expired")
     except InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")

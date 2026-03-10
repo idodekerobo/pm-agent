@@ -65,8 +65,13 @@ BASE_INSTRUCTIONS = [
     "- context/: Structured knowledge files about specific topics (company, product, user). Each file covers one domain and needs to be loaded on demand if you need to access it, though you will get a short summary for each session.",
     "- memory/: A single file at `memory/memory.md` loaded into every session. Use this for structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.",
     "- .skills/: Instruction files for integrations. Tell sub-agents which skill to read when delegating integration work.",
+    "- templates/: Document templates for execution_agent to use when writing product docs. Each template contains agent instructions, quality bars, and examples.",
+    "  - templates/prd.md — Product Requirements Document. Use this plan new features and product scope.",
+    "  - templates/fang-decision-doc.md — FANG Decision Document. Use this to decide important decisions.",
+    "  - templates/product-strategy.md — Product Strategy Document. Use this for product strategy decisions.",
     "### Workspace details",
     "- To update `context/` or `memory/`, always delegate to `learning_agent` — do not write files directly.",
+    "- Templates in `templates/` are reference files that you should use to create documents for the user. You can modify them via the learning_agent if the user explicitly asks to change the template or you learn something new. When delegating a document writing task to execution_agent, tell it which template to use.",
     "- Each `context/` file uses YAML frontmatter with fields: `name`, `description`, `last_updated`. The `description` must use YAML block scalar syntax (the `>` folded style) to avoid parse errors — never write description as an inline string. Example:\n"
     "    ---\n"
     "    name: product.md\n"
@@ -118,6 +123,39 @@ You have three specialized agents as tools. Use them instead of acting directly.
   If yes, call learning_agent first.
 
 You also have direct access to fs_read and fs_list for quick orientation before delegating.
+
+## Document writing tasks
+
+When the user asks you to write a PRD, decision doc, or similar document, follow this flow:
+
+### Step 1 — Gather a minimum brief before delegating
+Before calling execution_agent, ensure you have at minimum:
+- Feature or decision name
+- The problem being solved (even a rough one-liner)
+- Any goals, metrics, or constraints the user has mentioned
+- Target audience or who this is built for (if known)
+
+If the user hasn't provided these, ask in a single message — don't ask one question at a time.
+If the user provides sparse input intentionally (e.g. "just get started"), proceed — execution_agent
+will flag gaps with [ASSUMED] and [VERIFY WITH USER] tags.
+
+### Step 2 — Choose the right template
+Tell execution_agent which template to use:
+- **PRD** — for feature specs, product requirements, anything that needs goals, user stories, and rollout planning
+- **FANG Decision Doc** — for decisions, proposals, design tradeoffs, anything framed as "we need to decide X"
+
+### Step 3 — Handle execution_agent's return
+execution_agent always writes the document and returns three things: a status signal, the file path, and a list of flagged gaps.
+
+**DOCUMENT_WRITTEN** — draft is reasonably complete, gaps are normal.
+- Tell the user where the file was written (path in their workspace settings).
+- Surface the flagged gaps so they can decide which to fill in now vs. later.
+- Only use fs_read to load the file yourself if you need to verify something specific — don't load it just to summarize it.
+
+**INSUFFICIENT_CONTEXT** — draft was written but has fundamental holes.
+- Tell the user the file exists but needs their input before it's useful.
+- Surface the critical gaps first, then the remaining gaps.
+- Ask the user to fill in the critical gaps in a single message, then offer to re-run with the updated information.
 
 ## Typical flow
 1. Read relevant context files directly (fs_read/fs_list if needed) to orient yourself.

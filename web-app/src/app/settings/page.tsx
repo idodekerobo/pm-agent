@@ -21,7 +21,7 @@ const INTEGRATION_META: Record<string, { name: string; description: string; colo
   linear: { name: "Linear",       description: "Issue tracking & project management", color: "#5E6AD2", abbr: "LN" },
   google: { name: "Google Drive", description: "Cloud storage & document sync",        color: "#34A853", abbr: "GD" },
   notion: { name: "Notion",       description: "Docs, notes & knowledge base",         color: "#191919", abbr: "NT", requiresManualRevoke: true },
-  slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL", note: "After connecting, invite the bot to any Slack channels you want it active in." },
+  slack:  { name: "Slack",        description: "Team messaging & channel alerts",       color: "#E01E5A", abbr: "SL", note: "After connecting, invite the agent to any Slack channels you want it active in." },
 };
 
 const ALL_PROVIDERS = ["github", "linear", "google", "notion", "slack"];

@@ -21,7 +21,7 @@ const INTEGRATIONS = [
     abbr: 'SL',
     color: '#E01E5A',
     value: 'Get updates and trigger tasks from Slack. Your agent meets your team where they already work.',
-    note: 'After connecting, invite the bot to any Slack channels you want it active in.',
+    note: 'After connecting, invite the agent to any Slack channels you want it active in.',
   },
   {
     key: 'notion',

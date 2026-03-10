@@ -252,6 +252,20 @@ def seed_workspace(user_id: str):
         templates_dir = Path(__file__).parent.parent / "workspace" / "templates"
         template_files = list(templates_dir.rglob("*.md"))
 
+        def _volume_dest(f: Path) -> str:
+            """Map a local template source file to its destination path in the agent volume.
+
+            context/ and memory/ are written at the volume root (e.g. /context/company.md).
+            product-docs/ is flattened into /templates/ (e.g. /templates/prd.md),
+            dropping the product-docs/ prefix so templates sit alongside /context/ and /memory/.
+            """
+            rel = f.relative_to(templates_dir)
+            first = rel.parts[0] if rel.parts else ""
+            if first == "product-docs":
+                filename = Path(*rel.parts[1:]).as_posix() if len(rel.parts) > 1 else rel.name
+                return f"/templates/{filename}"
+            return f"/{rel.as_posix()}"
+
         if settings.workspace_backend == "production":
             import io
             from pathlib import PurePosixPath
@@ -261,7 +275,7 @@ def seed_workspace(user_id: str):
 
             # Collect paths already in the volume so we only write what's missing
             existing = set()
-            for check_dir in ("/context", "/memory"):
+            for check_dir in ("/context", "/memory", "/templates"):
                 try:
                     entries = await vol.listdir.aio(check_dir)
                     for entry in (entries or []):
@@ -271,15 +285,14 @@ def seed_workspace(user_id: str):
 
             missing = [
                 f for f in template_files
-                if f"/{f.relative_to(templates_dir).as_posix()}" not in existing
+                if _volume_dest(f) not in existing
             ]
 
             if missing:
                 def _do_seed():
                     with vol.batch_upload(force=True) as batch:
                         for f in missing:
-                            rel = f.relative_to(templates_dir).as_posix()
-                            batch.put_file(io.BytesIO(f.read_bytes()), f"/{rel}")
+                            batch.put_file(io.BytesIO(f.read_bytes()), _volume_dest(f))
 
                 await asyncio.to_thread(_do_seed)
                 print(f"[seed_workspace] wrote {len(missing)} template files for user {user_id}", flush=True)

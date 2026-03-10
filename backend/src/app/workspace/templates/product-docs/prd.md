@@ -104,8 +104,12 @@ After generating the document, ask the user if they want to add any of the follo
 
 List 2-4 bullets summarizing what this doc is, what decision it's driving, and what specific questions reviewers should focus on. Keep each bullet to 1-2 sentences.
 
-- What specific questions (if any) should reviewers focus on?
-- What tradeoffs or decisions need to be discussed and validated?
+Quality bar: A reviewer should be able to read only this section and know (1) what the feature is, (2) why it matters, and (3) what they're being asked to weigh in on. If your TL;DR could apply to any feature at any company, it's too vague.
+
+**Example:**
+- We're proposing a team collaboration feature to address our D30 retention gap (22% today, target 35%). This is our highest-leverage retention lever for Q3.
+- **Review question**: Should we ship invite-only in M1 and defer real-time editing to M2, or bundle both? The tradeoff is speed-to-learning vs. feature completeness.
+- **Review question**: We're scoping this to web only in v1. Is that acceptable given 40% of our DAU is mobile?
 
 ## Product Overview
 
@@ -131,10 +135,18 @@ Impact areas:
 
 ### Target Audience
 
-Answer in bullet form:
-- Who specifically is this built for? (e.g., "first-time users who haven't completed onboarding", "power users managing multiple projects")
+Answer in bullet form. Be specific about who this is for — a vague audience leads to a vague product. Name the user segment, their current behavior or state, and why they're the right first audience for this feature.
+
+Quality bar: "All users" is never a target audience. If you can't describe a specific person with a specific context (e.g., "a team lead who has already invited 2+ teammates but hasn't used any collaboration features"), the audience isn't defined enough yet. Flag with `[NEEDS VALIDATION]`.
+
+- Who specifically is this built for? Name the segment and their defining characteristic.
 - What is their current state or context when they encounter this problem?
+- Why are they the right audience to build for first? (e.g., highest pain, largest segment, best proxy for future users)
 - Link to any relevant user research, interviews, or competitor analysis if available.
+
+**Example:**
+- **Primary**: Team leads on the free plan who have invited 2+ teammates but whose teams have low weekly engagement (<2 sessions/week). These users have shown intent to collaborate but lack the tools to do it — they're the highest-churn segment among multi-user accounts.
+- **Secondary**: Solo users who hit the "share" button at least once in their first week. They've signaled interest in collaboration but have no one to collaborate with yet — the invite flow is designed to convert them into team leads.
 
 ### People Problems
 
@@ -187,13 +199,25 @@ Quality bar: A Key Result must have a baseline, a target, and a timeframe. "Impr
 
 ### Non-goals
 
-Call out what this feature explicitly will NOT do. This prevents scope creep. Write 2-5 bullets.
+Call out what this feature explicitly will NOT do. Non-goals can range from high-level strategy tradeoffs to specific product scoping decisions. Each one should imply a tradeoff you're consciously accepting. Write 2-5 bullets.
+
+Quality bar: Every non-goal should make at least one person uncomfortable — if nobody would push back on it, it's not a real tradeoff and doesn't need to be listed. "We won't build bad UX" is not a non-goal.
+
+Examples at different altitudes:
+- **Strategy**: "We are not trying to convert free users to paid with this feature — this is a retention play, not a monetization play"
+- **Product**: "We are not building a mobile experience for collaboration in v1 — web only"
+- **Scope**: "We are not redesigning the existing project settings page — the invite flow will be added to the current layout"
 
 ### Countermetrics + Guardrails
 
-List any metrics that could move negatively as a side effect. For each, note the threshold that would trigger a pause or rollback.
+List any metrics that could move negatively as a side effect of this feature. For each, note the specific threshold that would trigger a pause or rollback.
 
-Example: *"If session length drops >10% in the first week post-launch, pause rollout."*
+Quality bar: A real guardrail has a metric, a threshold, and an action. "We'll watch for regressions" is not a guardrail — it's a vague intention. If you can't name the metric and the number, you don't have a guardrail yet.
+
+**Example:**
+- If D7 retention for solo users drops >5% in the first two weeks (from feature clutter), pause rollout and investigate.
+- If invite email open rate is below 20%, revisit the email copy and subject line before expanding rollout.
+- If average page load time increases >500ms due to real-time collaboration features, file a P0 performance bug before proceeding to M2.
 
 ## Product Plan
 
@@ -243,16 +267,28 @@ Example: `feature_invite_sent` — fires when user submits invite form; captures
 
 ## Risks + Mitigations
 
-List the top 3-5 risks in order of severity. For each, include a mitigation.
+List the top 3-5 risks in order of severity. Risks can be at the market, execution, or technical level. For each, include a concrete mitigation — what you'll do about it now or what your contingency plan is.
 
-- **Risk**: [description]
-  - **Mitigation**: [what you'll do about it now, or your contingency]
+Quality bar: A real risk names what could go wrong, why it matters, and what you'd do about it. "Things might not work" is not a risk. If your mitigation is "we'll figure it out later," you don't have a mitigation yet — flag it with `[NEEDS VALIDATION]`.
+
+**Example:**
+- **Risk** (Execution): Team collaboration requires real-time sync infrastructure we haven't built before. If it takes longer than estimated, M2 slips and we miss the Q3 retention window.
+  - **Mitigation**: Spike the real-time sync layer in week 1. If the spike reveals >2 weeks of unexpected complexity, descope to async collaboration for M2 and push real-time to M3.
+- **Risk** (Market): Competitors have had team features for 6+ months. If our v1 is too minimal, users may not perceive it as a real alternative and retention won't move.
+  - **Mitigation**: User-test the M1 invite flow with 5 churned team leads before public launch. If qualitative signal is "this isn't enough," bundle M1+M2 and delay launch by 3 weeks.
+- **Risk** (Technical): Adding presence indicators could degrade page performance for users with slow connections, hurting the experience we're trying to improve.
+  - **Mitigation**: Set a 500ms load time guardrail (see Countermetrics). Implement presence as a progressive enhancement that degrades gracefully on slow connections.
 
 ## Detailed Requirements *(skip for 1-pager)*
 
 ### User Journey
 
-Write a short narrative (3-6 sentences) of what a user experiences end-to-end once this feature is built. Write in second person ("You open the app and...").
+Write a short narrative (3-6 sentences) of what a user experiences end-to-end once this feature is built. Write in second person ("You open the app and..."). The journey should cover the happy path from first encounter to core value — it sets up the User Stories below.
+
+Quality bar: A reader should be able to close their eyes and visualize the experience. If the journey is too abstract to imagine ("you use the feature and it works"), it's too vague. Name the specific screens, actions, and moments.
+
+**Example:**
+You open your project and click "Invite Teammate" from the settings page. You type in your teammate's email, set them as an editor, and hit send. They get an email with a branded link — when they click it, they land on a signup page that already shows your project name. After creating an account, they're dropped directly into the project. You see their cursor appear in the document you're editing. You both start making changes at the same time — their edits appear in real time, labeled with their name. When you're done, you check the activity feed and see a summary of everything your teammate changed.
 
 ### User Stories
 

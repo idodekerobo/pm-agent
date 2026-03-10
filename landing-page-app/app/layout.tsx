@@ -23,6 +23,7 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://draftai.us"),
   title: "Draft — AI Product Manager for Builders",
   description:
     "Scale yourself, not your headcount. Draft is the AI product manager that helps solo PMs and founders write better specs, think through strategy, and orchestrate your dev workflow.",
@@ -30,7 +31,14 @@ export const metadata: Metadata = {
     title: "Draft — AI Product Manager for Builders",
     description:
       "Scale yourself, not your headcount. Draft helps solo PMs and founders write better specs, think through strategy, and orchestrate your entire dev workflow.",
+    url: "https://draftai.us",
+    siteName: "Draft AI",
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og-image.png"],
   },
 };
 

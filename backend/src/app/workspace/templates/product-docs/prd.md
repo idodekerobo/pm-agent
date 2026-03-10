@@ -87,7 +87,7 @@ After generating the document, ask the user if they want to add any of the follo
      END AGENT INSTRUCTIONS
      ========================================== -->
 
-# Product Requirements Document
+# <Feature Name> Product Requirements Document
 
 **Team**:
 **Design**:

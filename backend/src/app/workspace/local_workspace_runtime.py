@@ -31,10 +31,20 @@ def seed_workspace_if_empty(root: Path) -> None:
 
     Idempotent — skips any file that already exists.
     Called on first use when no context files are present.
+
+    Path mapping:
+      context/ and memory/ are written at workspace root (e.g. context/company.md).
+      product-docs/ is flattened into templates/ (e.g. templates/prd.md),
+      dropping the product-docs/ prefix so templates sit alongside context/ and memory/.
     """
     for template_file in _TEMPLATES_DIR.rglob("*.md"):
         rel = template_file.relative_to(_TEMPLATES_DIR)
-        target = root / rel
+        first = rel.parts[0] if rel.parts else ""
+        if first == "product-docs":
+            filename = Path(*rel.parts[1:]) if len(rel.parts) > 1 else Path(rel.name)
+            target = root / "templates" / filename
+        else:
+            target = root / rel
         if not target.exists():
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(template_file.read_text(encoding="utf-8"), encoding="utf-8")

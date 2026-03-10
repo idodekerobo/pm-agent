@@ -180,8 +180,8 @@ export default function Hero() {
           }}
         >
           Draft is the AI product manager built for solo PMs and founders.
-          Write better specs, think through strategy, and orchestrate your dev
-          workflow — all integrated with the tools your team already uses.
+          Write better specs, think through strategy, and hand off tasks
+          directly to coding agents — all integrated with the tools your team already uses.
         </p>
 
         {/* CTAs */}
@@ -226,7 +226,7 @@ export default function Hero() {
               el.style.boxShadow = "0 0 0 0 rgba(200,148,59,0.4)";
             }}
           >
-            Start building with Draft
+            Start building for free with Draft
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -264,6 +264,20 @@ export default function Hero() {
             See how it works
           </a>
         </div>
+
+        {/* Fine print */}
+        <p
+          className="animate-fade-in delay-500"
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "0.7rem",
+            color: "var(--color-faint)",
+            marginTop: "1.25rem",
+            letterSpacing: "0.04em",
+          }}
+        >
+          Free to start · No credit card required
+        </p>
 
         {/* Scroll indicator */}
         <div

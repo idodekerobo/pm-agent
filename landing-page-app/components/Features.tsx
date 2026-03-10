@@ -49,6 +49,20 @@ const features = [
   },
   {
     number: "04",
+    title: "Team alignment",
+    headline: "Stop being your team's Slack bot.",
+    body: "Draft tracks decisions, surfaces blockers, and keeps everyone in the loop — without you being the relay. No more re-explaining context. No more loose threads. Your team stays aligned without constantly pulling you in.",
+    detail: "Status updates · Decision logs · Blocker tracking · Async alignment",
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <path d="M4 8a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H9l-5 3V8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M9 13h6M9 17h4" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round"/>
+        <path d="M20 6l2-2M20 6h-2" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
+    number: "05",
     title: "Deep integrations",
     headline: "All your context, in one place.",
     body: "Draft connects to Slack, Linear, GitHub, Notion, and Google Docs — pulling in the context it needs to give you relevant, grounded answers. No more copy-pasting between tools.",
@@ -180,7 +194,7 @@ export default function Features() {
               maxWidth: "340px",
             }}
           >
-            Four core capabilities that cover the full product lifecycle — from
+            Five core capabilities that cover the full product lifecycle — from
             the first rough thought to code running in production.
           </p>
         </div>

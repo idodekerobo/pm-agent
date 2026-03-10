@@ -6,14 +6,14 @@ const personas = [
   {
     label: "01 — Solo PMs",
     headline: "The leverage of a full product team.",
-    body: "You're one person doing the work of five. Draft handles the documentation, strategy reviews, and cross-team coordination so you can stay focused on the decisions that only you can make.",
+    body: "You're one person doing the work of five. Draft handles the docs, strategy reviews, and all the comms overhead that pulls you away from actual product work — so you stay focused on the decisions that only you can make.",
     tag: "Your PM brain, amplified",
   },
   {
     label: "02 — Teams without a PM",
     headline: "Move with product clarity. Minus the overhead.",
-    body: "Engineering teams shouldn't be blocked by missing specs or unclear priorities. Draft gives your team structured, actionable plans so you can ship with confidence — no dedicated PM required.",
-    tag: "Ship faster",
+    body: "Engineering teams shouldn't be blocked by missing specs, unclear priorities, or waiting on someone to relay decisions. Draft gives your team structured plans, keeps everyone aligned as things evolve, and kills the status update overhead — no dedicated PM required.",
+    tag: "No PM? No problem.",
   },
   {
     label: "03 — Product teams",
@@ -126,8 +126,8 @@ export default function ForWho() {
             <span
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: "0.65rem",
-                color: "var(--color-muted)",
+                fontSize: "0.7rem",
+                color: "var(--color-accent)",
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
                 display: "block",

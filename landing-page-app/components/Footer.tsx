@@ -1,8 +1,8 @@
 "use client";
 
-const APP_URL        = process.env.NEXT_PUBLIC_APP_URL               ?? "#";
-const PRIVACY_URL    = process.env.NEXT_PUBLIC_PRIVACY_URL           ?? "#";
-const TERMS_URL      = process.env.NEXT_PUBLIC_TERMS_OF_USE_URL      ?? "#";
+import Link from "next/link";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
 
 export default function Footer() {
   return (
@@ -167,10 +167,10 @@ export default function Footer() {
         </span>
         <div style={{ display: "flex", gap: "1.5rem" }}>
           {[
-            { label: "Privacy Policy", href: PRIVACY_URL },
-            { label: "Terms of Use",   href: TERMS_URL   },
+            { label: "Privacy Policy", href: "/privacy-policy" },
+            { label: "Terms of Use",   href: "/terms"          },
           ].map((l) => (
-            <a
+            <Link
               key={l.label}
               href={l.href}
               style={{
@@ -189,7 +189,7 @@ export default function Footer() {
               }
             >
               {l.label}
-            </a>
+            </Link>
           ))}
         </div>
       </div>

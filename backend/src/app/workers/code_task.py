@@ -145,6 +145,11 @@ async def _run(code_task_id: str) -> dict:
         )
         update_code_task(supabase, task_id=code_task_id, status="running")
 
+        # Verify claude CLI is available before attempting the run
+        verify_result = await _exec(sb, "which claude && claude --version", env=env)
+        if verify_result["exit_code"] != 0:
+            raise RuntimeError("claude CLI not found in sandbox — image may need to be rebuilt")
+
         claude_result = await _exec(
             sb,
             'claude -p "$(cat .agent-prompt.md)" < /dev/null',
@@ -152,8 +157,9 @@ async def _run(code_task_id: str) -> dict:
             env=env,
             timeout_s=60 * 60,  # 1 hour for the implementation step
         )
-        if claude_result["stderr"]:
-            print(f"[code_task] claude stderr: {claude_result['stderr'][:500]}", flush=True)
+
+        if claude_result["exit_code"] != 0:
+            raise RuntimeError(f"claude exited with code {claude_result['exit_code']}:\n{claude_result['stderr']}")
 
         # Read structured output written by claude per spec instructions
         output_result = await _exec(sb, "cat /repo/.task-output.json", env=env)

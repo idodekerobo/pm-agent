@@ -22,7 +22,7 @@ const INTEGRATION_META: Record<string, { name: string; description: string; colo
   google:       { name: "Google Drive", description: "Cloud storage & document sync",         color: "#34A853", abbr: "GD" },
   notion:       { name: "Notion",       description: "Docs, notes & knowledge base",          color: "#191919", abbr: "NT", requiresManualRevoke: true },
   slack:        { name: "Slack",        description: "Team messaging & channel alerts",        color: "#E01E5A", abbr: "SL", note: "After connecting, invite the agent to any Slack channels you want it active in." },
-  "claude-code": { name: "Claude Code", description: "AI coding assistant via your own token", color: "#D97756", abbr: "CC", isByok: true },
+  "claude-code": { name: "Claude Code", description: "AI coding assistant via your Anthropic API key", color: "#D97756", abbr: "CC", isByok: true },
 };
 
 const ALL_PROVIDERS = ["github", "linear", "google", "notion", "slack", "claude-code"];
@@ -618,25 +618,31 @@ function SettingsContent() {
                                 {isByokExpanded && (
                                   <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4 space-y-3">
                                     <div>
-                                      <p className="text-xs font-medium text-zinc-700 mb-2">How to get your token:</p>
+                                      <p className="text-xs font-medium text-zinc-700 mb-2">How to get your API key:</p>
                                       <ol className="space-y-1 text-xs text-zinc-500 list-none">
-                                        <li className="flex items-start gap-2">
+                                        {/* <li className="flex items-start gap-2">
                                           <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
                                           <span>If not already installed: <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">npm install -g @anthropic-ai/claude-code</code> — <a href="https://code.claude.com/docs/en/quickstart" target="_blank" rel="noopener noreferrer" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">see details</a></span>
+                                        </li> */}
+                                        <li className="flex items-start gap-2">
+                                          <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
+                                          <span>Go to <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">platform.claude.com/settings/keys</a> and create a new API key</span>
                                         </li>
                                         <li className="flex items-start gap-2">
                                           <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">2</span>
-                                          Run <code className="ml-1 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">claude setup-token</code> in your terminal — a browser window will open, click <strong className="text-zinc-600">Confirm</strong>
+                                          Copy the key — it starts with <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">sk-ant-...</code>
                                         </li>
                                         <li className="flex items-start gap-2">
                                           <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">3</span>
-                                          Return to your terminal and copy the OAuth token (it starts with <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">sk-ant-...</code>)
-                                        </li>
-                                        <li className="flex items-start gap-2">
-                                          <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">4</span>
-                                          Paste it below — your token is encrypted and stored securely
+                                          Paste it below — your key is encrypted and stored securely
                                         </li>
                                       </ol>
+                                      <div className="mt-4 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-shrink-0 text-amber-500">
+                                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                        </svg>
+                                        <p className="text-[10px] text-amber-700 leading-relaxed">Coding tasks are billed directly to your Anthropic account at API pricing. Charges apply each time the coding agent runs.</p>
+                                      </div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <input

@@ -18,7 +18,8 @@ from app.errors import log_error
 
 router = APIRouter()
 
-MAX_HISTORY_ITEMS = 50
+# TODO: add user messaging on max chat thread length and figure out compaction logic
+MAX_HISTORY_ITEMS = 75
 
 class SessionMetadata(BaseModel):
     timezone: Optional[str] = None

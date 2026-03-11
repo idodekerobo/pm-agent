@@ -6,6 +6,9 @@ run-api:
 run-worker:
 	cd backend && OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES PYTHONPATH=src uv run --env-file .env.local python -m app.workers.runner
 
+run-worker-code-tasks:
+	cd backend && OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES PYTHONPATH=src uv run --env-file .env.local python -m app.workers.runner_code_tasks
+
 run-scheduler:
 	cd backend && PYTHONPATH=src uv run --env-file .env.local python -m app.workers.scheduler
 
@@ -20,6 +23,7 @@ run-landing:
 dev:
 	$(MAKE) run-api & \
 	$(MAKE) run-worker & \
+	$(MAKE) run-worker-code-tasks & \
 	$(MAKE) run-scheduler & \
 	$(MAKE) run-web & \
 	$(MAKE) run-landing

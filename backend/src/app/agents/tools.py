@@ -203,3 +203,64 @@ async def tool_slack(
             "error_category": "infrastructure",
         }))
         raise
+
+
+@function_tool
+async def tool_spawn_code_task(
+    context: RunContextWrapper[AgentContext],
+    repo_url: str,
+    spec: str,
+    base_branch: str = "main",
+) -> str:
+    """Spawn a background coding agent to implement a feature in a GitHub repository.
+
+    The agent clones the repo, implements the spec autonomously, and opens a PR when done.
+    Progress updates are written to this chat thread throughout. Always read the
+    coding-agent SKILL.md before calling this tool.
+
+    Args:
+      repo_url: Full HTTPS GitHub URL, e.g. https://github.com/owner/repo
+      spec: Complete implementation spec. Must include acceptance criteria, stack context,
+            and the required .task-output.json instruction at the end.
+      base_branch: Branch to open the PR against. Defaults to main.
+    """
+    agent_session_id = context.context.agent_session_id
+    user_id = context.context.user_id
+    workspace_id = context.context.workspace_id
+
+    if not agent_session_id:
+        return "Error: could not determine the current session. Please try again."
+
+    if not repo_url.startswith("https://github.com/"):
+        return "Error: repo_url must be a full HTTPS GitHub URL (https://github.com/owner/repo)."
+
+    try:
+        supabase = get_supabase()
+        from app.db.code_tasks import create_code_task
+        from app.workers.queue import get_queue
+        from app.workers.code_task import run_code_task
+
+        task_id = create_code_task(
+            supabase,
+            agent_session_id=agent_session_id,
+            user_id=user_id,
+            workspace_id=workspace_id,
+            repo_url=repo_url,
+            base_branch=base_branch,
+            spec=spec,
+        )
+
+        queue = get_queue("code_tasks")
+        queue.enqueue(run_code_task, task_id, job_timeout=60 * 100)
+
+        return (
+            f"Coding task started (id: {task_id[:8]}). "
+            f"Working on `{repo_url}` against branch `{base_branch}`. "
+            f"Progress updates will appear in this thread. "
+            f"A PR will be opened when complete."
+        )
+    except Exception as e:
+        asyncio.create_task(log_error(user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_spawn_code_task", "repo_url": repo_url,
+        }))
+        return f"Failed to start coding task: {str(e)}"

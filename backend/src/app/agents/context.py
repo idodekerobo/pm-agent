@@ -167,6 +167,7 @@ execution_agent always writes the document and returns three things: a status si
 # Maps integration provider names (as stored in the integrations table) to the
 # skill directory names they unlock. Add new entries here as skills are added.
 PROVIDER_SKILL_MAP: dict[str, list[str]] = {
+    "claude-code": ["coding-agent"],
     "github": ["github"],
     "google": ["google-drive", "google-docs"],
     "linear": ["linear-cli"],
@@ -556,6 +557,25 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
     if skill_section:
         instructions.append(skill_section)
 
+    has_claude_code = "claude-code" in payload.active_providers
+    has_github = "github" in payload.active_providers
+
+    if has_claude_code and has_github:
+        instructions.append(
+            "\n## Coding Agent\n"
+            "You have a direct tool `tool_spawn_code_task` that spawns a background coding agent "
+            "to implement features in a GitHub repository. "
+            "Before calling it, read `.skills/coding-agent/SKILL.md` via `fs_read` — it contains "
+            "the full workflow. Call this tool directly; do NOT delegate to `execution_agent`."
+        )
+    elif has_claude_code and not has_github:
+        instructions.append(
+            "\n## Coding Agent\n"
+            "The coding agent is available but requires GitHub to be connected. "
+            "If the user asks to implement or change code, let them know they need to connect "
+            "GitHub in their integrations settings before coding tasks can run."
+        )
+
     instructions.append(DELEGATION_INSTRUCTIONS)
 
     return "\n".join(instructions)
@@ -668,6 +688,10 @@ def build_agent_run_payload(
     )
     if slack_result and slack_result.data:
         tools.append(tool_slack)
+
+    if "claude-code" in active_providers and "github" in active_providers:
+        from app.agents.tools import tool_spawn_code_task
+        tools.append(tool_spawn_code_task)
 
     agent_context = AgentContext(
         organization_id=organization_id,

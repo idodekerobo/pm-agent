@@ -143,16 +143,27 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
 
 def _sanitize_for_model(items: list[dict]) -> list[dict]:
-    """Convert internal item types that the model doesn't understand into standard message items.
+    """Prepare conversation history for the model input.
 
-    Items like code_task_update are written by background workers for the frontend's
-    benefit. They're valid in our DB but not valid OpenAI input types. Converting them
-    to 'message' preserves the context (the model knows a task ran and what happened)
-    without triggering a 400 from the API.
+    Two transforms applied:
+    1. Internal types (e.g. code_task_update) are written by background workers for the
+       frontend's benefit. They're not valid OpenAI input types, so they're converted to
+       plain assistant messages so the model retains the context.
+    2. Orphaned tool calls are dropped. The API requires every function_call to have a
+       matching function_call_output with the same call_id. The history limit can slice
+       a pair in half (call present, output cut off), which causes a 400. Dropping the
+       unpaired side prevents that.
     """
     INTERNAL_TYPES = {"code_task_update"}
+
+    call_ids_with_calls = {item["call_id"] for item in items if item.get("type") == "function_call"}
+    call_ids_with_outputs = {item["call_id"] for item in items if item.get("type") == "function_call_output"}
+    orphaned_call_ids = call_ids_with_calls.symmetric_difference(call_ids_with_outputs)
+
     result = []
     for item in items:
+        if item.get("call_id") in orphaned_call_ids:
+            continue
         if item.get("type") in INTERNAL_TYPES:
             result.append({
                 "type": "message",

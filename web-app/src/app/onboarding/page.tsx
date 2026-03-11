@@ -587,15 +587,19 @@ export default function OnboardingPage() {
                         <ol className="space-y-1 text-xs text-zinc-500 list-none">
                           <li className="flex items-start gap-2">
                             <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
-                            Install Claude Code: <code className="ml-1 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">npm install -g @anthropic-ai/claude-code</code>
+                            <span>If not already installed: <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">npm install -g @anthropic-ai/claude-code</code> — <a href="https://code.claude.com/docs/en/quickstart" target="_blank" rel="noopener noreferrer" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">see details</a></span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">2</span>
-                            Run <code className="ml-1 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">claude setup-token</code> in your terminal
+                            Run <code className="ml-1 rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">claude setup-token</code> in your terminal — a browser window will open, click <strong className="text-zinc-600">Confirm</strong>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">3</span>
-                            Copy and paste the token below
+                            Return to your terminal and copy the OAuth token (it starts with <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">sk-ant-...</code>)
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">4</span>
+                            Paste it below — your token is encrypted and stored securely
                           </li>
                         </ol>
                       </div>
@@ -604,7 +608,7 @@ export default function OnboardingPage() {
                           type="password"
                           value={byokToken}
                           onChange={(e) => setByokToken(e.target.value)}
-                          placeholder="Paste your Claude Code token"
+                          placeholder="sk-ant-..."
                           className="flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
                         />
                         <button

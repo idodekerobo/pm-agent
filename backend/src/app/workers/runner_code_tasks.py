@@ -57,7 +57,6 @@ def main():
         [code_tasks_queue],
         connection=redis_conn,
         exception_handlers=[custom_exc_handler],
-        job_execution_timeout=60 * 100,  # 100 min — longer than default 180s
     )
 
     setup_loghandlers(logging.DEBUG)

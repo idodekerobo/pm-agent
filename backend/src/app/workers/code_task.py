@@ -72,6 +72,7 @@ async def _run(code_task_id: str) -> dict:
             image=get_agent_image(),
             timeout=60 * 90,  # 90 min max lifetime
             app=app,
+            verbose=True,
         )
 
         # --- CLONE ---

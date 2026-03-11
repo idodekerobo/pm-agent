@@ -347,13 +347,14 @@ async def provision_skills_for_provider(
     workspace_id: str,
     organization_id: str,
     user_id: str,
-    sandbox_id: str | None,
     provider: str,
 ) -> None:
     """Write skill files for a provider into the user's workspace volume.
 
     Called once from an RQ task when the user connects an integration —
     NOT on every agent run. Skills persist in the volume until removed.
+
+    In production, writes directly to the Modal Volume (no sandbox needed).
     """
     skill_names = PROVIDER_SKILL_MAP.get(provider, [])
     if not skill_names:
@@ -366,25 +367,24 @@ async def provision_skills_for_provider(
         if not skill:
             continue
 
-        workspace_path = f".skills/{skill_name}/SKILL.md"
-
         if settings.workspace_backend == "production":
-            from app.workspace.workspace_runtime import fs_write
-            await fs_write(
-                workspace_id,
-                workspace_path,
-                skill["content"],
-                organization_id=organization_id,
-                user_id=user_id,
-                sandbox_id=sandbox_id,
-            )
+            import asyncio
+            import io
+            from app.workspace.modal_sandbox import get_or_create_volume
+            vol = get_or_create_volume(user_id)
+            abs_path = f"/.skills/{skill_name}/SKILL.md"
+            data = skill["content"].encode("utf-8")
+            def _do_write(v=vol, p=abs_path, d=data):
+                with v.batch_upload(force=True) as batch:
+                    batch.put_file(io.BytesIO(d), p)
+            await asyncio.to_thread(_do_write)
         else:
             import asyncio
             from app.workspace.local_workspace_runtime import fs_write as _sync_fs_write
             await asyncio.to_thread(
                 _sync_fs_write,
                 workspace_id,
-                workspace_path,
+                f".skills/{skill_name}/SKILL.md",
                 skill["content"],
                 organization_id=organization_id,
                 user_id=user_id,
@@ -396,36 +396,35 @@ async def deprovision_skills_for_provider(
     workspace_id: str,
     organization_id: str,
     user_id: str,
-    sandbox_id: str | None,
     provider: str,
 ) -> None:
     """Delete skill files for a provider from the user's workspace volume.
 
     Called once from an RQ task when the user disconnects an integration.
+
+    In production, deletes directly from the Modal Volume (no sandbox needed).
     """
     skill_names = PROVIDER_SKILL_MAP.get(provider, [])
     if not skill_names:
         return
 
-    targets = " ".join([f".skills/{name}/SKILL.md" for name in skill_names])
-    command = f"rm -f {targets}"
-
     if settings.workspace_backend == "production":
-        from app.workspace.workspace_runtime import bash
-        await bash(
-            workspace_id,
-            command=command,
-            organization_id=organization_id,
-            user_id=user_id,
-            sandbox_id=sandbox_id,
-        )
+        from app.workspace.modal_sandbox import get_or_create_volume
+        vol = get_or_create_volume(user_id)
+        for skill_name in skill_names:
+            abs_path = f"/.skills/{skill_name}/SKILL.md"
+            try:
+                await vol.remove_file.aio(abs_path)
+            except Exception:
+                pass  # file may not exist if provisioning previously failed
     else:
         import asyncio
         from app.workspace.local_workspace_runtime import bash as _sync_bash
+        targets = " ".join([f".skills/{name}/SKILL.md" for name in skill_names])
         await asyncio.to_thread(
             _sync_bash,
             workspace_id,
-            command=command,
+            command=f"rm -f {targets}",
             organization_id=organization_id,
             user_id=user_id,
         )

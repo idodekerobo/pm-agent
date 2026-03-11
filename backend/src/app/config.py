@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     github_client_secret: str = ""
     github_webhook_secret: str = ""
 
+    # Code task sandbox hook secret — injected into sandbox env, verified on inbound hook calls
+    code_task_hook_secret: str = ""
+
     # Payments
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
@@ -45,6 +48,6 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context) -> None:
-        self.allowed_origins = [self.client_app_base_url]
+        self.allowed_origins = [self.client_app_base_url, "https://anxiously-nonvituperative-gricelda.ngrok-free.dev"]
 
 settings = Settings()

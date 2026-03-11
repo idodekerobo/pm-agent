@@ -309,8 +309,10 @@ async def _exec(
     if env:
         full_env.update(env)
     p = await sb.exec.aio("bash", "-c", command, workdir=workdir, timeout=timeout_s, env=full_env)
-    stdout = await p.stdout.read.aio()
-    stderr = await p.stderr.read.aio()
+    stdout, stderr = await asyncio.gather(
+        p.stdout.read.aio(),
+        p.stderr.read.aio(),
+    )
     await p.wait.aio()
     return {"stdout": stdout, "stderr": stderr, "exit_code": p.returncode}
 

@@ -107,6 +107,10 @@ async def _run(code_task_id: str) -> dict:
         hook_url = f"{settings.api_base_url}/webhook/claude-code/hook"
         hook_secret = settings.code_task_hook_secret
         claude_settings = {
+            "permissions": {
+                "allow": ["Bash(*)", "Write(*)", "Edit(*)", "Read(*)"],
+                "deny": []
+            },
             "hooks": {
                 "PostToolUse": [
                     {
@@ -142,7 +146,7 @@ async def _run(code_task_id: str) -> dict:
 
         claude_result = await _exec(
             sb,
-            'claude --dangerously-skip-permissions -p "$(cat .agent-prompt.md)"',
+            'claude -p "$(cat .agent-prompt.md)" < /dev/null',
             workdir="/repo",
             env=env,
             timeout_s=60 * 60,  # 1 hour for the implementation step

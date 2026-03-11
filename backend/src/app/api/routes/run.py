@@ -70,7 +70,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     # Build ephemeral system context — prepended every turn, never saved to DB
     system_item = _build_web_system_item(req.session_metadata)
-    input_items = ([system_item] if system_item else []) + history_items + [user_item]
+    input_items = ([system_item] if system_item else []) + _sanitize_for_model(history_items) + [user_item]
 
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
@@ -140,6 +140,28 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="idle")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+def _sanitize_for_model(items: list[dict]) -> list[dict]:
+    """Convert internal item types that the model doesn't understand into standard message items.
+
+    Items like code_task_update are written by background workers for the frontend's
+    benefit. They're valid in our DB but not valid OpenAI input types. Converting them
+    to 'message' preserves the context (the model knows a task ran and what happened)
+    without triggering a 400 from the API.
+    """
+    INTERNAL_TYPES = {"code_task_update"}
+    result = []
+    for item in items:
+        if item.get("type") in INTERNAL_TYPES:
+            result.append({
+                "type": "message",
+                "role": item.get("role", "assistant"),
+                "content": item.get("content", []),
+            })
+        else:
+            result.append(item)
+    return result
 
 
 def _build_web_system_item(metadata: Optional[SessionMetadata]) -> Optional[dict]:

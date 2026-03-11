@@ -20,7 +20,7 @@ def get_or_create_volume(user_id: str, organization_id: str = None, workspace_id
 def get_agent_image() -> modal.Image:
     return (
         modal.Image.debian_slim()
-        .apt_install("curl", "git", "unzip")
+        .apt_install("curl", "git", "unzip", "nodejs")
         .run_commands(
             # Install GitHub CLI via official Debian package repo
             "mkdir -p -m 755 /etc/apt/keyrings"
@@ -32,6 +32,8 @@ def get_agent_image() -> modal.Image:
             # Install Deno + Linear CLI
             "curl -fsSL https://deno.land/x/install/install.sh | DENO_INSTALL=/usr/local sh",
             "/usr/local/bin/deno install --root /usr/local -A --reload -f -g -n linear jsr:@schpet/linear-cli",
+            # Install Claude Code CLI
+            "npm install -g @anthropic-ai/claude-code",
         )
     )
 

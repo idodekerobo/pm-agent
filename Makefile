@@ -18,6 +18,10 @@ run-web:
 run-landing:
 	cd landing-page-app && npm run dev -- --port 3001
 
+# Runs at localhost:9181
+run-rq-dashboard:
+	cd backend && uv run --env-file .env.local sh -c 'rq-dashboard --redis-url "$$REDIS_URL" --port 9181'
+
 # ── Start everything ─────────────────────────────────────────────────────────
 
 dev:

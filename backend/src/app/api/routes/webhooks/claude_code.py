@@ -11,7 +11,7 @@ sufficient — we control both ends of this call.
 """
 import secrets
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings

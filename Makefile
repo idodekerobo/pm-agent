@@ -21,9 +21,27 @@ run-landing:
 # ── Start everything ─────────────────────────────────────────────────────────
 
 dev:
+	trap 'kill 0' SIGINT SIGTERM EXIT; \
 	$(MAKE) run-api & \
 	$(MAKE) run-worker & \
 	$(MAKE) run-worker-code-tasks & \
 	$(MAKE) run-scheduler & \
 	$(MAKE) run-web & \
-	$(MAKE) run-landing
+	$(MAKE) run-landing; \
+	wait
+
+# ── Process management ────────────────────────────────────────────────────────
+
+stop:
+	-pkill -f "uvicorn app.main:app" 2>/dev/null || true
+	-pkill -f "workers\.runner$$" 2>/dev/null || true
+	-pkill -f "workers\.runner_code_tasks" 2>/dev/null || true
+	-pkill -f "workers\.scheduler" 2>/dev/null || true
+	-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+	-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+	-lsof -ti:3001 | xargs kill -9 2>/dev/null || true
+	@echo "All services stopped."
+
+restart: stop
+	@sleep 1
+	$(MAKE) dev

@@ -25,7 +25,7 @@ router = APIRouter(prefix="/claude-code")
 class HookPayload(BaseModel):
     task_id: str
     tool: str           # e.g. "Write", "Bash", "Edit"
-    tool_input: str     # brief description of what was done, written by the hook script
+    file_path: str      # path of the file written/edited, extracted from Claude Code's hook stdin
 
 
 @router.post("/hook")
@@ -47,7 +47,7 @@ async def code_task_hook(
         # Ignore hooks for tasks that aren't actively running
         return {"ok": True}
 
-    message = f"**[{payload.tool}]** {payload.tool_input}"
+    message = f"**[{payload.tool}]** `{payload.file_path}`"
     item = {
         "role": "assistant",
         "type": "code_task_update",

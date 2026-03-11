@@ -20,7 +20,7 @@ def get_or_create_volume(user_id: str, organization_id: str = None, workspace_id
 def get_agent_image() -> modal.Image:
     return (
         modal.Image.debian_slim()
-        .apt_install("curl", "git", "unzip")
+        .apt_install("curl", "git", "unzip", "jq")
         .run_commands(
             # Install Node.js 22 LTS via NodeSource (EOL April 2027)
             "curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs",

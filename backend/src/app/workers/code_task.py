@@ -120,10 +120,12 @@ async def _run(code_task_id: str) -> dict:
                             {
                                 "type": "command",
                                 "command": (
+                                    f"HOOK_DATA=$(cat); "
+                                    f"FILE=$(echo \"$HOOK_DATA\" | jq -r '.tool_input.file_path // \"unknown\"'); "
                                     f"curl -s -X POST {hook_url} "
                                     f"-H 'Authorization: Bearer {hook_secret}' "
                                     f"-H 'Content-Type: application/json' "
-                                    f"-d '{{\"task_id\": \"{code_task_id}\", \"tool\": \"Write\", \"tool_input\": \"Edited a file\"}}'"
+                                    f"-d \"{{\\\"task_id\\\": \\\"{code_task_id}\\\", \\\"tool\\\": \\\"Write\\\", \\\"file_path\\\": \\\"$FILE\\\"}}\""
                                 ),
                             }
                         ],

@@ -19,6 +19,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     "redis>=5.0.0",
     "rq>=1.16.0",
+    "rq-dashboard>=0.7.0",
     "rq-scheduler>=0.13.1",
     "slack-sdk>=3.40.1",
     "stripe>=10.0.0",

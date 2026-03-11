@@ -28,15 +28,15 @@ from app.workspace.modal_sandbox import get_agent_image, get_modal_app
 # RQ entry point (must be synchronous)
 # ---------------------------------------------------------------------------
 
-def run_code_task(code_task_id: str) -> None:
-    asyncio.run(_run(code_task_id))
+def run_code_task(code_task_id: str) -> dict:
+    return asyncio.run(_run(code_task_id))
 
 
 # ---------------------------------------------------------------------------
 # Core async logic
 # ---------------------------------------------------------------------------
 
-async def _run(code_task_id: str) -> None:
+async def _run(code_task_id: str) -> dict:
     print(f"[code_task] starting — task_id={code_task_id}", flush=True)
     supabase = get_supabase()
     task = get_code_task(supabase, task_id=code_task_id)
@@ -215,6 +215,14 @@ async def _run(code_task_id: str) -> None:
             task_id=code_task_id, status="complete",
             message=complete_msg, session=session,
         )
+        return {
+            "status": "complete",
+            "task_id": code_task_id,
+            "branch": branch_name,
+            "pr_url": pr_url,
+            "summary": final_text,
+            "output": output_result,
+        }
 
     except Exception as e:
         error_msg = str(e)
@@ -230,6 +238,7 @@ async def _run(code_task_id: str) -> None:
             message=f"Task failed: {error_msg[:500]}",
             session=session,
         )
+        raise
 
     finally:
         if sb:

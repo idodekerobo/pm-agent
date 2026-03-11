@@ -1,9 +1,13 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
 from app.integrations.crypto import encrypt_token
+
+CLAUDE_CODE_TOKEN_TTL = timedelta(days=365)
 
 router = APIRouter(prefix="/claude-code")
 
@@ -32,7 +36,7 @@ async def claude_code_connect(
         "account_label": "Claude Code Enabled",
         "access_token": encrypt_token(token),
         "scopes": [],
-        "expires_at": None,
+        "expires_at": (datetime.now(timezone.utc) + CLAUDE_CODE_TOKEN_TTL).isoformat(),
     }).execute()
 
     return {"status": "connected"}

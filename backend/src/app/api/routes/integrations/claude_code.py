@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
 from app.integrations.crypto import encrypt_token
+from app.workers.queue import queue
+from app.workers.tasks import deprovision_skill, provision_skill
 
 CLAUDE_CODE_TOKEN_TTL = timedelta(days=365)
 
@@ -39,6 +41,8 @@ async def claude_code_connect(
         "expires_at": (datetime.now(timezone.utc) + CLAUDE_CODE_TOKEN_TTL).isoformat(),
     }).execute()
 
+    queue.enqueue(provision_skill, user_id, "claude-code")
+
     return {"status": "connected"}
 
 
@@ -46,4 +50,5 @@ async def claude_code_connect(
 async def claude_code_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "claude-code").execute()
+    queue.enqueue(deprovision_skill, user_id, "claude-code")
     return {"status": "disconnected"}

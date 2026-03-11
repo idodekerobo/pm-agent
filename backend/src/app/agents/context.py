@@ -14,6 +14,7 @@ class AgentContext:
     user_id: str
     workspace_id: str
     sandbox_id: str | None = None
+    agent_session_id: str | None = None
     # Populated when the agent is running in response to a Slack @-mention.
     # Contains: channel_id, ts, thread_ts (None if top-level), is_in_thread (bool)
     slack_mention_context: dict | None = None
@@ -697,6 +698,7 @@ def build_agent_run_payload(
         user_id=user_id,
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,
+        agent_session_id=agent_session_id,
         slack_mention_context=slack_mention_context,
     )
 

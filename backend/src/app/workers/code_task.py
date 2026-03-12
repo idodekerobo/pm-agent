@@ -321,8 +321,11 @@ Write this file before stopping:
 **File:** `.task-output.json`
 **Content:**
 ```json
-{{"summary": "2–3 sentences describing what was implemented and any notable decisions or tradeoffs made.", "branch": "pm-agent/1-2-word-slug (e.g. pm-agent/add-auth, pm-agent/fix-checkout). kebab-case, no hash codes."}}
+{{"summary": "2–3 sentences describing what was implemented and any notable decisions or tradeoffs made.", "branch": "pm-agent/<slug>"}}
 ```
+
+- `summary`: what you built and any notable decisions or tradeoffs.
+- `branch`: the git branch name that will be used when pushing your work. Use `pm-agent/` followed by 1–3 kebab-case words describing what was built (e.g. `pm-agent/add-auth`, `pm-agent/fix-checkout-bug`, `pm-agent/stripe-webhooks`). No hash codes or random suffixes.
 
 Do not consider the task complete until `.task-output.json` exists.
 """

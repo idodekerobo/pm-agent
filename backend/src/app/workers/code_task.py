@@ -219,10 +219,7 @@ async def _run(code_task_id: str) -> dict:
 
         # Open PR
         repo_path = _parse_repo_path(repo_url)
-        pr_title = (
-            task_output.get("pr_title")
-            or (spec.splitlines()[0][:72] if spec else "PM Agent: implement feature").strip("#").strip()
-        )
+        pr_title = (spec.splitlines()[0][:72] if spec else "PM Agent: implement feature").strip("#").strip()
         print(f"[code_task] creating PR — repo={repo_path} title={pr_title!r}", flush=True)
         pr_result = await _exec(
             sb,
@@ -324,7 +321,7 @@ Write this file before stopping:
 **File:** `.task-output.json`
 **Content:**
 ```json
-{{"summary": "2–3 sentences describing what was implemented and any notable decisions or tradeoffs made.", "pr_title": "Short conventional-commit style title, max 72 chars (e.g. 'feat: add stripe webhook handler')"}}
+{{"summary": "2–3 sentences describing what was implemented and any notable decisions or tradeoffs made.", "branch": "pm-agent/1-2-word-slug (e.g. pm-agent/add-auth, pm-agent/fix-checkout). kebab-case, no hash codes."}}
 ```
 
 Do not consider the task complete until `.task-output.json` exists.

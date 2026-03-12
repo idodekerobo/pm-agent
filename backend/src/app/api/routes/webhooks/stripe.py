@@ -15,6 +15,7 @@ from app.db.billing import (
     get_plan_id_by_stripe_price_id,
     grant_credits,
     upsert_subscription,
+    expire_signup_credits,
 )
 from app.db.supabase_client import get_supabase
 
@@ -176,6 +177,9 @@ async def _handle_invoice_paid(supabase, invoice: dict) -> None:
     lines = invoice.get("lines", {}).get("data", [])
     period_end_ts = lines[0]["period"]["end"] if lines else None
     expires_at = _ts_to_dt(period_end_ts)
+
+    if invoice.get("billing_reason") == "subscription_create":
+        expire_signup_credits(supabase, billing_account_id=str(billing_account.id))
 
     grant_credits(
         supabase,

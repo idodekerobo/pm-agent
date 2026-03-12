@@ -238,6 +238,19 @@ def link_model_usage_to_ledger(
     ).eq("id", model_usage_id).execute()
 
 
+def expire_signup_credits(
+    supabase: Client,
+    *,
+    billing_account_id: str,
+) -> None:
+    """Expire all signup_grant credits for a billing account.
+    Called when a user upgrades to a paid plan so free credits don't stack."""
+    now = datetime.utcnow().isoformat()
+    supabase.table("credit_ledger").update({"expires_at": now}).eq(
+        "billing_account_id", billing_account_id
+    ).eq("type", "signup_grant").is_("expires_at", "null").execute()
+
+
 def get_plan_id_by_name(
     supabase: Client,
     *,

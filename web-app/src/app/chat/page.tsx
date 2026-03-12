@@ -87,15 +87,17 @@ export default function ChatPage() {
           filter: `agent_session_id=eq.${activeSessionId}`,
         },
         (payload) => {
-          const item = payload.new as Record<string, unknown>;
-          if (item.type !== "code_task_update") return;
+          const row = payload.new as Record<string, unknown>;
+          const item = row.item as Record<string, unknown> | undefined;
+          console.log("[realtime] INSERT received — type:", item?.type, "status:", item?.code_task_status, "id:", row.id);
+          if (item?.type !== "code_task_update") return;
           const content = item.content as Array<{ text?: string }> | undefined;
           const text = content?.[0]?.text;
           if (!text) return;
           setMessages((prev) => [
             ...prev,
             {
-              id: `realtime-${item.id ?? Date.now()}`,
+              id: `realtime-${row.id ?? Date.now()}`,
               role: "assistant" as const,
               content: text,
             },

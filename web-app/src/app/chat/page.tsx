@@ -9,6 +9,8 @@ import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
 import FeedbackModal from "@/components/FeedbackModal";
 import ToolCallBlock from "@/components/ToolCallBlock";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabaseClient";
 
 interface Message {
@@ -743,9 +745,17 @@ export default function ChatPage() {
                           : "bg-zinc-100 text-zinc-900"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {message.content}
-                      </p>
+                      {message.role === "user" ? (
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {message.content}
+                        </p>
+                      ) : (
+                        <div className="prose prose-sm prose-zinc max-w-none text-zinc-900 [&_a]:text-blue-600 [&_a]:underline [&_pre]:bg-zinc-800 [&_pre]:text-zinc-100 [&_code:not(pre_code)]:bg-zinc-200 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:text-zinc-800">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

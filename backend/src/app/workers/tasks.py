@@ -192,12 +192,11 @@ def provision_skill(user_id: str, provider: str):
     async def _run():
         from app.agents.context import resolve_workspace_context, provision_skills_for_provider
         supabase = get_supabase()
-        organization_id, _project_id, workspace_id, sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
+        organization_id, _project_id, workspace_id, _sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
         await provision_skills_for_provider(
             workspace_id=workspace_id,
             organization_id=organization_id,
             user_id=user_id,
-            sandbox_id=sandbox_id,
             provider=provider,
         )
 
@@ -216,12 +215,11 @@ def deprovision_skill(user_id: str, provider: str):
     async def _run():
         from app.agents.context import resolve_workspace_context, deprovision_skills_for_provider
         supabase = get_supabase()
-        organization_id, _project_id, workspace_id, sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
+        organization_id, _project_id, workspace_id, _sandbox_id, _profile = resolve_workspace_context(supabase, user_id)
         await deprovision_skills_for_provider(
             workspace_id=workspace_id,
             organization_id=organization_id,
             user_id=user_id,
-            sandbox_id=sandbox_id,
             provider=provider,
         )
 

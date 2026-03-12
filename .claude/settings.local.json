@@ -6,7 +6,8 @@
       "WebSearch",
       "WebFetch(domain:cli.github.com)",
       "WebFetch(domain:station.railway.com)",
-      "WebFetch(domain:docs.railway.com)"
+      "WebFetch(domain:docs.railway.com)",
+      "WebFetch(domain:www.notion.so)"
     ]
   }
 }

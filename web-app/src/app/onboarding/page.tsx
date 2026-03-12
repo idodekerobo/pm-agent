@@ -44,6 +44,14 @@ const INTEGRATIONS = [
     color: '#5E6AD2',
     value: 'Create and triage issues automatically. Your agent can manage your full backlog and sprint cycles.',
   },
+  {
+    key: 'claude-code',
+    name: 'Claude Code',
+    abbr: 'CC',
+    color: '#D97756',
+    value: 'Use your own Anthropic API key to power your agent with AI coding capabilities.',
+    isByok: true,
+  },
 ];
 
 type Step = 1 | 2 | 3 | 4;
@@ -119,6 +127,10 @@ export default function OnboardingPage() {
   });
   const [integrations, setIntegrations] = useState<IntegrationStatus>({});
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
+  const [byokExpanded, setByokExpanded] = useState(false);
+  const [byokToken, setByokToken] = useState('');
+  const [byokSaving, setByokSaving] = useState(false);
+  const [byokError, setByokError] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [email, setEmail] = useState('');
@@ -126,7 +138,7 @@ export default function OnboardingPage() {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, session, loading } = useAuth();
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   // When the user confirms their email in the /auth/confirmed tab, that tab
@@ -166,8 +178,38 @@ export default function OnboardingPage() {
 
   const handleConnect = (providerKey: string) => {
     if (!user?.id) return;
+    if (providerKey === 'claude-code') {
+      setByokExpanded(true);
+      setByokError('');
+      return;
+    }
     setConnectingProvider(providerKey);
     window.open(`${apiBase}/integrations/${providerKey}/connect?user_id=${user.id}`, '_blank', 'width=600,height=700');
+  };
+
+  const handleSaveClaudeCodeToken = async () => {
+    if (!byokToken.trim()) {
+      setByokError('Token is required.');
+      return;
+    }
+    setByokSaving(true);
+    setByokError('');
+    try {
+      const accessToken = session?.access_token ?? '';
+      const res = await fetch(`${apiBase}/integrations/claude-code/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ token: byokToken.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setIntegrations((prev) => ({ ...prev, 'claude-code': true }));
+      setByokExpanded(false);
+      setByokToken('');
+    } catch {
+      setByokError('Failed to save token. Please try again.');
+    } finally {
+      setByokSaving(false);
+    }
   };
 
   const validateStep1 = () => {
@@ -462,61 +504,131 @@ export default function OnboardingPage() {
             {INTEGRATIONS.map((integration) => {
               const connected = !!integrations[integration.key];
               const connecting = connectingProvider === integration.key;
+              const isByok = 'isByok' in integration && integration.isByok;
+              const isByokOpen = isByok && byokExpanded && !connected;
               return (
                 <div
                   key={integration.key}
-                  className={`flex items-center gap-4 rounded-lg border p-4 transition-colors ${
+                  className={`rounded-lg border overflow-hidden transition-colors ${
                     connected ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 bg-white'
                   }`}
                 >
-                  <div
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
-                    style={{ backgroundColor: integration.color }}
-                  >
-                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-geist-mono)' }}>
-                      {integration.abbr}
-                    </span>
-                  </div>
+                  <div className="flex items-center gap-4 p-4">
+                    <div
+                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
+                      style={{ backgroundColor: integration.color }}
+                    >
+                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-geist-mono)' }}>
+                        {integration.abbr}
+                      </span>
+                    </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-zinc-900">{integration.name}</p>
-                      {connected && (
-                        <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700">
-                          Connected
-                        </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-zinc-900">{integration.name}</p>
+                        {connected && (
+                          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700">
+                            Connected
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{integration.value}</p>
+                      {'note' in integration && integration.note && (
+                        <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{integration.note}</p>
                       )}
                     </div>
-                    <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{integration.value}</p>
-                    {'note' in integration && integration.note && (
-                      <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{integration.note}</p>
+
+                    {isByok ? (
+                      <button
+                        type="button"
+                        onClick={() => { if (!connected) { setByokExpanded((o) => !o); setByokError(''); } }}
+                        disabled={connected}
+                        className={`flex-shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          connected
+                            ? 'border-transparent bg-transparent text-zinc-400 cursor-default'
+                            : 'border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
+                        }`}
+                      >
+                        {connected ? 'Connected' : isByokOpen ? 'Cancel' : 'Connect'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => !connected && handleConnect(integration.key)}
+                        disabled={connected || connecting}
+                        className={`flex-shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          connected
+                            ? 'border-transparent bg-transparent text-zinc-400 cursor-default'
+                            : 'border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
+                        }`}
+                      >
+                        {connecting ? (
+                          <span className="flex items-center gap-1.5">
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            Connecting...
+                          </span>
+                        ) : connected ? (
+                          'Connected'
+                        ) : (
+                          'Connect'
+                        )}
+                      </button>
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => !connected && handleConnect(integration.key)}
-                    disabled={connected || connecting}
-                    className={`flex-shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                      connected
-                        ? 'border-transparent bg-transparent text-zinc-400 cursor-default'
-                        : 'border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
-                    }`}
-                  >
-                    {connecting ? (
-                      <span className="flex items-center gap-1.5">
-                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Connecting...
-                      </span>
-                    ) : connected ? (
-                      'Connected'
-                    ) : (
-                      'Connect'
-                    )}
-                  </button>
+                  {/* Inline BYOK token form */}
+                  {isByokOpen && (
+                    <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 space-y-3">
+                      <div>
+                        <p className="text-xs font-medium text-zinc-700 mb-2">How to get your API key:</p>
+                        <ol className="space-y-1 text-xs text-zinc-500 list-none">
+                          {/* <li className="flex items-start gap-2">
+                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
+                            <span>If not already installed: <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">npm install -g @anthropic-ai/claude-code</code> — <a href="https://code.claude.com/docs/en/quickstart" target="_blank" rel="noopener noreferrer" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">see details</a></span>
+                          </li> */}
+                          <li className="flex items-start gap-2">
+                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
+                            <span>Go to <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">platform.claude.com/settings/keys</a> and create a new API key</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">2</span>
+                            Copy the key — it starts with <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">sk-ant-...</code>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">3</span>
+                            Paste it below — your key is encrypted and stored securely
+                          </li>
+                        </ol>
+                        <div className="mt-4 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-shrink-0 text-amber-500">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                          </svg>
+                          <p className="text-[10px] text-amber-700 leading-relaxed">Coding tasks are billed directly to your Anthropic account at API pricing. Charges apply each time the coding agent runs.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="password"
+                          value={byokToken}
+                          onChange={(e) => setByokToken(e.target.value)}
+                          placeholder="sk-ant-..."
+                          className="flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveClaudeCodeToken}
+                          disabled={byokSaving}
+                          className="flex-shrink-0 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-800 disabled:bg-zinc-400"
+                        >
+                          {byokSaving ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
+                      {byokError && <p className="text-xs text-red-600">{byokError}</p>}
+                    </div>
+                  )}
                 </div>
               );
             })}

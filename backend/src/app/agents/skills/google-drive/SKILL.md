@@ -1,13 +1,13 @@
 ---
 name: google-drive
-description: Find, search, and retrieve any file in Google Drive — Docs, Sheets, Slides, PDFs, folders, and more. Use this skill whenever you need to find a file by name, look up a document ID, browse folder structure, or discover files by type, content, recency, or owner.
+description: Find, search, and retrieve any file in Google Drive — Docs, Sheets, Slides, PDFs, folders, and more. Use this skill whenever you need to find a file by name, look up a document ID, browse folder structure, or discover files by type, content, recency, or owner. 
 ---
 
 # Google Drive File Search & Discovery
 
 ## Overview
 
-This skill teaches how to query the Google Drive API using cURL to find and retrieve **any file type** in Google Drive — Google Docs, Sheets, Slides, PDFs, folders, and more. Use this whenever you need to locate a file by name, look up its ID, browse folders, or discover files based on type, content, date, or sharing status.
+This skill teaches how to query the Google Drive API using cURL to find and retrieve **any file type** in Google Drive — Google Docs, Sheets, Slides, PDFs, folders, and more. Use this whenever you need to locate a file by name, look up its ID, browse folders, or discover files based on type, content, date, or sharing status. If you need to **write or edit** a Google Doc, refer to the google-docs skill.
 
 ## cURL Query Structure
 

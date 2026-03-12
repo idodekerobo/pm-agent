@@ -14,6 +14,7 @@ class AgentContext:
     user_id: str
     workspace_id: str
     sandbox_id: str | None = None
+    agent_session_id: str | None = None
     # Populated when the agent is running in response to a Slack @-mention.
     # Contains: channel_id, ts, thread_ts (None if top-level), is_in_thread (bool)
     slack_mention_context: dict | None = None
@@ -167,6 +168,7 @@ execution_agent always writes the document and returns three things: a status si
 # Maps integration provider names (as stored in the integrations table) to the
 # skill directory names they unlock. Add new entries here as skills are added.
 PROVIDER_SKILL_MAP: dict[str, list[str]] = {
+    "claude-code": ["coding-agent"],
     "github": ["github"],
     "google": ["google-drive", "google-docs"],
     "linear": ["linear-cli"],
@@ -346,13 +348,14 @@ async def provision_skills_for_provider(
     workspace_id: str,
     organization_id: str,
     user_id: str,
-    sandbox_id: str | None,
     provider: str,
 ) -> None:
     """Write skill files for a provider into the user's workspace volume.
 
     Called once from an RQ task when the user connects an integration —
     NOT on every agent run. Skills persist in the volume until removed.
+
+    In production, writes directly to the Modal Volume (no sandbox needed).
     """
     skill_names = PROVIDER_SKILL_MAP.get(provider, [])
     if not skill_names:
@@ -365,25 +368,24 @@ async def provision_skills_for_provider(
         if not skill:
             continue
 
-        workspace_path = f".skills/{skill_name}/SKILL.md"
-
         if settings.workspace_backend == "production":
-            from app.workspace.workspace_runtime import fs_write
-            await fs_write(
-                workspace_id,
-                workspace_path,
-                skill["content"],
-                organization_id=organization_id,
-                user_id=user_id,
-                sandbox_id=sandbox_id,
-            )
+            import asyncio
+            import io
+            from app.workspace.modal_sandbox import get_or_create_volume
+            vol = get_or_create_volume(user_id)
+            abs_path = f"/.skills/{skill_name}/SKILL.md"
+            data = skill["content"].encode("utf-8")
+            def _do_write(v=vol, p=abs_path, d=data):
+                with v.batch_upload(force=True) as batch:
+                    batch.put_file(io.BytesIO(d), p)
+            await asyncio.to_thread(_do_write)
         else:
             import asyncio
             from app.workspace.local_workspace_runtime import fs_write as _sync_fs_write
             await asyncio.to_thread(
                 _sync_fs_write,
                 workspace_id,
-                workspace_path,
+                f".skills/{skill_name}/SKILL.md",
                 skill["content"],
                 organization_id=organization_id,
                 user_id=user_id,
@@ -395,36 +397,35 @@ async def deprovision_skills_for_provider(
     workspace_id: str,
     organization_id: str,
     user_id: str,
-    sandbox_id: str | None,
     provider: str,
 ) -> None:
     """Delete skill files for a provider from the user's workspace volume.
 
     Called once from an RQ task when the user disconnects an integration.
+
+    In production, deletes directly from the Modal Volume (no sandbox needed).
     """
     skill_names = PROVIDER_SKILL_MAP.get(provider, [])
     if not skill_names:
         return
 
-    targets = " ".join([f".skills/{name}/SKILL.md" for name in skill_names])
-    command = f"rm -f {targets}"
-
     if settings.workspace_backend == "production":
-        from app.workspace.workspace_runtime import bash
-        await bash(
-            workspace_id,
-            command=command,
-            organization_id=organization_id,
-            user_id=user_id,
-            sandbox_id=sandbox_id,
-        )
+        from app.workspace.modal_sandbox import get_or_create_volume
+        vol = get_or_create_volume(user_id)
+        for skill_name in skill_names:
+            abs_path = f"/.skills/{skill_name}/SKILL.md"
+            try:
+                await vol.remove_file.aio(abs_path)
+            except Exception:
+                pass  # file may not exist if provisioning previously failed
     else:
         import asyncio
         from app.workspace.local_workspace_runtime import bash as _sync_bash
+        targets = " ".join([f".skills/{name}/SKILL.md" for name in skill_names])
         await asyncio.to_thread(
             _sync_bash,
             workspace_id,
-            command=command,
+            command=f"rm -f {targets}",
             organization_id=organization_id,
             user_id=user_id,
         )
@@ -549,12 +550,31 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
             f"\n## Active User Integrations \n"
             f"You can connect to the below providers/apps to help or do work on behalf of the user. "
             f"Use the appropriate SKILL (see below) to learn how to interact with each one:\n"
-            f"{formatted_providers}.\n"
+            f"{formatted_providers}\n"
         )
 
     skill_section = build_skill_section(payload)
     if skill_section:
         instructions.append(skill_section)
+
+    has_claude_code = "claude-code" in payload.active_providers
+    has_github = "github" in payload.active_providers
+
+    if has_claude_code and has_github:
+        instructions.append(
+            "\n## Coding Agent\n"
+            "You have a direct tool `tool_spawn_code_task` that spawns a background coding agent "
+            "to implement features in a GitHub repository. "
+            "Before calling it, read `.skills/coding-agent/SKILL.md` via `fs_read` — it contains "
+            "the full workflow. Call this tool directly; do NOT delegate to `execution_agent`."
+        )
+    elif has_claude_code and not has_github:
+        instructions.append(
+            "\n## Coding Agent\n"
+            "The coding agent is available but requires GitHub to be connected. "
+            "If the user asks to implement or change code, let them know they need to connect "
+            "GitHub in their integrations settings before coding tasks can run."
+        )
 
     instructions.append(DELEGATION_INSTRUCTIONS)
 
@@ -669,11 +689,16 @@ def build_agent_run_payload(
     if slack_result and slack_result.data:
         tools.append(tool_slack)
 
+    if "claude-code" in active_providers and "github" in active_providers:
+        from app.agents.tools import tool_spawn_code_task
+        tools.append(tool_spawn_code_task)
+
     agent_context = AgentContext(
         organization_id=organization_id,
         user_id=user_id,
         workspace_id=workspace_id,
         sandbox_id=sandbox_id,
+        agent_session_id=agent_session_id,
         slack_mention_context=slack_mention_context,
     )
 

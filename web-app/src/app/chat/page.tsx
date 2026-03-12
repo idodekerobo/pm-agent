@@ -8,6 +8,7 @@ import { useBilling } from "@/lib/BillingContext";
 import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
 import FeedbackModal from "@/components/FeedbackModal";
+import { createClient } from "@/lib/supabaseClient";
 
 interface Message {
   id: string;
@@ -69,6 +70,46 @@ export default function ChatPage() {
       })
       .catch(() => setSessionMetadata({ timezone: tz }));
   }, [session]);
+
+  // Subscribe to live code task progress updates for the active session
+  useEffect(() => {
+    if (!activeSessionId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`code-task-updates-${activeSessionId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "conversation_items",
+          filter: `agent_session_id=eq.${activeSessionId}`,
+        },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>;
+          const item = row.item as Record<string, unknown> | undefined;
+          console.log("[realtime] INSERT received — type:", item?.type, "status:", item?.code_task_status, "id:", row.id);
+          if (item?.type !== "code_task_update") return;
+          const content = item.content as Array<{ text?: string }> | undefined;
+          const text = content?.[0]?.text;
+          if (!text) return;
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `realtime-${row.id ?? Date.now()}`,
+              role: "assistant" as const,
+              content: text,
+            },
+          ]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeSessionId]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

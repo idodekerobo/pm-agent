@@ -18,7 +18,8 @@ from app.errors import log_error
 
 router = APIRouter()
 
-MAX_HISTORY_ITEMS = 50
+# TODO: add user messaging on max chat thread length and figure out compaction logic
+MAX_HISTORY_ITEMS = 75
 
 class SessionMetadata(BaseModel):
     timezone: Optional[str] = None
@@ -70,7 +71,8 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     # Build ephemeral system context — prepended every turn, never saved to DB
     system_item = _build_web_system_item(req.session_metadata)
-    input_items = ([system_item] if system_item else []) + history_items + [user_item]
+    # TODO: may save on tokens by removing code_task from input or maybe only sending results
+    input_items = ([system_item] if system_item else []) + _sanitize_for_model(history_items) + [user_item]
 
     async def event_generator() -> AsyncGenerator[str, None]:
         final_output = ""
@@ -140,6 +142,39 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="idle")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+def _sanitize_for_model(items: list[dict]) -> list[dict]:
+    """Prepare conversation history for the model input.
+
+    Two transforms applied:
+    1. Internal types (e.g. code_task_update) are written by background workers for the
+       frontend's benefit. They're not valid OpenAI input types, so they're converted to
+       plain assistant messages so the model retains the context.
+    2. Orphaned tool calls are dropped. The API requires every function_call to have a
+       matching function_call_output with the same call_id. The history limit can slice
+       a pair in half (call present, output cut off), which causes a 400. Dropping the
+       unpaired side prevents that.
+    """
+    INTERNAL_TYPES = {"code_task_update"}
+
+    call_ids_with_calls = {item["call_id"] for item in items if item.get("type") == "function_call"}
+    call_ids_with_outputs = {item["call_id"] for item in items if item.get("type") == "function_call_output"}
+    orphaned_call_ids = call_ids_with_calls.symmetric_difference(call_ids_with_outputs)
+
+    result = []
+    for item in items:
+        if item.get("call_id") in orphaned_call_ids:
+            continue
+        if item.get("type") in INTERNAL_TYPES:
+            result.append({
+                "type": "message",
+                "role": item.get("role", "assistant"),
+                "content": item.get("content", []),
+            })
+        else:
+            result.append(item)
+    return result
 
 
 def _build_web_system_item(metadata: Optional[SessionMetadata]) -> Optional[dict]:

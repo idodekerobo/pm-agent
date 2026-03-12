@@ -17,6 +17,8 @@ async def run_orchestrator(
     learner = build_learning_agent(payload)
 
     read_tools = [t for t in payload.tools if t.name in {"tool_fs_read", "tool_fs_list"}]
+    coding_tools = [t for t in payload.tools if t.name == "tool_spawn_code_task"]
+
     model_id = "gpt-5.2"
     pm_agent = Agent(
         name="Product Manager Agent",
@@ -24,6 +26,7 @@ async def run_orchestrator(
         model=model_id,
         tools=[
             *read_tools,
+            *coding_tools,
             execution.as_tool(
                 tool_name="execution_agent",
                 tool_description=(

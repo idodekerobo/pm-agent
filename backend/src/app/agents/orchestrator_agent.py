@@ -67,7 +67,11 @@ async def run_orchestrator(
     # Runner that streams its own events separately.
     async for event in result.stream_events():
         if event.type == "raw_response_event":
-            continue
+            data = event.data
+            if getattr(data, "type", None) == "response.output_text.delta":
+                delta = getattr(data, "delta", None)
+                if delta:
+                    yield {"type": "message", "content": delta}
         elif event.type == "agent_updated_stream_event":
             print(f"Agent updated: {event.new_agent.name}")
             continue
@@ -106,12 +110,6 @@ async def run_orchestrator(
                 }
             elif event.item.type == "message_output_item":
                 print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")
-                content = ItemHelpers.text_message_output(event.item)
-                if content:
-                    yield {
-                        "type": "message",
-                        "content": content,
-                    }
 
     try:
         usage = result.context_wrapper.usage

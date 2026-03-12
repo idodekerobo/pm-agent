@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
@@ -8,6 +8,7 @@ import { useBilling } from "@/lib/BillingContext";
 import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
 import FeedbackModal from "@/components/FeedbackModal";
+import ToolCallBlock from "@/components/ToolCallBlock";
 import { createClient } from "@/lib/supabaseClient";
 
 interface Message {
@@ -15,7 +16,13 @@ interface Message {
   role: "user" | "assistant" | "tool_call" | "tool_output";
   content: string;
   toolName?: string;
+  callId?: string;
+  toolArguments?: string;
 }
+
+type RenderItem =
+  | { type: "message"; message: Message }
+  | { type: "tool_pair"; id: string; call: Message; output: Message | null };
 
 interface Session {
   id: string;
@@ -163,13 +170,16 @@ export default function ChatPage() {
                 role: "tool_call",
                 content: item.arguments ?? "",
                 toolName: item.name,
+                callId: item.call_id ?? "",
+                toolArguments: item.arguments ?? "",
               });
             } else if (item?.type === "function_call_output") {
               const out = typeof item.output === "string" ? item.output : JSON.stringify(item.output);
               mapped.push({
                 id: `${sessionId}-${mapped.length}`,
                 role: "tool_output",
-                content: out.length > 200 ? out.slice(0, 200) + "..." : out,
+                content: out,
+                callId: item.call_id ?? "",
               });
             } else {
               const role = item?.role as "user" | "assistant";
@@ -340,7 +350,9 @@ export default function ChatPage() {
                   id: `tool-${Date.now()}-${Math.random()}`,
                   role: "tool_call" as const,
                   content: eventData.content ?? "",
-                  toolName: eventData.content,
+                  toolName: eventData.name ?? "",
+                  callId: eventData.call_id ?? "",
+                  toolArguments: eventData.arguments ?? "",
                 },
               ]);
               currentAssistantId = null;
@@ -352,6 +364,7 @@ export default function ChatPage() {
                   id: `output-${Date.now()}-${Math.random()}`,
                   role: "tool_output" as const,
                   content: eventData.content ?? "",
+                  callId: eventData.call_id ?? "",
                 },
               ]);
             } else if (eventData.type === "message") {
@@ -416,6 +429,30 @@ export default function ChatPage() {
       minute: "2-digit",
     })}`;
   };
+
+  const renderItems = useMemo((): RenderItem[] => {
+    const items: RenderItem[] = [];
+    const callIdToIndex = new Map<string, number>();
+
+    for (const msg of messages) {
+      if (msg.role === "tool_call" && msg.callId) {
+        const idx = items.length;
+        callIdToIndex.set(msg.callId, idx);
+        items.push({ type: "tool_pair", id: msg.id, call: msg, output: null });
+      } else if (msg.role === "tool_output" && msg.callId && callIdToIndex.has(msg.callId)) {
+        const idx = callIdToIndex.get(msg.callId)!;
+        const existing = items[idx] as { type: "tool_pair"; id: string; call: Message; output: Message | null };
+        items[idx] = { ...existing, output: msg };
+      } else if (msg.role !== "tool_call" && msg.role !== "tool_output") {
+        items.push({ type: "message", message: msg });
+      } else {
+        // Orphaned tool message (no callId or no matching pair) — render as plain text fallback
+        items.push({ type: "message", message: msg });
+      }
+    }
+
+    return items;
+  }, [messages]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -672,35 +709,19 @@ export default function ChatPage() {
                 </div>
               </div>
             ) : (
-              messages.map((message) => {
-                if (message.role === "tool_call") {
+              renderItems.map((item) => {
+                if (item.type === "tool_pair") {
                   return (
-                    <div key={message.id} className="flex justify-start">
-                      <div className="max-w-lg rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                        <p className="font-mono text-xs font-semibold text-zinc-500">
-                          🛠 {message.toolName}
-                        </p>
-                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">
-                          {message.content}
-                        </pre>
-                      </div>
+                    <div key={item.id} className="flex justify-start">
+                      <ToolCallBlock
+                        toolName={item.call.toolName ?? item.call.content}
+                        toolArguments={item.call.toolArguments ?? item.call.content}
+                        output={item.output ? item.output.content : null}
+                      />
                     </div>
                   );
                 }
-                if (message.role === "tool_output") {
-                  return (
-                    <div key={message.id} className="flex justify-start">
-                      <div className="max-w-lg rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <p className="font-mono text-xs font-semibold text-zinc-400">
-                          📋 Output
-                        </p>
-                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">
-                          {message.content}
-                        </pre>
-                      </div>
-                    </div>
-                  );
-                }
+                const message = item.message;
                 return (
                   <div
                     key={message.id}

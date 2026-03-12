@@ -121,7 +121,8 @@ async def _run(code_task_id: str) -> dict:
                                 "type": "command",
                                 "command": (
                                     f"HOOK_DATA=$(cat); "
-                                    f"FILE=$(echo \"$HOOK_DATA\" | jq -r '.tool_input.file_path // \"unknown\"'); "
+                                    f"FILE=$(echo \"$HOOK_DATA\" | grep -oP '\"file_path\":\"\\K[^\"]+' | head -1); "
+                                    f"FILE=${{FILE:-unknown}}; "
                                     f"curl -s -X POST {hook_url} "
                                     f"-H 'Authorization: Bearer {hook_secret}' "
                                     f"-H 'Content-Type: application/json' "

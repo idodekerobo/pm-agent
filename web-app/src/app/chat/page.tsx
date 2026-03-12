@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef, useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useEffect, useState, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
@@ -32,8 +32,9 @@ interface Session {
   display_name?: string | null;
 }
 
-export default function ChatPage() {
+function ChatPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { session, signOut } = useAuth();
   const { creditsRemaining, planName, refetch: refetchBilling } = useBilling();
   const profileComplete = useProfileComplete();
@@ -71,6 +72,8 @@ export default function ChatPage() {
     if (!session || hasInitialized.current) return;
     hasInitialized.current = true;
     fetchSessions();
+    const sessionFromUrl = searchParams.get("s");
+    if (sessionFromUrl) loadSession(sessionFromUrl);
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     fetch("https://ipapi.co/json/")
       .then((r) => r.json())
@@ -163,6 +166,7 @@ export default function ChatPage() {
   const startNewSession = () => {
     setActiveSessionId(null);
     setMessages([]);
+    router.push("/chat");
   };
 
   const loadSession = async (sessionId: string) => {
@@ -208,6 +212,7 @@ export default function ChatPage() {
         }
         setActiveSessionId(sessionId);
         setMessages(mapped);
+        router.push(`/chat?s=${sessionId}`);
       }
     } catch (e) {
       console.error("Failed to load session:", e);
@@ -864,5 +869,13 @@ export default function ChatPage() {
         <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
       )}
     </div>
+  );
+}
+
+export default function ChatPageWrapper() {
+  return (
+    <Suspense>
+      <ChatPage />
+    </Suspense>
   );
 }

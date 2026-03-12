@@ -54,7 +54,7 @@ function SettingsContent() {
   const { user, session, signOut } = useAuth();
   const { creditsRemaining, monthlyCredits, planName, currentPeriodEnd, loading: billingLoading } = useBilling();
   const profileComplete = useProfileComplete();
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const activeTab: Tab = (searchParams.get('tab') as Tab) ?? 'profile';
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +78,7 @@ function SettingsContent() {
     const billing = searchParams.get('billing');
     if (billing === 'success' || billing === 'canceled') {
       setBillingBanner(billing);
-      setActiveTab('billing');
-      router.replace('/settings', { scroll: false });
+      router.replace('/settings?tab=billing', { scroll: false });
     }
   }, []);
 
@@ -289,7 +288,7 @@ function SettingsContent() {
             </p>
             <nav className="flex flex-col gap-1">
               <button
-                onClick={() => setActiveTab('profile')}
+                onClick={() => router.push('/settings?tab=profile')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'profile'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -303,7 +302,7 @@ function SettingsContent() {
                 Profile
               </button>
               <button
-                onClick={() => setActiveTab('integrations')}
+                onClick={() => router.push('/settings?tab=integrations')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'integrations'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -319,7 +318,7 @@ function SettingsContent() {
                 Integrations
               </button>
               <button
-                onClick={() => setActiveTab('agent-files')}
+                onClick={() => router.push('/settings?tab=agent-files')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'agent-files'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -332,7 +331,7 @@ function SettingsContent() {
                 Agent Files
               </button>
               <button
-                onClick={() => setActiveTab('billing')}
+                onClick={() => router.push('/settings?tab=billing')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'billing'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -346,7 +345,7 @@ function SettingsContent() {
                 Billing
               </button>
               <button
-                onClick={() => { setActiveTab('feedback'); setFeedbackSubmitted(false); }}
+                onClick={() => { router.push('/settings?tab=feedback'); setFeedbackSubmitted(false); }}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'feedback'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -376,7 +375,7 @@ function SettingsContent() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setActiveTab('profile')}
+                  onClick={() => router.push('/settings?tab=profile')}
                   className="ml-4 shrink-0 rounded-lg bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
                 >
                   Complete profile

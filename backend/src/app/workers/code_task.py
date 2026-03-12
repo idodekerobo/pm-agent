@@ -133,7 +133,7 @@ async def _run(code_task_id: str) -> dict:
                 ]
             }
         }
-        await _exec(sb, "mkdir -p /repo/.claude && echo '.claude/settings.local.json' >> /repo/.gitignore", env=env)
+        await _exec(sb, "mkdir -p /repo/.claude && printf '\\n.claude/settings.local.json\\n' >> /repo/.gitignore", env=env)
         settings_file = await sb.open.aio("/repo/.claude/settings.local.json", "w")
         async with settings_file:
             await settings_file.write.aio(json.dumps(claude_settings))

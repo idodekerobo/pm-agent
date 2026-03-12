@@ -103,7 +103,7 @@ export default function LogoBar() {
                 flexDirection: "column",
                 alignItems: "center",
                 gap: "0.4rem",
-                opacity: integration.comingSoon ? 0.35 : 0.55,
+                opacity: integration.comingSoon ? 0.5 : 0.75,
                 transition: "opacity 0.2s",
                 cursor: "default",
               }}
@@ -111,7 +111,7 @@ export default function LogoBar() {
                 (e.currentTarget as HTMLElement).style.opacity = "1";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = integration.comingSoon ? "0.35" : "0.55";
+                (e.currentTarget as HTMLElement).style.opacity = integration.comingSoon ? "0.5" : "0.75";
               }}
             >
               <div style={{ color: "var(--color-primary)" }}>

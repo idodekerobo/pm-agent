@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -75,10 +76,20 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
     input_items = ([system_item] if system_item else []) + _sanitize_for_model(history_items) + [user_item]
 
     async def event_generator() -> AsyncGenerator[str, None]:
+        from app.agents.context import auto_name_session
+
         final_output = ""
         usage_data: dict | None = None
-        if req.agent_session_id is None:
+        if payload.is_new_session:
             yield f"data: {json.dumps({'type': 'session_created', 'agent_session_id': payload.agent_session_id})}\n\n"
+            asyncio.create_task(
+                auto_name_session(
+                    supabase,
+                    user_id=user_id,
+                    session_id=payload.agent_session_id,
+                    prompt=req.prompt,
+                )
+            )
         yield f"data: {json.dumps({'type': 'item_created', 'role': 'user', 'id': user_item_id})}\n\n"
         set_workspace_agent_run_status(supabase, workspace_id=str(payload.workspace_id), status="running")
         try:

@@ -35,6 +35,7 @@ class AgentRunPayload:
     full_name: str | None = None
     role: str | None = None
     company_name: str | None = None
+    is_new_session: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -628,6 +629,54 @@ def resolve_workspace_context(supabase, user_id: str) -> tuple[str, str, str, st
 # Payload builder
 # ---------------------------------------------------------------------------
 
+async def auto_name_session(
+    supabase,
+    *,
+    user_id: str,
+    session_id: str,
+    prompt: str,
+) -> str | None:
+    """Generate a short display name for a new session using a cheap LLM call.
+
+    Runs concurrently with the agent stream. Returns the generated name, or None
+    on any failure (always silent — naming is best-effort).
+    """
+    import asyncio
+    from openai import AsyncOpenAI
+    from app.db.agent_sessions import update_session_display_name
+
+    try:
+        client = AsyncOpenAI()
+        response = await client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        "Generate a short title (3 to 6 words) for a chat session that starts "
+                        f"with this message:\n\n\"{prompt[:600]}\"\n\n"
+                        "Return only the title. No quotes, no punctuation at the end."
+                    ),
+                }
+            ],
+            max_tokens=20,
+            temperature=0.3,
+        )
+        name = response.choices[0].message.content.strip().strip('"').strip("'")
+        if name:
+            await asyncio.to_thread(
+                update_session_display_name,
+                supabase,
+                session_id=session_id,
+                user_id=user_id,
+                display_name=name,
+            )
+            return name
+    except Exception as e:
+        print(f"[auto_name_session] failed: {e}")
+    return None
+
+
 def build_agent_run_payload(
     supabase,
     user_id: str,
@@ -655,7 +704,8 @@ def build_agent_run_payload(
 
     organization_id, project_id, workspace_id, sandbox_id, profile = resolve_workspace_context(supabase, user_id)
 
-    if agent_session_id is None:
+    is_new_session = agent_session_id is None
+    if is_new_session:
         agent_session_id = create_agent_session(
             supabase,
             organization_id=organization_id,
@@ -714,4 +764,5 @@ def build_agent_run_payload(
         full_name=profile.get("full_name"),
         role=profile.get("role"),
         company_name=profile.get("company_name"),
+        is_new_session=is_new_session,
     )

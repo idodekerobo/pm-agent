@@ -124,6 +124,37 @@ function ChatPage() {
     };
   }, [activeSessionId]);
 
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("session-name-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "agent_sessions",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as { id: string; display_name?: string };
+          if (!updated.display_name) return;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === updated.id ? { ...s, display_name: updated.display_name } : s
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     if (!openMenuId) return;

@@ -71,6 +71,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
 
     # Build ephemeral system context — prepended every turn, never saved to DB
     system_item = _build_web_system_item(req.session_metadata)
+    # TODO: may save on tokens by removing code_task from input or maybe only sending results
     input_items = ([system_item] if system_item else []) + _sanitize_for_model(history_items) + [user_item]
 
     async def event_generator() -> AsyncGenerator[str, None]:

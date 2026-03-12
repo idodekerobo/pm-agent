@@ -550,7 +550,7 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
             f"\n## Active User Integrations \n"
             f"You can connect to the below providers/apps to help or do work on behalf of the user. "
             f"Use the appropriate SKILL (see below) to learn how to interact with each one:\n"
-            f"{formatted_providers}.\n"
+            f"{formatted_providers}\n"
         )
 
     skill_section = build_skill_section(payload)

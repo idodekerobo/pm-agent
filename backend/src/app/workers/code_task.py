@@ -47,6 +47,8 @@ async def _run(code_task_id: str) -> dict:
     base_branch = task.base_branch
     spec = task.spec
 
+    print(f"[code_task] task loaded — repo={repo_url} branch={base_branch} session={agent_session_id}", flush=True)
+
     session = (
         supabase.table("agent_sessions")
         .select("session_start_platform, external_thread_id")
@@ -54,11 +56,14 @@ async def _run(code_task_id: str) -> dict:
         .single()
         .execute()
     ).data
+    print(f"[code_task] session platform={session.get('session_start_platform') if session else 'unknown'}", flush=True)
 
     sb = None
     try:
+        print("[code_task] fetching tokens...", flush=True)
         anthropic_token = await get_valid_token(supabase, user_id=user_id, provider="claude-code")
         github_token = await get_valid_token(supabase, user_id=user_id, provider="github")
+        print("[code_task] tokens fetched OK", flush=True)
 
         env = {
             "NO_COLOR": "1",
@@ -67,6 +72,7 @@ async def _run(code_task_id: str) -> dict:
             "ANTHROPIC_API_KEY": anthropic_token,
         }
 
+        print("[code_task] creating Modal sandbox...", flush=True)
         app = await get_modal_app()
         sb = await modal.Sandbox.create.aio(
             image=get_agent_image(),
@@ -74,6 +80,7 @@ async def _run(code_task_id: str) -> dict:
             app=app,
             verbose=True,
         )
+        print(f"[code_task] sandbox created — id={sb.object_id}", flush=True)
 
         # --- CLONE ---
         await _post_update(
@@ -83,9 +90,12 @@ async def _run(code_task_id: str) -> dict:
         )
         update_code_task(supabase, task_id=code_task_id, status="cloning")
 
+        print(f"[code_task] cloning {repo_url}...", flush=True)
         clone_url = _inject_token_into_url(repo_url, github_token)
         result = await _exec(sb, f"git clone {clone_url} /repo", env=env, timeout_s=120)
+        print(f"[code_task] clone exit_code={result['exit_code']}", flush=True)
         if result["exit_code"] != 0:
+            print(f"[code_task] clone stderr: {result['stderr']}", flush=True)
             raise RuntimeError(f"git clone failed:\n{result['stderr']}")
 
         await _exec(
@@ -95,6 +105,7 @@ async def _run(code_task_id: str) -> dict:
         )
 
         # Write spec (orchestrator's feature brief) and the full assembled prompt separately
+        print("[code_task] writing spec and prompt files...", flush=True)
         f = await sb.open.aio("/repo/.agent-spec.md", "w")
         async with f:
             await f.write.aio(spec)
@@ -103,10 +114,9 @@ async def _run(code_task_id: str) -> dict:
         async with prompt_file:
             await prompt_file.write.aio(_build_claude_prompt(spec))
 
-        # Write .claude/settings.json to configure PostToolUse hooks
-        # Hooks POST back to our backend so updates appear in the chat thread
         hook_url = f"{settings.api_base_url}/webhook/claude-code/hook"
         hook_secret = settings.code_task_hook_secret
+        print(f"[code_task] hook_url={hook_url}", flush=True)
         claude_settings = {
             "permissions": {
                 "allow": ["Bash(*)", "Write(*)", "Edit(*)", "Read(*)"],
@@ -138,6 +148,7 @@ async def _run(code_task_id: str) -> dict:
         settings_file = await sb.open.aio("/repo/.claude/settings.local.json", "w")
         async with settings_file:
             await settings_file.write.aio(json.dumps(claude_settings))
+        print("[code_task] .claude/settings.json written", flush=True)
 
         # --- RUN ---
         await _post_update(
@@ -150,9 +161,11 @@ async def _run(code_task_id: str) -> dict:
 
         # Verify claude CLI is available before attempting the run
         verify_result = await _exec(sb, "which claude && claude --version", env=env)
+        print(f"[code_task] claude verify — exit_code={verify_result['exit_code']} stdout={verify_result['stdout'].strip()!r} stderr={verify_result['stderr'].strip()!r}", flush=True)
         if verify_result["exit_code"] != 0:
             raise RuntimeError("claude CLI not found in sandbox — image may need to be rebuilt")
 
+        print("[code_task] launching claude...", flush=True)
         claude_result = await _exec(
             sb,
             'claude -p "$(cat .agent-prompt.md)" < /dev/null',
@@ -161,6 +174,9 @@ async def _run(code_task_id: str) -> dict:
             timeout_s=60 * 60,  # 1 hour for the implementation step
         )
 
+        print(f"[code_task] claude finished — exit_code={claude_result['exit_code']}", flush=True)
+        print(f"[code_task] claude stdout ({len(claude_result['stdout'])} chars): {claude_result['stdout'][:1000] or '(empty)'}", flush=True)
+        print(f"[code_task] claude stderr ({len(claude_result['stderr'])} chars): {claude_result['stderr'][:500] or '(empty)'}", flush=True)
         if claude_result["exit_code"] != 0:
             raise RuntimeError(f"claude exited with code {claude_result['exit_code']}:\n{claude_result['stderr']}")
 
@@ -168,6 +184,7 @@ async def _run(code_task_id: str) -> dict:
         output_result = await _exec(sb, "cat /repo/.task-output.json", env=env)
         task_output = {}
         if output_result["exit_code"] == 0:
+            print(f"[code_task] .task-output.json: {output_result['stdout'][:300]}", flush=True)
             try:
                 task_output = json.loads(output_result["stdout"])
             except json.JSONDecodeError:
@@ -195,6 +212,7 @@ async def _run(code_task_id: str) -> dict:
             f"git push origin {branch_name}",
         ])
         push_result = await _exec(sb, push_cmds, workdir="/repo", env=env, timeout_s=120)
+        print(f"[code_task] push exit_code={push_result['exit_code']}", flush=True)
         if push_result["exit_code"] != 0:
             print(f"[code_task] push stderr: {push_result['stderr']}", flush=True)
             raise RuntimeError(f"git push failed:\n{push_result['stderr']}")
@@ -215,6 +233,7 @@ async def _run(code_task_id: str) -> dict:
             timeout_s=30,
         )
         pr_url = pr_result["stdout"].strip() if pr_result["exit_code"] == 0 else None
+        print(f"[code_task] PR result — exit_code={pr_result['exit_code']} url={pr_url}", flush=True)
         if pr_result["exit_code"] != 0:
             print(f"[code_task] PR stderr: {pr_result['stderr']}", flush=True)
 
@@ -258,6 +277,7 @@ async def _run(code_task_id: str) -> dict:
         raise
 
     finally:
+        print(f"[code_task] terminating sandbox — task_id={code_task_id}", flush=True)
         if sb:
             try:
                 await sb.terminate.aio()

@@ -228,10 +228,14 @@ async def tool_spawn_code_task(
     user_id = context.context.user_id
     workspace_id = context.context.workspace_id
 
+    print(f"[tool_spawn_code_task] called — repo={repo_url} branch={base_branch} session={agent_session_id} user={user_id}", flush=True)
+
     if not agent_session_id:
+        print("[tool_spawn_code_task] ERROR: no agent_session_id on context", flush=True)
         return "Error: could not determine the current session. Please try again."
 
     if not repo_url.startswith("https://github.com/"):
+        print(f"[tool_spawn_code_task] ERROR: invalid repo_url: {repo_url}", flush=True)
         return "Error: repo_url must be a full HTTPS GitHub URL (https://github.com/owner/repo)."
 
     try:
@@ -249,9 +253,11 @@ async def tool_spawn_code_task(
             base_branch=base_branch,
             spec=spec,
         )
+        print(f"[tool_spawn_code_task] task created — task_id={task_id}", flush=True)
 
         queue = get_queue("code_tasks")
-        queue.enqueue(run_code_task, task_id, job_timeout=60 * 100)
+        job = queue.enqueue(run_code_task, task_id, job_timeout=60 * 100)
+        print(f"[tool_spawn_code_task] enqueued — job_id={job.id} queue=code_tasks", flush=True)
 
         return (
             f"Coding task started (id: {task_id[:8]}). "
@@ -260,6 +266,7 @@ async def tool_spawn_code_task(
             f"A PR will be opened when complete."
         )
     except Exception as e:
+        print(f"[tool_spawn_code_task] ERROR: {e}", flush=True)
         asyncio.create_task(log_error(user_id, "agent", e, context={
             "origin": "agent_tool", "tool": "tool_spawn_code_task", "repo_url": repo_url,
         }))

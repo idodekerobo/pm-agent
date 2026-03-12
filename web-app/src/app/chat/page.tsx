@@ -52,6 +52,7 @@ export default function ChatPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const getToken = () => session?.access_token ?? "";
@@ -133,6 +134,14 @@ export default function ChatPage() {
       renameInputRef.current?.select();
     }
   }, [renamingSessionId]);
+
+  // Auto-resize textarea as content changes
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   const fetchSessions = async () => {
     try {
@@ -813,19 +822,26 @@ export default function ChatPage() {
         {/* Input Area */}
         <div className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">
           <form onSubmit={handleSendMessage} className="mx-auto max-w-2xl">
-            <div className="flex gap-3">
-              <input
-                type="text"
+            <div className="flex items-end gap-3">
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isLoading && input.trim()) handleSendMessage(e as unknown as React.FormEvent);
+                  }
+                }}
                 disabled={isLoading}
                 placeholder="Ask me anything..."
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
+                className="flex-1 max-h-40 resize-none overflow-y-auto rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                className="shrink-0 rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
               >
                 Send
               </button>

@@ -1,13 +1,16 @@
 'use client';
 
-import { useRef, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef, useEffect, useState, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
 import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
 import FeedbackModal from "@/components/FeedbackModal";
+import ToolCallBlock from "@/components/ToolCallBlock";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabaseClient";
 
 interface Message {
@@ -15,7 +18,13 @@ interface Message {
   role: "user" | "assistant" | "tool_call" | "tool_output";
   content: string;
   toolName?: string;
+  callId?: string;
+  toolArguments?: string;
 }
+
+type RenderItem =
+  | { type: "message"; message: Message }
+  | { type: "tool_pair"; id: string; call: Message; output: Message | null };
 
 interface Session {
   id: string;
@@ -23,8 +32,9 @@ interface Session {
   display_name?: string | null;
 }
 
-export default function ChatPage() {
+function ChatPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { session, signOut } = useAuth();
   const { creditsRemaining, planName, refetch: refetchBilling } = useBilling();
   const profileComplete = useProfileComplete();
@@ -45,6 +55,7 @@ export default function ChatPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const getToken = () => session?.access_token ?? "";
@@ -61,6 +72,8 @@ export default function ChatPage() {
     if (!session || hasInitialized.current) return;
     hasInitialized.current = true;
     fetchSessions();
+    const sessionFromUrl = searchParams.get("s");
+    if (sessionFromUrl) loadSession(sessionFromUrl);
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     fetch("https://ipapi.co/json/")
       .then((r) => r.json())
@@ -111,6 +124,37 @@ export default function ChatPage() {
     };
   }, [activeSessionId]);
 
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("session-name-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "agent_sessions",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          const updated = payload.new as { id: string; display_name?: string };
+          if (!updated.display_name) return;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === updated.id ? { ...s, display_name: updated.display_name } : s
+            )
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user?.id]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     if (!openMenuId) return;
@@ -126,6 +170,14 @@ export default function ChatPage() {
       renameInputRef.current?.select();
     }
   }, [renamingSessionId]);
+
+  // Auto-resize textarea as content changes
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [input]);
 
   const fetchSessions = async () => {
     try {
@@ -145,6 +197,7 @@ export default function ChatPage() {
   const startNewSession = () => {
     setActiveSessionId(null);
     setMessages([]);
+    router.push("/chat");
   };
 
   const loadSession = async (sessionId: string) => {
@@ -163,13 +216,16 @@ export default function ChatPage() {
                 role: "tool_call",
                 content: item.arguments ?? "",
                 toolName: item.name,
+                callId: item.call_id ?? "",
+                toolArguments: item.arguments ?? "",
               });
             } else if (item?.type === "function_call_output") {
               const out = typeof item.output === "string" ? item.output : JSON.stringify(item.output);
               mapped.push({
                 id: `${sessionId}-${mapped.length}`,
                 role: "tool_output",
-                content: out.length > 200 ? out.slice(0, 200) + "..." : out,
+                content: out,
+                callId: item.call_id ?? "",
               });
             } else {
               const role = item?.role as "user" | "assistant";
@@ -187,6 +243,7 @@ export default function ChatPage() {
         }
         setActiveSessionId(sessionId);
         setMessages(mapped);
+        router.push(`/chat?s=${sessionId}`);
       }
     } catch (e) {
       console.error("Failed to load session:", e);
@@ -340,7 +397,9 @@ export default function ChatPage() {
                   id: `tool-${Date.now()}-${Math.random()}`,
                   role: "tool_call" as const,
                   content: eventData.content ?? "",
-                  toolName: eventData.content,
+                  toolName: eventData.name ?? "",
+                  callId: eventData.call_id ?? "",
+                  toolArguments: eventData.arguments ?? "",
                 },
               ]);
               currentAssistantId = null;
@@ -352,6 +411,7 @@ export default function ChatPage() {
                   id: `output-${Date.now()}-${Math.random()}`,
                   role: "tool_output" as const,
                   content: eventData.content ?? "",
+                  callId: eventData.call_id ?? "",
                 },
               ]);
             } else if (eventData.type === "message") {
@@ -416,6 +476,30 @@ export default function ChatPage() {
       minute: "2-digit",
     })}`;
   };
+
+  const renderItems = useMemo((): RenderItem[] => {
+    const items: RenderItem[] = [];
+    const callIdToIndex = new Map<string, number>();
+
+    for (const msg of messages) {
+      if (msg.role === "tool_call" && msg.callId) {
+        const idx = items.length;
+        callIdToIndex.set(msg.callId, idx);
+        items.push({ type: "tool_pair", id: msg.id, call: msg, output: null });
+      } else if (msg.role === "tool_output" && msg.callId && callIdToIndex.has(msg.callId)) {
+        const idx = callIdToIndex.get(msg.callId)!;
+        const existing = items[idx] as { type: "tool_pair"; id: string; call: Message; output: Message | null };
+        items[idx] = { ...existing, output: msg };
+      } else if (msg.role !== "tool_call" && msg.role !== "tool_output") {
+        items.push({ type: "message", message: msg });
+      } else {
+        // Orphaned tool message (no callId or no matching pair) — render as plain text fallback
+        items.push({ type: "message", message: msg });
+      }
+    }
+
+    return items;
+  }, [messages]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
@@ -672,35 +756,19 @@ export default function ChatPage() {
                 </div>
               </div>
             ) : (
-              messages.map((message) => {
-                if (message.role === "tool_call") {
+              renderItems.map((item) => {
+                if (item.type === "tool_pair") {
                   return (
-                    <div key={message.id} className="flex justify-start">
-                      <div className="max-w-lg rounded-lg border border-zinc-200 bg-white px-3 py-2">
-                        <p className="font-mono text-xs font-semibold text-zinc-500">
-                          🛠 {message.toolName}
-                        </p>
-                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">
-                          {message.content}
-                        </pre>
-                      </div>
+                    <div key={item.id} className="flex justify-start">
+                      <ToolCallBlock
+                        toolName={item.call.toolName ?? item.call.content}
+                        toolArguments={item.call.toolArguments ?? item.call.content}
+                        output={item.output ? item.output.content : null}
+                      />
                     </div>
                   );
                 }
-                if (message.role === "tool_output") {
-                  return (
-                    <div key={message.id} className="flex justify-start">
-                      <div className="max-w-lg rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                        <p className="font-mono text-xs font-semibold text-zinc-400">
-                          📋 Output
-                        </p>
-                        <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all font-mono text-xs text-zinc-400">
-                          {message.content}
-                        </pre>
-                      </div>
-                    </div>
-                  );
-                }
+                const message = item.message;
                 return (
                   <div
                     key={message.id}
@@ -713,9 +781,17 @@ export default function ChatPage() {
                           : "bg-zinc-100 text-zinc-900"
                       }`}
                     >
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {message.content}
-                      </p>
+                      {message.role === "user" ? (
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                          {message.content}
+                        </p>
+                      ) : (
+                        <div className="prose prose-sm prose-zinc max-w-none text-zinc-900 [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all [&_pre]:bg-zinc-800 [&_pre]:text-zinc-100 [&_code:not(pre_code)]:bg-zinc-200 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:text-zinc-800">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -792,19 +868,26 @@ export default function ChatPage() {
         {/* Input Area */}
         <div className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">
           <form onSubmit={handleSendMessage} className="mx-auto max-w-2xl">
-            <div className="flex gap-3">
-              <input
-                type="text"
+            <div className="flex items-end gap-3">
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!isLoading && input.trim()) handleSendMessage(e as unknown as React.FormEvent);
+                  }
+                }}
                 disabled={isLoading}
                 placeholder="Ask me anything..."
-                className="flex-1 rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
+                className="flex-1 max-h-40 resize-none overflow-y-auto rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
               />
               <button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                className="shrink-0 rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
               >
                 Send
               </button>
@@ -817,5 +900,13 @@ export default function ChatPage() {
         <FeedbackModal onClose={() => setShowFeedbackModal(false)} />
       )}
     </div>
+  );
+}
+
+export default function ChatPageWrapper() {
+  return (
+    <Suspense>
+      <ChatPage />
+    </Suspense>
   );
 }

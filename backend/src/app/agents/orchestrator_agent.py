@@ -67,7 +67,11 @@ async def run_orchestrator(
     # Runner that streams its own events separately.
     async for event in result.stream_events():
         if event.type == "raw_response_event":
-            continue
+            data = event.data
+            if getattr(data, "type", None) == "response.output_text.delta":
+                delta = getattr(data, "delta", None)
+                if delta:
+                    yield {"type": "message", "content": delta}
         elif event.type == "agent_updated_stream_event":
             print(f"Agent updated: {event.new_agent.name}")
             continue
@@ -79,6 +83,9 @@ async def run_orchestrator(
                 yield {
                     "type": "tool_call",
                     "content": f"{raw.name} tool was called",
+                    "call_id": raw.call_id,
+                    "name": raw.name,
+                    "arguments": raw.arguments,
                     "db_item": {
                         "type": "function_call",
                         "name": raw.name,
@@ -89,12 +96,12 @@ async def run_orchestrator(
             elif event.item.type == "tool_call_output_item":
                 output = str(event.item.output)
                 print(f"-- Tool output: {output[:200]}")
-                short_output = (output[:200] + "...") if len(output) > 200 else output
                 raw = event.item.raw_item
                 call_id = raw.call_id if hasattr(raw, "call_id") else raw.get("call_id", "")
                 yield {
                     "type": "tool_output",
-                    "content": short_output,
+                    "content": output,
+                    "call_id": call_id,
                     "db_item": {
                         "type": "function_call_output",
                         "call_id": call_id,
@@ -103,12 +110,6 @@ async def run_orchestrator(
                 }
             elif event.item.type == "message_output_item":
                 print(f"-- Message output:\n {ItemHelpers.text_message_output(event.item)}")
-                content = ItemHelpers.text_message_output(event.item)
-                if content:
-                    yield {
-                        "type": "message",
-                        "content": content,
-                    }
 
     try:
         usage = result.context_wrapper.usage

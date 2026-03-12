@@ -350,6 +350,15 @@ async def _run_agent_for_message(
             if chunk["type"] == "final_output":
                 final_output = chunk["content"]
 
+        if payload.is_new_session:
+            from app.agents.context import auto_name_session
+            await auto_name_session(
+                supabase,
+                user_id=user_id,
+                session_id=payload.agent_session_id,
+                prompt=prompt_text,
+            )
+
         if is_mention:
             # Fallback: if the agent produced output but didn't call tool_slack,
             # post final_output directly in the channel.

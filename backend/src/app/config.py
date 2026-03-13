@@ -4,6 +4,7 @@ class Settings(BaseSettings):
     app_environment: str
     api_base_url: str
     client_app_base_url: str
+    client_landing_page_base_url: str
     allowed_origins: list[str] = []
 
     supabase_url: str
@@ -51,6 +52,6 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context) -> None:
-        self.allowed_origins = [self.client_app_base_url, "https://anxiously-nonvituperative-gricelda.ngrok-free.dev"]
+        self.allowed_origins = [self.client_app_base_url, self.client_landing_page_base_url]
 
 settings = Settings()

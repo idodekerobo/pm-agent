@@ -4,15 +4,33 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
+const STORAGE_KEY = "draft_demo";
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [onboardingUrl, setOnboardingUrl] = useState(`${APP_URL}/onboarding`);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Append demo_token to CTA if a demo session exists
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved?.demo_token) {
+        const params = new URLSearchParams({ demo_token: saved.demo_token });
+        if (saved.url) params.set("company_url", saved.url);
+        setOnboardingUrl(`${APP_URL}/onboarding?${params.toString()}`);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   return (
@@ -116,7 +134,7 @@ export default function Nav() {
           </a>
 
           <a
-            href={`${APP_URL}/onboarding`}
+            href={onboardingUrl}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -219,7 +237,7 @@ export default function Nav() {
             </a>
           ))}
           <a
-            href={`${APP_URL}/onboarding`}
+            href={onboardingUrl}
             style={{
               display: "inline-block",
               padding: "0.75rem 1.5rem",

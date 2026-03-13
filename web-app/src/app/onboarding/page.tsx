@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { createClient } from '@/lib/supabaseClient';
 
@@ -113,13 +113,16 @@ const STEP_LABELS: Record<Step, { title: string; subtitle: string; note?: string
   },
 };
 
-export default function OnboardingPage() {
+function OnboardingPageInner() {
   const [step, setStep] = useState<Step>(1);
+  const searchParams = useSearchParams();
+  const demoToken = searchParams.get('demo_token');
+  const demoCompanyUrl = searchParams.get('company_url');
   const [profile, setProfile] = useState<ProfileData>({
     fullName: '',
     role: '',
     companyName: '',
-    companyUrl: '',
+    companyUrl: demoCompanyUrl ? demoCompanyUrl.replace(/^https?:\/\//, '') : '',
     productName: '',
     productDescription: '',
     useCases: [],
@@ -245,13 +248,18 @@ export default function OnboardingPage() {
 
       const supabase = createClient();
       localStorage.setItem('onboarding_awaiting', 'true');
+      // Thread demo_token into the callback URL so /auth/callback can claim
+      // the demo session immediately after the user confirms their email.
+      const callbackBase = `${process.env.NEXT_PUBLIC_WEB_APP_BASE_URL}/auth/callback`;
+      const callbackUrl = demoToken
+        ? `${callbackBase}?demo_token=${demoToken}`
+        : callbackBase;
+
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          // /auth/callback defaults next to /onboarding, which is where we
-          // want users to land so the useEffect above can pick up from localStorage.
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_WEB_APP_BASE_URL}/auth/callback`,
+          emailRedirectTo: callbackUrl,
         },
       });
 
@@ -294,6 +302,8 @@ export default function OnboardingPage() {
   const handleFinish = () => {
     router.push('/chat');
   };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   // Awaiting email confirmation state
   if (awaitingConfirmation) {
@@ -678,5 +688,13 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense>
+      <OnboardingPageInner />
+    </Suspense>
   );
 }

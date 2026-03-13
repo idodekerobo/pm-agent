@@ -206,6 +206,24 @@ async def tool_slack(
 
 
 @function_tool
+async def tool_fetch_url(context: RunContextWrapper[AgentContext], url: str) -> str:
+    """Fetch the content of a URL and return it as clean text or markdown.
+    Use this to read web pages, company sites, documentation, articles, etc.
+    Args:
+        url: The full URL to fetch (must include https://).
+    """
+    from app.utils.web_fetch import fetch_url
+    try:
+        return await fetch_url(url)
+    except Exception as e:
+        asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
+            "origin": "agent_tool", "tool": "tool_fetch_url", "url": url,
+            "error_category": "infrastructure",
+        }))
+        raise
+
+
+@function_tool
 async def tool_spawn_code_task(
     context: RunContextWrapper[AgentContext],
     repo_url: str,

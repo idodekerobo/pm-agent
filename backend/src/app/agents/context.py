@@ -699,7 +699,7 @@ def build_agent_run_payload(
         slack_mention_context: Populate AgentContext.slack_mention_context for
             @-mention flows so the agent knows how to route its reply via tool_slack.
     """
-    from app.agents.tools import tool_bash, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
+    from app.agents.tools import tool_bash, tool_fetch_url, tool_fs_list, tool_fs_read, tool_fs_write, tool_slack
     from app.db.agent_sessions import create_agent_session
 
     organization_id, project_id, workspace_id, sandbox_id, profile = resolve_workspace_context(supabase, user_id)
@@ -728,7 +728,7 @@ def build_agent_run_payload(
         else []
     )
 
-    tools = [tool_fs_list, tool_fs_write, tool_fs_read, tool_bash]
+    tools = [tool_fs_list, tool_fs_write, tool_fs_read, tool_bash, tool_fetch_url]
     slack_result = (
         supabase.table("slack_installations")
         .select("id")

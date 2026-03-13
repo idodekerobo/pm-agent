@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     # LLM Providers
     openai_api_key: str
 
+    # Web fetch
+    jina_api_key: str = ""
+
     # Integrations
     oauth_encryption_key: str
     session_secret: str

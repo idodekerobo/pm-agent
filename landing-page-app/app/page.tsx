@@ -1,5 +1,5 @@
 import Nav from "@/components/Nav";
-import Hero from "@/components/Hero";
+import DemoHero from "@/components/DemoHero";
 import LogoBar from "@/components/LogoBar";
 import ForWho from "@/components/ForWho";
 import Features from "@/components/Features";
@@ -11,7 +11,7 @@ export default function Home() {
   return (
     <main>
       <Nav />
-      <Hero />
+      <DemoHero />
       <LogoBar />
       <ForWho />
       <Features />

@@ -28,14 +28,15 @@ const INTEGRATIONS = [
     name: 'Notion',
     abbr: 'NT',
     color: '#191919',
-    value: 'Read and write your knowledge base. Sync decisions, specs, and context automatically.',
+    value: 'Read and write your knowledge base. Sync docs and database context automatically.',
   },
   {
     key: 'google',
     name: 'Google Drive',
     abbr: 'GD',
     color: '#34A853',
-    value: 'Access Docs, Sheets, and Slides. Your agent can draft, update, and analyze documents directly.',
+    value: 'Write Docs and Sheets directly. Your agent can use Drive as a live knowledge base for your agent to take action on.',
+    comingSoon: true,
   },
   {
     key: 'linear',
@@ -515,6 +516,7 @@ function OnboardingPageInner() {
               const connected = !!integrations[integration.key];
               const connecting = connectingProvider === integration.key;
               const isByok = 'isByok' in integration && integration.isByok;
+              const isComingSoon = 'comingSoon' in integration && integration.comingSoon;
               const isByokOpen = isByok && byokExpanded && !connected;
               return (
                 <div
@@ -548,7 +550,11 @@ function OnboardingPageInner() {
                       )}
                     </div>
 
-                    {isByok ? (
+                    {isComingSoon ? (
+                      <span className="flex-shrink-0 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-400 cursor-default">
+                        Coming soon
+                      </span>
+                    ) : isByok ? (
                       <button
                         type="button"
                         onClick={() => { if (!connected) { setByokExpanded((o) => !o); setByokError(''); } }}

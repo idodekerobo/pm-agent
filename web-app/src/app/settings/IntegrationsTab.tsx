@@ -10,11 +10,11 @@ interface Integration {
   created_at: string;
 }
 
-const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean; note?: string; isByok?: boolean }> = {
+const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean; note?: string; isByok?: boolean; comingSoon?: boolean }> = {
   github:       { name: 'GitHub',       description: 'Repos, issues & pull requests',        color: '#24292F', abbr: 'GH' },
   linear:       { name: 'Linear',       description: 'Issue tracking & project management',   color: '#5E6AD2', abbr: 'LN' },
-  google:       { name: 'Google Drive', description: 'Cloud storage & document sync',         color: '#34A853', abbr: 'GD' },
-  notion:       { name: 'Notion',       description: 'Docs, notes & knowledge base',          color: '#191919', abbr: 'NT', requiresManualRevoke: true },
+  google:       { name: 'Google Drive', description: 'Write docs & sheets, and sync your knowledge base',         color: '#34A853', abbr: 'GD', comingSoon: true },
+  notion:       { name: 'Notion',       description: 'Docs, databases & sync your knowledge base',          color: '#191919', abbr: 'NT', requiresManualRevoke: true },
   slack:        { name: 'Slack',        description: 'Team messaging & channel alerts',        color: '#E01E5A', abbr: 'SL', note: 'After connecting, invite the agent to any Slack channels you want it active in.' },
   'claude-code': { name: 'Claude Code', description: 'AI coding assistant via your Anthropic API key', color: '#D97756', abbr: 'CC', isByok: true },
 };
@@ -306,7 +306,11 @@ export default function IntegrationsTab() {
                               <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
                             )}
                           </div>
-                          {meta.isByok ? (
+                          {meta.comingSoon ? (
+                            <span className="flex-shrink-0 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-400 cursor-default">
+                              Coming soon
+                            </span>
+                          ) : meta.isByok ? (
                             <button
                               onClick={() => { setByokExpanded((o) => !o); setByokError(null); }}
                               className="flex-shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"

@@ -116,6 +116,8 @@ export default function LiveDemo() {
   const questionRef = useRef<HTMLInputElement>(null);
   const replyRef = useRef<HTMLInputElement>(null);
   const unmountedRef = useRef(false);
+  const scrollBodyRef = useRef<HTMLDivElement>(null);
+  const isUserScrolledRef = useRef(false);
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -149,6 +151,13 @@ export default function LiveDemo() {
     if (phase === "url_entered") questionRef.current?.focus();
     if (phase === "awaiting") replyRef.current?.focus();
   }, [phase]);
+
+  useEffect(() => {
+    if (isUserScrolledRef.current) return;
+    const el = scrollBodyRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [streamingText, messages, toolLabel]);
 
   // ── Persistence ────────────────────────────────────────────────────────────
 
@@ -303,6 +312,13 @@ export default function LiveDemo() {
     });
   }
 
+  function handleScrollBodyScroll() {
+    const el = scrollBodyRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    isUserScrolledRef.current = !atBottom;
+  }
+
   function reset() {
     localStorage.removeItem(STORAGE_KEY);
     unmountedRef.current = false;
@@ -428,6 +444,8 @@ export default function LiveDemo() {
 
       {/* ── Scrollable body ───────────────────────────────────────────────── */}
       <div
+        ref={scrollBodyRef}
+        onScroll={handleScrollBodyScroll}
         style={{
           flex: 1,
           overflowY: "auto",

@@ -19,7 +19,7 @@ export function useProfileComplete() {
       headers: { Authorization: `Bearer ${session.access_token}` },
     })
       .then((r) => r.json())
-      .then((data) => setComplete(!!data.full_name && !!data.role && !!data.product_description && !!data.use_case))
+      .then((data) => setComplete(!!data.full_name && !!data.role))
       .catch(() => setComplete(true)); // on error, don't show banner
   }, [session]);
 

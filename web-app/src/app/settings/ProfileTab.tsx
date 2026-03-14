@@ -2,18 +2,31 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { ROLES } from '@/lib/profileOptions';
 
-import { ROLES, USE_CASE_OPTIONS } from '@/lib/profileOptions';
+const FOCUS_CHIPS = [
+  'Shipping features',
+  'Reducing bugs',
+  'Growing users',
+  'Cutting costs',
+  'Managing stakeholders',
+];
+
+const ACTIVITY_CHIPS = [
+  'Design & specs',
+  'Data & analytics',
+  'Customer support',
+  'Engineering collaboration',
+  'Strategy & planning',
+];
 
 interface ProfileData {
   full_name: string;
   role: string;
-  company_name: string;
+  role_other: string;
   company_url: string;
-  product_name: string;
-  product_description: string;
-  use_case: string;
-  use_case_context: string;
+  current_focus: string[];
+  daily_activities: string[];
 }
 
 export default function ProfileTab() {
@@ -23,13 +36,13 @@ export default function ProfileTab() {
   const [profile, setProfile] = useState<ProfileData>({
     full_name: '',
     role: '',
-    company_name: '',
+    role_other: '',
     company_url: '',
-    product_name: '',
-    product_description: '',
-    use_case: '',
-    use_case_context: '',
+    current_focus: [],
+    daily_activities: [],
   });
+  const [focusCustom, setFocusCustom] = useState('');
+  const [activityCustom, setActivityCustom] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -44,18 +57,18 @@ export default function ProfileTab() {
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
-        const allParts = (data.use_case ?? '').split(', ').filter(Boolean);
-        const knownParts = allParts.filter((p: string) => USE_CASE_OPTIONS.includes(p));
-        const contextParts = allParts.filter((p: string) => !USE_CASE_OPTIONS.includes(p));
+
+        // Separate known role from "Other" custom text
+        const roleValue: string = data.role ?? '';
+        const isKnownRole = ROLES.filter((r) => r !== 'Other').includes(roleValue);
+
         setProfile({
           full_name: data.full_name ?? '',
-          role: data.role ?? '',
-          company_name: data.company_name ?? '',
-          company_url: data.company_url ?? '',
-          product_name: data.product_name ?? '',
-          product_description: data.product_description ?? '',
-          use_case: knownParts.join(', '),
-          use_case_context: contextParts.join(', '),
+          role: isKnownRole ? roleValue : (roleValue ? 'Other' : ''),
+          role_other: isKnownRole ? '' : roleValue,
+          company_url: (data.company_url ?? '').replace(/^https?:\/\//, ''),
+          current_focus: data.current_focus ?? [],
+          daily_activities: data.daily_activities ?? [],
         });
       } catch {
         setError('Could not load profile. Please refresh.');
@@ -67,15 +80,21 @@ export default function ProfileTab() {
     if (session) fetchProfile();
   }, [session, apiBase]);
 
-  const selectedUseCases = profile.use_case
-    ? profile.use_case.split(', ').filter(Boolean)
-    : [];
+  const toggleChip = (field: 'current_focus' | 'daily_activities', chip: string) => {
+    setProfile((p) => {
+      const current = new Set(p[field]);
+      if (current.has(chip)) current.delete(chip);
+      else current.add(chip);
+      return { ...p, [field]: [...current] };
+    });
+  };
 
-  const toggleUseCase = (option: string) => {
-    const current = new Set(selectedUseCases);
-    if (current.has(option)) current.delete(option);
-    else current.add(option);
-    setProfile((p) => ({ ...p, use_case: [...current].join(', ') }));
+  const addCustomChip = (field: 'current_focus' | 'daily_activities', val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed || profile[field].includes(trimmed)) return;
+    setProfile((p) => ({ ...p, [field]: [...p[field], trimmed] }));
+    if (field === 'current_focus') setFocusCustom('');
+    else setActivityCustom('');
   };
 
   const handleSave = async () => {
@@ -84,22 +103,16 @@ export default function ProfileTab() {
     setSaving(true);
     try {
       const token = session?.access_token ?? '';
+      const resolvedRole = profile.role === 'Other' ? profile.role_other.trim() : profile.role;
       const res = await fetch(`${apiBase}/user/profile`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           full_name: profile.full_name,
-          role: profile.role,
-          company_name: profile.company_name || null,
-          company_url: profile.company_url
-            ? `https://${profile.company_url.replace(/^https?:\/\//, '')}`
-            : null,
-          product_name: profile.product_name || null,
-          product_description: profile.product_description || null,
-          use_case: [
-            ...profile.use_case.split(', ').filter(Boolean),
-            ...(profile.use_case_context.trim() ? [profile.use_case_context.trim()] : []),
-          ].join(', ') || null,
+          role: resolvedRole || null,
+          company_url: profile.company_url || null,
+          current_focus: profile.current_focus.length ? profile.current_focus : null,
+          daily_activities: profile.daily_activities.length ? profile.daily_activities : null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -149,33 +162,31 @@ export default function ProfileTab() {
             <label className="block text-sm font-medium text-zinc-700 mb-1.5">Role</label>
             <select
               value={profile.role}
-              onChange={(e) => setProfile({ ...profile, role: e.target.value })}
+              onChange={(e) => setProfile({ ...profile, role: e.target.value, role_other: '' })}
               className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
             >
               <option value="">Select your role</option>
               {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
+            {profile.role === 'Other' && (
+              <input
+                type="text"
+                value={profile.role_other}
+                onChange={(e) => setProfile({ ...profile, role_other: e.target.value })}
+                className="mt-2 block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                placeholder="Describe your role"
+              />
+            )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company Name <span className="text-zinc-400 font-normal">(optional)</span></label>
-            <input
-              type="text"
-              value={profile.company_name}
-              onChange={(e) => setProfile({ ...profile, company_name: e.target.value })}
-              className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-              placeholder="Acme Inc."
-            />
-          </div>
-
-          <div>
+          <div className="col-span-2">
             <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company URL <span className="text-zinc-400 font-normal">(optional)</span></label>
             <div className="flex items-center rounded-md border border-zinc-300 bg-zinc-50/50 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900">
               <span className="flex items-center self-stretch pl-3 pr-2 text-sm text-zinc-400 select-none bg-zinc-100 border-r border-zinc-300 rounded-l-md">https://</span>
               <input
                 type="text"
-                value={(profile.company_url || '').replace(/^https?:\/\//, '')}
-                onChange={(e) => setProfile({ ...profile, company_url: e.target.value })}
+                value={profile.company_url}
+                onChange={(e) => setProfile({ ...profile, company_url: e.target.value.replace(/^https?:\/\//, '') })}
                 className="flex-1 bg-transparent py-2.5 pl-3 pr-3 text-sm text-zinc-900 focus:outline-none"
                 placeholder="acme.com"
               />
@@ -183,57 +194,108 @@ export default function ProfileTab() {
           </div>
         </div>
 
-        {/* Product */}
+        {/* Current Focus */}
         <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1.5">Product Name(s)</label>
-          <input
-            type="text"
-            value={profile.product_name}
-            onChange={(e) => setProfile({ ...profile, product_name: e.target.value })}
-            className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-            placeholder="Acme Shipment Tracker"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1.5">What does your product(s) do?</label>
-          <textarea
-            value={profile.product_description}
-            onChange={(e) => setProfile({ ...profile, product_description: e.target.value })}
-            rows={4}
-            className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
-            placeholder="We build a B2B SaaS platform that helps logistics teams track shipments in real time..."
-          />
-        </div>
-
-        {/* Use cases */}
-        <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-3">How do you use PM Agent?</label>
-          <div className="grid grid-cols-2 gap-2">
-            {USE_CASE_OPTIONS.map((option) => {
-              const selected = selectedUseCases.includes(option);
+          <label className="block text-sm font-medium text-zinc-700 mb-3">Current focus</label>
+          <div className="flex flex-wrap gap-2">
+            {FOCUS_CHIPS.map((chip) => {
+              const selected = profile.current_focus.includes(chip);
               return (
                 <button
-                  key={option}
+                  key={chip}
                   type="button"
-                  onClick={() => toggleUseCase(option)}
-                  className={`rounded-md border px-3 py-2.5 text-left text-sm transition-colors ${
+                  onClick={() => toggleChip('current_focus', chip)}
+                  className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
                     selected
                       ? 'border-zinc-900 bg-zinc-900 text-white'
                       : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
                   }`}
                 >
-                  {option}
+                  {chip}
                 </button>
               );
             })}
+            {/* Persisted custom chips */}
+            {profile.current_focus.filter((f) => !FOCUS_CHIPS.includes(f)).map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => toggleChip('current_focus', chip)}
+                className="rounded-full border border-zinc-900 bg-zinc-900 text-white px-3.5 py-1.5 text-sm transition-colors"
+              >
+                {chip}
+              </button>
+            ))}
           </div>
-          <textarea
-            value={profile.use_case_context}
-            onChange={(e) => setProfile({ ...profile, use_case_context: e.target.value })}
-            rows={3}
-            className="mt-3 block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
-            placeholder="Anything else?"
-          />
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              value={focusCustom}
+              onChange={(e) => setFocusCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomChip('current_focus', focusCustom); } }}
+              className="flex-1 rounded-md border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              placeholder="Add your own…"
+            />
+            <button
+              type="button"
+              onClick={() => addCustomChip('current_focus', focusCustom)}
+              className="rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* Daily Activities */}
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 mb-3">Daily activities</label>
+          <div className="flex flex-wrap gap-2">
+            {ACTIVITY_CHIPS.map((chip) => {
+              const selected = profile.daily_activities.includes(chip);
+              return (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => toggleChip('daily_activities', chip)}
+                  className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                    selected
+                      ? 'border-zinc-900 bg-zinc-900 text-white'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
+                  }`}
+                >
+                  {chip}
+                </button>
+              );
+            })}
+            {/* Persisted custom chips */}
+            {profile.daily_activities.filter((a) => !ACTIVITY_CHIPS.includes(a)).map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => toggleChip('daily_activities', chip)}
+                className="rounded-full border border-zinc-900 bg-zinc-900 text-white px-3.5 py-1.5 text-sm transition-colors"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              value={activityCustom}
+              onChange={(e) => setActivityCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomChip('daily_activities', activityCustom); } }}
+              className="flex-1 rounded-md border border-zinc-200 bg-zinc-50/50 px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+              placeholder="Add your own…"
+            />
+            <button
+              type="button"
+              onClick={() => addCustomChip('daily_activities', activityCustom)}
+              className="rounded-md border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+            >
+              Add
+            </button>
+          </div>
         </div>
 
         {/* Feedback */}

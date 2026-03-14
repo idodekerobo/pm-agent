@@ -11,6 +11,8 @@ def create_agent_session(
     workspace_id: str,
     session_start_platform: str = "web",
     external_thread_id: str | None = None,
+    is_pinned: bool = False,
+    initiated_by: str = "user",
 ) -> str:
     """
     Creates a new agent session tied to a project.
@@ -22,6 +24,8 @@ def create_agent_session(
         "project_id": project_id,
         "workspace_id": workspace_id,
         "session_start_platform": session_start_platform,
+        "is_pinned": is_pinned,
+        "initiated_by": initiated_by,
     }
     if external_thread_id is not None:
         insert_payload["external_thread_id"] = external_thread_id
@@ -67,16 +71,23 @@ def find_session_by_thread_id(
     return result.data[0]["id"] if result.data else None
 
 
-def update_session_display_name(
+_PATCHABLE_SESSION_FIELDS = {"display_name", "is_pinned"}
+
+
+def update_session_fields(
     supabase: Client,
     *,
     session_id: str,
     user_id: str,
-    display_name: str,
+    fields: dict,
 ) -> bool:
+    """Update whitelisted fields on an agent session. Returns True if a row was updated."""
+    safe = {k: v for k, v in fields.items() if k in _PATCHABLE_SESSION_FIELDS}
+    if not safe:
+        return True
     result = (
         supabase.table("agent_sessions")
-        .update({"display_name": display_name})
+        .update(safe)
         .eq("id", session_id)
         .eq("user_id", user_id)
         .execute()
@@ -124,7 +135,25 @@ def list_sessions_for_user(supabase: Client, *, user_id: str) -> list[AgentSessi
         .select("*")
         .eq("user_id", user_id)
         .neq("session_start_platform", "background")
+        .order("is_pinned", desc=True)
         .order("created_at", desc=True)
         .execute()
     )
     return [AgentSession.model_validate(row) for row in (result.data or [])]
+
+
+def mark_session_read(supabase: Client, *, session_id: str, user_id: str) -> bool:
+    """Set last_read_at = now() for the session. Returns True if a row was updated."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    result = (
+        supabase.table("agent_sessions")
+        .update({"last_read_at": now})
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return bool(result.data)
+
+
+

@@ -13,11 +13,13 @@ def create_agent_session(
     external_thread_id: str | None = None,
     is_pinned: bool = False,
     initiated_by: str = "user",
+    display_name: str | None = None,
 ) -> str:
     """
     Creates a new agent session tied to a project.
     Returns the new agent_session_id.
     """
+    from datetime import datetime, timezone
     insert_payload: dict = {
         "organization_id": organization_id,
         "user_id": user_id,
@@ -26,7 +28,10 @@ def create_agent_session(
         "session_start_platform": session_start_platform,
         "is_pinned": is_pinned,
         "initiated_by": initiated_by,
+        "last_read_at": datetime.now(timezone.utc).isoformat(),
     }
+    if display_name is not None:
+        insert_payload["display_name"] = display_name
     if external_thread_id is not None:
         insert_payload["external_thread_id"] = external_thread_id
 

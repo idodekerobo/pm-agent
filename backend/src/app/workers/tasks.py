@@ -323,25 +323,36 @@ def gather_onboarding_context(user_id: str, profile: dict):
 
         full_name = profile.get("full_name") or "Not provided"
         role = profile.get("role") or "Not provided"
-        company_name = profile.get("company_name") or "Not provided"
         company_url = profile.get("company_url") or "Not provided"
-        product_description = profile.get("product_description") or "Not provided"
-        use_case = profile.get("use_case") or "Not provided"
+        scrape_observations = profile.get("onboarding_scrape_observations") or "Not provided"
+        scrape_correction = profile.get("onboarding_scrape_correction")
+        current_focus_raw = profile.get("current_focus") or []
+        current_focus = ", ".join(current_focus_raw) if current_focus_raw else "Not provided"
+        daily_activities = profile.get("daily_activities") or []
+        daily_activities_str = ", ".join(daily_activities) if daily_activities else "Not provided"
+
+        product_context = f"Agent observations about their product/company:\n{scrape_observations}"
+        if scrape_correction:
+            product_context += (
+                f"\n\nThe user corrected the above observations with this clarification "
+                f"(treat as authoritative where it conflicts):\n{scrape_correction}"
+            )
 
         prompt = f"""Write the following user-provided onboarding information to the appropriate workspace context files.
-This information was entered directly by the user during onboarding — treat it as authoritative.
+This information was gathered during onboarding — treat it as authoritative.
 
 Full name: {full_name}
 Role: {role}
-Company: {company_name}
 Company URL: {company_url}
-Product description: {product_description}
-How they plan to use PM Agent: {use_case}
+Current focus: {current_focus}
+Daily activities: {daily_activities_str}
+
+{product_context}
 
 Write to:
-- context/user.md — full name, role, and how they plan to use PM Agent
-- context/company.md — company name and URL
-- context/product.md — product description and what they are building
+- context/user.md — full name, role, current focus, and daily activities
+- context/company.md — company URL and anything inferable about the company from the product observations
+- context/product.md — synthesized product description derived from the observations (and correction if present)
 
 Ensure each file has valid YAML frontmatter (name, description using > block scalar, last_updated).
 Read each file before writing so you merge rather than overwrite any existing content."""

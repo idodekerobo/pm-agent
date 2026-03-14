@@ -11,11 +11,11 @@ router = APIRouter(prefix="/user", tags=["user"])
 class ProfilePayload(BaseModel):
     full_name: str
     role: str
-    company_name: str | None = None
     company_url: str | None = None
-    product_name: str | None = None
-    product_description: str | None = None
-    use_case: str | None = None
+    onboarding_scrape_observations: str | None = None
+    onboarding_scrape_correction: str | None = None
+    current_focus: list[str] | None = None
+    daily_activities: list[str] | None = None
 
 
 @router.get("/profile", response_model=User)
@@ -23,7 +23,7 @@ async def get_profile(user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
     row = (
         supabase.table("users")
-        .select("id, email, created_at, organization_id, full_name, role, company_name, company_url, product_name, product_description, use_case")
+        .select("id, email, created_at, organization_id, full_name, role, company_name, company_url, product_name, product_description, use_case, onboarding_scrape_observations, onboarding_scrape_correction, current_focus, daily_activities")
         .eq("id", user_id)
         .single()
         .execute()
@@ -49,11 +49,11 @@ async def _upsert_profile(user_id: str, body: ProfilePayload, enqueue_context: b
     update_data = {
         "full_name": body.full_name,
         "role": body.role,
-        "company_name": body.company_name,
         "company_url": body.company_url,
-        "product_name": body.product_name,
-        "product_description": body.product_description,
-        "use_case": body.use_case,
+        "onboarding_scrape_observations": body.onboarding_scrape_observations,
+        "onboarding_scrape_correction": body.onboarding_scrape_correction,
+        "current_focus": body.current_focus,
+        "daily_activities": body.daily_activities,
     }
 
     result = (

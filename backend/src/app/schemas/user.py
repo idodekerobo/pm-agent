@@ -18,6 +18,10 @@ class UserBase(BaseModel):
     product_name: Optional[str] = None
     product_description: Optional[str] = None
     use_case: Optional[str] = None
+    onboarding_scrape_observations: Optional[str] = None
+    onboarding_scrape_correction: Optional[str] = None
+    current_focus: Optional[list[str]] = None
+    daily_activities: Optional[list[str]] = None
 
 
 class UserCreate(UserBase):

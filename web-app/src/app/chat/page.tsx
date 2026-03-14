@@ -12,6 +12,7 @@ import ToolCallBlock from "@/components/ToolCallBlock";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabaseClient";
+import EmptyStateChat from "@/components/EmptyStateChat";
 
 interface Message {
   id: string;
@@ -134,15 +135,20 @@ function ChatPage() {
               if (prev.some((m) => m.id === id)) return prev;
               return [...prev, { id, role: "assistant" as const, content: text }];
             });
-            // Update last_message_at on the local session so the unread dot shows
-            // for other sessions (this session is already open so no dot needed here)
+            // Message is visible to the user — mark read locally and on the server
+            // so navigating away doesn't leave a stale unread dot.
+            const now = new Date().toISOString();
             setSessions((prev) =>
               prev.map((s) =>
                 s.id === activeSessionId
-                  ? { ...s, last_message_at: new Date().toISOString() }
+                  ? { ...s, last_message_at: now, last_read_at: now }
                   : s
               )
             );
+            fetch(`${apiBaseUrl}/sessions/${activeSessionId}/read`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${getToken()}` },
+            }).catch(() => {});
           }
         }
       )
@@ -831,27 +837,22 @@ function ChatPage() {
         <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-6 py-8">
           <div className="mx-auto max-w-2xl space-y-6">
             {messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-center">
-                <div>
-                  {activeSession?.initiated_by === "agent" ? (
-                    <>
-                      <p className="text-lg text-zinc-600">Your agent is preparing a welcome...</p>
-                      <p className="mt-2 text-sm text-zinc-400">
-                        It&apos;s reviewing your profile and will be right with you.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-lg text-zinc-600">
-                        Start a conversation with your Product Manager Agent
-                      </p>
-                      <p className="mt-2 text-sm text-zinc-400">
-                        Ask questions about product strategy, market analysis, or feature prioritization
-                      </p>
-                    </>
-                  )}
+              activeSession?.initiated_by === "agent" ? (
+                <div className="flex h-full items-center justify-center text-center">
+                  <div>
+                    <p className="text-lg text-zinc-600">Your agent is preparing a welcome...</p>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      It&apos;s reviewing your profile and will be right with you.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <EmptyStateChat
+                  onPromptSelect={(p) => setInput(p)}
+                  token={getToken()}
+                  userId={session?.user?.id ?? ''}
+                />
+              )
             ) : (
               renderItems.map((item) => {
                 if (item.type === "tool_pair") {

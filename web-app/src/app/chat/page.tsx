@@ -847,11 +847,7 @@ function ChatPage() {
                   </div>
                 </div>
               ) : (
-                <EmptyStateChat
-                  onPromptSelect={(p) => setInput(p)}
-                  token={getToken()}
-                  userId={session?.user?.id ?? ''}
-                />
+                <EmptyStateChat onPromptSelect={(p) => setInput(p)} />
               )
             ) : (
               renderItems.map((item) => {

@@ -43,6 +43,23 @@ def append_conversation_item(
     )
     return response.data[0]["id"]
 
+def batch_append_conversation_items(
+    supabase: Client,
+    *,
+    agent_session_id: str,
+    items: list[dict],
+    source_platform: str = "web",
+) -> None:
+    """Insert multiple conversation items in a single DB round trip."""
+    if not items:
+        return
+    payload = [
+        {"agent_session_id": agent_session_id, "item": item, "source_platform": source_platform}
+        for item in items
+    ]
+    supabase.table("conversation_items").insert(payload).execute()
+
+
 def get_conversation_items(
     supabase: Client,
     *,

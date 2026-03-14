@@ -225,3 +225,8 @@ async def run_demo_agent(
 
     if full_text:
         yield {"type": "final_output", "content": full_text}
+
+    try:
+        yield {"type": "_store_items", "items": result.to_input_list()}
+    except Exception:
+        pass

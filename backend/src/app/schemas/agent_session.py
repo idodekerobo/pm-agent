@@ -16,6 +16,9 @@ class AgentSessionBase(BaseModel):
     session_start_platform: str = "web"
     external_thread_id: Optional[str] = None
     display_name: Optional[str] = None
+    is_pinned: bool = False
+    initiated_by: str = "user"
+    last_read_at: Optional[datetime] = None
 
 
 class AgentSessionCreate(AgentSessionBase):

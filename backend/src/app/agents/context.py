@@ -643,7 +643,7 @@ async def auto_name_session(
     """
     import asyncio
     from openai import AsyncOpenAI
-    from app.db.agent_sessions import update_session_display_name
+    from app.db.agent_sessions import update_session_fields
 
     try:
         client = AsyncOpenAI()
@@ -665,11 +665,11 @@ async def auto_name_session(
         name = response.choices[0].message.content.strip().strip('"').strip("'")
         if name:
             await asyncio.to_thread(
-                update_session_display_name,
+                update_session_fields,
                 supabase,
                 session_id=session_id,
                 user_id=user_id,
-                display_name=name,
+                fields={"display_name": name},
             )
             return name
     except Exception as e:

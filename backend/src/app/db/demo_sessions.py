@@ -56,6 +56,21 @@ def append_demo_items(supabase: Client, *, demo_token: str, items: list[dict]) -
     supabase.table("demo_sessions").update({"items": items}).eq("demo_token", demo_token).execute()
 
 
+def get_claimed_demo_for_user(supabase: Client, *, user_id: str) -> Optional[dict]:
+    """Return the most recently claimed demo session for a user, or None."""
+    result = (
+        supabase.table("demo_sessions")
+        .select("*")
+        .eq("claimed_user_id", user_id)
+        .eq("claimed", True)
+        .order("created_at", desc=True)
+        .limit(1)
+        .maybe_single()
+        .execute()
+    )
+    return result.data
+
+
 def claim_demo_session(supabase: Client, *, demo_token: str, user_id: str) -> Optional[dict]:
     """Mark a demo session as claimed by a user. Returns the updated row."""
     result = (

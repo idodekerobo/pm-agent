@@ -18,6 +18,7 @@ from app.api.routes.billing import router as billing_router
 from app.api.routes.user import router as user_router
 from app.api.routes.feedback import router as feedback_router
 from app.api.routes.demo import router as demo_router
+from app.api.routes.welcome import router as welcome_router
 from app.errors import log_error
 
 os.environ["OPENAI_API_KEY"] = settings.openai_api_key
@@ -79,3 +80,4 @@ app.include_router(billing_router)
 app.include_router(user_router)
 app.include_router(feedback_router)
 app.include_router(demo_router)
+app.include_router(welcome_router)

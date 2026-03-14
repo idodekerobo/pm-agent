@@ -103,29 +103,24 @@ async def demo_run(req: DemoRunRequest):
                 yield _sse({"type": "session_created", "demo_token": demo_token, "demo_session_id": demo_session_id})
                 await asyncio.sleep(0)  # flush
 
-            assistant_reply = ""
+            stored_items: list | None = None
             async for event in run_demo_agent(
                 url=req.url,
                 question=req.question,
                 history=req.history,
                 payload=payload,
             ):
+                # Intercept the private storage event — never forward to client
+                if event.get("type") == "_store_items":
+                    stored_items = event.get("items")
+                    continue
                 yield _sse(event)
                 await asyncio.sleep(0)
-                # Capture the final complete text (prefer final_output over accumulated deltas)
-                if event.get("type") == "final_output":
-                    assistant_reply = event.get("content", "")
-                elif event.get("type") == "message" and not assistant_reply:
-                    assistant_reply += event.get("content", "")
 
-            # Persist full conversation after stream completes
-            if assistant_reply:
-                full_items = list(req.history) + [
-                    {"role": "user", "content": req.question},
-                    {"role": "assistant", "content": assistant_reply},
-                ]
+            # Persist full conversation (including tool calls/outputs) after stream completes
+            if stored_items:
                 try:
-                    append_demo_items(supabase, demo_token=demo_token, items=full_items)
+                    append_demo_items(supabase, demo_token=demo_token, items=stored_items)
                 except Exception:
                     pass  # best-effort — don't fail the response
 

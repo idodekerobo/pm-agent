@@ -4,14 +4,15 @@ from pydantic import BaseModel
 from app.api.deps import auth_protect_route
 from app.db.supabase_client import get_supabase
 from app.db.projects import get_or_create_default_project
-from app.db.agent_sessions import create_agent_session, list_sessions_for_user, update_session_display_name, delete_session
+from app.db.agent_sessions import create_agent_session, list_sessions_for_user, update_session_fields, delete_session, mark_session_read
 from app.db.conversations import get_conversation_items
 
 router = APIRouter()
 
 
 class UpdateSessionRequest(BaseModel):
-    display_name: str
+    display_name: str | None = None
+    is_pinned: bool | None = None
 
 
 @router.post("/sessions")
@@ -56,11 +57,23 @@ def list_sessions(user_id: str = Depends(auth_protect_route)):
 
 
 @router.patch("/sessions/{session_id}")
-def rename_session(session_id: str, body: UpdateSessionRequest, user_id: str = Depends(auth_protect_route)):
+def update_session(session_id: str, body: UpdateSessionRequest, user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
-    ok = update_session_display_name(supabase, session_id=session_id, user_id=user_id, display_name=body.display_name)
+    ok = update_session_fields(
+        supabase,
+        session_id=session_id,
+        user_id=user_id,
+        fields=body.model_dump(exclude_none=True),
+    )
     if not ok:
         raise HTTPException(status_code=404, detail="Session not found")
+    return {"ok": True}
+
+
+@router.post("/sessions/{session_id}/read")
+def read_session(session_id: str, user_id: str = Depends(auth_protect_route)):
+    supabase = get_supabase()
+    mark_session_read(supabase, session_id=session_id, user_id=user_id)
     return {"ok": True}
 
 

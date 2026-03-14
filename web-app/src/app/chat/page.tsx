@@ -30,6 +30,10 @@ interface Session {
   id: string;
   created_at: string;
   display_name?: string | null;
+  is_pinned: boolean;
+  initiated_by: string;
+  last_read_at: string | null;
+  last_message_at: string;
 }
 
 function ChatPage() {
@@ -103,18 +107,43 @@ function ChatPage() {
           const row = payload.new as Record<string, unknown>;
           const item = row.item as Record<string, unknown> | undefined;
           console.log("[realtime] INSERT received — type:", item?.type, "status:", item?.code_task_status, "id:", row.id);
-          if (item?.type !== "code_task_update") return;
-          const content = item.content as Array<{ text?: string }> | undefined;
-          const text = content?.[0]?.text;
-          if (!text) return;
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `realtime-${row.id ?? Date.now()}`,
-              role: "assistant" as const,
-              content: text,
-            },
-          ]);
+          // Handle code task progress updates
+          if (item?.type === "code_task_update") {
+            const content = item.content as Array<{ text?: string }> | undefined;
+            const text = content?.[0]?.text;
+            if (!text) return;
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `realtime-${row.id ?? Date.now()}`,
+                role: "assistant" as const,
+                content: text,
+              },
+            ]);
+            return;
+          }
+
+          // Handle agent-initiated messages written by background tasks (e.g. welcome session)
+          if (item?.type === "message" && item?.role === "assistant") {
+            const content = item.content as Array<{ text?: string }> | undefined;
+            const text = content?.[0]?.text;
+            if (!text) return;
+            setMessages((prev) => {
+              // Avoid duplicates if the message is already in state
+              const id = `realtime-${row.id ?? Date.now()}`;
+              if (prev.some((m) => m.id === id)) return prev;
+              return [...prev, { id, role: "assistant" as const, content: text }];
+            });
+            // Update last_message_at on the local session so the unread dot shows
+            // for other sessions (this session is already open so no dot needed here)
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === activeSessionId
+                  ? { ...s, last_message_at: new Date().toISOString() }
+                  : s
+              )
+            );
+          }
         }
       )
       .subscribe();
@@ -244,6 +273,15 @@ function ChatPage() {
         setActiveSessionId(sessionId);
         setMessages(mapped);
         router.push(`/chat?s=${sessionId}`);
+        // Mark as read and update local session state so the unread dot clears
+        fetch(`${apiBaseUrl}/sessions/${sessionId}/read`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }).catch(() => {});
+        const now = new Date().toISOString();
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, last_read_at: now } : s))
+        );
       }
     } catch (e) {
       console.error("Failed to load session:", e);
@@ -271,6 +309,30 @@ function ChatPage() {
       }
     } catch (e) {
       console.error("Failed to rename session:", e);
+    }
+  };
+
+  const handleTogglePin = async (sessionId: string, currentlyPinned: boolean) => {
+    const newPinned = !currentlyPinned;
+    setSessions((prev) =>
+      prev
+        .map((s) => (s.id === sessionId ? { ...s, is_pinned: newPinned } : s))
+        .sort((a, b) => {
+          if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        })
+    );
+    try {
+      await fetch(`${apiBaseUrl}/sessions/${sessionId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ is_pinned: newPinned }),
+      });
+    } catch (e) {
+      console.error("Failed to toggle pin:", e);
     }
   };
 
@@ -477,6 +539,11 @@ function ChatPage() {
     })}`;
   };
 
+  const activeSession = useMemo(
+    () => sessions.find((s) => s.id === activeSessionId) ?? null,
+    [sessions, activeSessionId]
+  );
+
   const renderItems = useMemo((): RenderItem[] => {
     const items: RenderItem[] = [];
     const callIdToIndex = new Map<string, number>();
@@ -590,8 +657,18 @@ function ChatPage() {
                           : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
                       }`}
                     >
-                      <span className="block truncate pr-5 font-medium">
-                        {s.display_name ?? formatSessionTime(s.created_at)}
+                      <span className="flex items-center gap-1.5 pr-5">
+                        {s.is_pinned && (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-zinc-400">
+                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6h2v-6h5v-2l-2-2z"/>
+                          </svg>
+                        )}
+                        <span className="truncate font-medium">
+                          {s.display_name ?? formatSessionTime(s.created_at)}
+                        </span>
+                        {(!s.last_read_at || new Date(s.last_message_at) > new Date(s.last_read_at)) && s.id !== activeSessionId && (
+                          <span className="ml-auto shrink-0 h-2 w-2 rounded-full bg-rose-700" />
+                        )}
                       </span>
                       {s.display_name && (
                         <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
@@ -640,6 +717,15 @@ function ChatPage() {
                         className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100"
                       >
                         Rename
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          handleTogglePin(s.id, s.is_pinned);
+                        }}
+                        className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100"
+                      >
+                        {s.is_pinned ? "Unpin" : "Pin"}
                       </button>
                       <button
                         onClick={() => {
@@ -747,12 +833,23 @@ function ChatPage() {
             {messages.length === 0 ? (
               <div className="flex h-full items-center justify-center text-center">
                 <div>
-                  <p className="text-lg text-zinc-600">
-                    Start a conversation with your Product Manager Agent
-                  </p>
-                  <p className="mt-2 text-sm text-zinc-400">
-                    Ask questions about product strategy, market analysis, or feature prioritization
-                  </p>
+                  {activeSession?.initiated_by === "agent" ? (
+                    <>
+                      <p className="text-lg text-zinc-600">Your agent is preparing a welcome...</p>
+                      <p className="mt-2 text-sm text-zinc-400">
+                        It&apos;s reviewing your profile and will be right with you.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg text-zinc-600">
+                        Start a conversation with your Product Manager Agent
+                      </p>
+                      <p className="mt-2 text-sm text-zinc-400">
+                        Ask questions about product strategy, market analysis, or feature prioritization
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
             ) : (

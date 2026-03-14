@@ -30,16 +30,26 @@ router = APIRouter()
 MODEL_ID = "gpt-5.2"
 
 WELCOME_SYSTEM_PROMPT = """\
-You are Draft, an AI product manager. A new user just finished setting up their account.
-Your job is to write their first message — a warm, substantive opening that shows you already
-understand their product and have useful things to offer.
+You are Draft, an AI product manager. A new user just completed onboarding.
+Your job is to write their first message — the opening note they see when they land in the product.
 
 Rules:
-- Do NOT introduce yourself or say "Welcome" or "Hello". Start with something substantive.
-- Reference what you know about their product concretely.
-- Surface one sharp observation or insight about their situation.
-- End with ONE specific follow-up question that would help you work better for them.
-- Keep it under 180 words.
+- Do NOT say "Welcome", "Hello", or introduce yourself. Start with something grounded and specific.
+- Open by referencing their product or company concretely — one sentence that shows Draft already
+  knows their context.
+- In 2-3 sentences, explain what makes Draft different from a generic AI assistant:
+  * Draft builds persistent memory across sessions — it learns your product, team, and decisions
+    and gets more useful the more you use it.
+  * It connects to the tools you already use: Slack, Linear, Google Drive, Notion, GitHub, and more.
+  * It can write PRDs, decision docs, competitive research, and create issues — not just chat.
+  * If they have issues they can directly email the founder unlike other huge companies ;)
+- Tell them they can customize how their agent works: their Agent Files (in Settings → Agent Files)
+  include document templates and skills they can edit or expand — adding new templates, new
+  integrations, or custom instructions shapes how Draft works for their specific team.
+- If they had a prior demo conversation, mention it's saved in their sidebar so they can pick it up.
+- End with ONE sharp, specific question based on their stated use cases — something actionable,
+  not generic. Make it feel like the natural next step.
+- Keep it under 220 words.
 - Do not use any tools — you have all the context you need in this message.
 """
 
@@ -129,6 +139,38 @@ def _format_demo_transcript(items: list[dict]) -> str:
 # Background task
 # ---------------------------------------------------------------------------
 
+async def name_demo_session(
+    *,
+    user_id: str,
+    session_id: str,
+    demo_items: list[dict],
+) -> None:
+    """Extract the first user message from demo_items and auto-name the demo session."""
+    from app.agents.context import auto_name_session
+
+    first_user_text = ""
+    for item in demo_items:
+        if item.get("role") == "user":
+            content = item.get("content", "")
+            if isinstance(content, list):
+                first_user_text = " ".join(
+                    c.get("text", "") for c in content if isinstance(c, dict)
+                )
+            else:
+                first_user_text = str(content)
+            if first_user_text.strip():
+                break
+
+    if first_user_text.strip():
+        supabase = get_supabase()
+        await auto_name_session(
+            supabase,
+            user_id=user_id,
+            session_id=session_id,
+            prompt=first_user_text,
+        )
+
+
 async def generate_welcome_message(
     *,
     user_id: str,
@@ -151,8 +193,10 @@ async def generate_welcome_message(
         if transcript:
             url_hint = f" (URL: {company_url})" if company_url else ""
             context_parts += [
-                f"\n## Demo conversation context{url_hint}",
-                "The user had this conversation with Draft before signing up:",
+                f"\n## Prior demo conversation{url_hint}",
+                "Before signing up, the user had this conversation with Draft. "
+                "Use it for context — do NOT repeat or summarize it. "
+                "Reference that the conversation is saved in their sidebar.",
                 transcript,
             ]
 
@@ -233,6 +277,7 @@ async def create_welcome_session(
         workspace_id=workspace_id,
         is_pinned=True,
         initiated_by="agent",
+        display_name="Welcome to Draft AI",
     )
 
     # Convert demo session into a regular resumable session (if demo exists)
@@ -263,6 +308,15 @@ async def create_welcome_session(
         demo_items=demo_items,
         company_url=company_url,
     )
+
+    # Auto-name the demo session from its first user message
+    if demo_session_id and demo_items:
+        background_tasks.add_task(
+            name_demo_session,
+            user_id=user_id,
+            session_id=demo_session_id,
+            demo_items=demo_items,
+        )
 
     return WelcomeSessionResponse(
         welcome_session_id=welcome_session_id,

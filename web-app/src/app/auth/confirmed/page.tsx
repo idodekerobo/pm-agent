@@ -37,25 +37,25 @@ export default function ConfirmedPage() {
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token ?? '';
         const profile = parsed as {
-          fullName: string; role: string; companyName: string; companyUrl: string;
-          productName: string; productDescription: string; useCases: string[]; useCaseContext: string;
+          full_name: string;
+          role: string;
+          company_url: string;
+          onboarding_scrape_observations: string;
+          onboarding_scrape_correction: string;
+          current_focus: string;
+          daily_activities: string[];
         };
         await fetch(`${apiBase}/user/profile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
-            full_name: profile.fullName,
-            role: profile.role,
-            company_name: profile.companyName || null,
-            company_url: profile.companyUrl
-              ? `https://${profile.companyUrl.replace(/^https?:\/\//, '')}`
-              : null,
-            product_name: profile.productName || null,
-            product_description: profile.productDescription || null,
-            use_case: [
-              ...profile.useCases,
-              ...(profile.useCaseContext?.trim() ? [profile.useCaseContext.trim()] : []),
-            ].join(', ') || null,
+            full_name: profile.full_name || null,
+            role: profile.role || null,
+            company_url: profile.company_url || null,
+            onboarding_scrape_observations: profile.onboarding_scrape_observations || null,
+            onboarding_scrape_correction: profile.onboarding_scrape_correction || null,
+            current_focus: profile.current_focus || null,
+            daily_activities: profile.daily_activities?.length ? profile.daily_activities : null,
           }),
         });
       } finally {

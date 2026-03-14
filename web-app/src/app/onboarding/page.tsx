@@ -215,6 +215,7 @@ function OnboardingPageInner() {
   const [submitting, setSubmitting] = useState(false);
 
   // Step 5 — connect tools
+  const [finishing, setFinishing] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationStatus>({});
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [byokExpanded, setByokExpanded] = useState(false);
@@ -478,6 +479,8 @@ function OnboardingPageInner() {
   // ---------------------------------------------------------------------------
 
   const handleFinish = async () => {
+    if (finishing) return;
+    setFinishing(true);
     try {
       const accessToken = session?.access_token ?? '';
 
@@ -1268,9 +1271,20 @@ function OnboardingPageInner() {
             <button
               type="button"
               onClick={handleFinish}
-              className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
+              disabled={finishing}
+              className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:bg-zinc-400 disabled:cursor-not-allowed transition-colors"
             >
-              Finish Setup →
+              {finishing ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Setting up…
+                </span>
+              ) : (
+                'Finish Setup →'
+              )}
             </button>
           )}
         </div>

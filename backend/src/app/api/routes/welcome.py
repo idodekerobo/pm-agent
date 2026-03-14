@@ -71,12 +71,11 @@ Rules:
 class ProfileData(BaseModel):
     full_name: str = ""
     role: str = ""
-    company_name: str = ""
     company_url: str = ""
-    product_name: str = ""
-    product_description: str = ""
-    use_cases: list[str] = []
-    use_case_context: str = ""
+    onboarding_scrape_observations: str = ""
+    onboarding_scrape_correction: str = ""
+    current_focus: list[str] = []
+    daily_activities: list[str] = []
 
 
 class WelcomeSessionRequest(BaseModel):
@@ -98,18 +97,16 @@ def _format_profile(p: ProfileData) -> str:
         parts.append(f"Name: {p.full_name}")
     if p.role:
         parts.append(f"Role: {p.role}")
-    if p.company_name:
-        parts.append(f"Company: {p.company_name}")
     if p.company_url:
         parts.append(f"Company URL: {p.company_url}")
-    if p.product_name:
-        parts.append(f"Product: {p.product_name}")
-    if p.product_description:
-        parts.append(f"Product description: {p.product_description}")
-    if p.use_cases:
-        parts.append(f"Intended use cases: {', '.join(p.use_cases)}")
-    if p.use_case_context:
-        parts.append(f"Additional context: {p.use_case_context}")
+    if p.current_focus:
+        parts.append(f"Current focus: {', '.join(p.current_focus)}")
+    if p.daily_activities:
+        parts.append(f"Daily activities: {', '.join(p.daily_activities)}")
+    if p.onboarding_scrape_observations:
+        parts.append(f"Product observations:\n{p.onboarding_scrape_observations}")
+    if p.onboarding_scrape_correction:
+        parts.append(f"User correction to observations: {p.onboarding_scrape_correction}")
     return "\n".join(parts)
 
 

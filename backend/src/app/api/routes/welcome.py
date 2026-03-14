@@ -42,7 +42,6 @@ Rules:
     and gets more useful the more you use it.
   * It connects to the tools you already use: Slack, Linear, Google Drive, Notion, GitHub, and more.
   * It can write PRDs, decision docs, competitive research, and create issues — not just chat.
-  * If they have issues they can directly email the founder unlike other huge companies ;)
 - Tell them they can customize how their agent works: their Agent Files (in Settings → Agent Files)
   include document templates and skills they can edit or expand — adding new templates, new
   integrations, or custom instructions shapes how Draft works for their specific team.

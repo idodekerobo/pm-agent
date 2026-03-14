@@ -300,7 +300,33 @@ function OnboardingPageInner() {
     setStep((s) => (s - 1) as Step);
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    try {
+      const accessToken = session?.access_token ?? '';
+      const res = await fetch(`${apiBase}/welcome-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          profile: {
+            full_name: profile.fullName,
+            role: profile.role,
+            company_name: profile.companyName,
+            company_url: profile.companyUrl,
+            product_name: profile.productName,
+            product_description: profile.productDescription,
+            use_cases: profile.useCases,
+            use_case_context: profile.useCaseContext,
+          },
+        }),
+      });
+      if (res.ok) {
+        const { welcome_session_id } = await res.json();
+        router.push(`/chat?s=${welcome_session_id}`);
+        return;
+      }
+    } catch {
+      // TODO: log error
+    }
     router.push('/chat');
   };
 

@@ -48,6 +48,7 @@ function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sessionMetadata, setSessionMetadata] = useState<{ timezone: string; location?: string } | null>(null);
@@ -226,6 +227,8 @@ function ChatPage() {
     } catch (e) {
       console.error("Failed to fetch sessions:", e);
       logError(getToken, "Failed to fetch sessions", { action: "fetchSessions" });
+    } finally {
+      setSessionsLoaded(true);
     }
   };
 
@@ -837,7 +840,7 @@ function ChatPage() {
         <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-6 py-8">
           <div className="mx-auto max-w-2xl space-y-6">
             {messages.length === 0 ? (
-              activeSession?.initiated_by === "agent" ? (
+              !sessionsLoaded ? null : activeSession?.initiated_by === "agent" ? (
                 <div className="flex h-full items-center justify-center text-center">
                   <div>
                     <p className="text-lg text-zinc-600">Your agent is preparing a welcome...</p>

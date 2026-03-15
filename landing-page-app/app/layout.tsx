@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { PostHogProvider } from "@/lib/PostHogProvider";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -52,7 +53,9 @@ export default function RootLayout({
       <body
         className={`${fraunces.variable} ${jakarta.variable} ${jetbrains.variable} antialiased`}
       >
-        {children}
+        <PostHogProvider>
+          {children}
+        </PostHogProvider>
       </body>
     </html>
   );

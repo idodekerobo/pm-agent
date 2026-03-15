@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePostHog } from "posthog-js/react";
+import { EVENTS } from "@/lib/analytics";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
 const STORAGE_KEY = "draft_demo";
@@ -10,6 +12,9 @@ export default function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [onboardingUrl, setOnboardingUrl] = useState(`${APP_URL}/onboarding`);
+  const ph = usePostHog();
+  const getStartedCta = "Get started"
+  const signInCta = "Sign in"
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -115,6 +120,7 @@ export default function Nav() {
 
           <a
             href={`${APP_URL}/auth/sign-in`}
+            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav', cta_text: signInCta })}
             style={{
               fontFamily: "var(--font-body)",
               fontSize: "0.875rem",
@@ -130,11 +136,12 @@ export default function Nav() {
               ((e.target as HTMLElement).style.color = "var(--color-muted)")
             }
           >
-            Sign in
+            {signInCta}
           </a>
 
           <a
             href={onboardingUrl}
+            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav', cta_text: getStartedCta })}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -159,7 +166,7 @@ export default function Nav() {
               (e.target as HTMLElement).style.transform = "translateY(0)";
             }}
           >
-            Get started
+            {getStartedCta}
           </a>
         </div>
 
@@ -238,6 +245,7 @@ export default function Nav() {
           ))}
           <a
             href={onboardingUrl}
+            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav_mobile', cta_text: getStartedCta })}
             style={{
               display: "inline-block",
               padding: "0.75rem 1.5rem",
@@ -249,7 +257,7 @@ export default function Nav() {
               textAlign: "center",
             }}
           >
-            Get started
+            {getStartedCta}
           </a>
         </div>
       )}

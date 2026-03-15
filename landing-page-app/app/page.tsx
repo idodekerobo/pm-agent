@@ -6,10 +6,12 @@ import Features from "@/components/Features";
 import HowItWorks from "@/components/HowItWorks";
 import CTASection from "@/components/CTASection";
 import Footer from "@/components/Footer";
+import { SectionObserver } from "@/components/SectionObserver";
 
 export default function Home() {
   return (
     <main>
+      <SectionObserver />
       <Nav />
       <DemoHero />
       <LogoBar />

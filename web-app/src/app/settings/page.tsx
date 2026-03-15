@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { usePostHog } from 'posthog-js/react';
+import { EVENTS } from '@/lib/analytics';
 import { useProfileComplete } from '@/lib/useProfileComplete';
 import AgentFilesTab from './AgentFilesTab';
 import BillingTab from './BillingTab';
@@ -20,8 +22,10 @@ function SettingsContent() {
   const profileComplete = useProfileComplete();
   const activeTab: Tab = (searchParams.get('tab') as Tab) ?? 'profile';
   const [billingBanner, setBillingBanner] = useState<'success' | 'canceled' | null>(null);
+  const ph = usePostHog();
 
   const navigateToTab = (tab: Tab) => {
+    ph?.capture(EVENTS.SETTINGS_TAB_VIEWED, { tab });
     router.push(`/settings?tab=${tab}`);
   };
 

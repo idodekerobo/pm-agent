@@ -8,6 +8,8 @@ import { ROLES } from '@/lib/profileOptions';
 import { INTEGRATIONS } from '@/lib/integrations';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { usePostHog } from 'posthog-js/react';
+import { EVENTS } from '@/lib/analytics';
 
 // ---------------------------------------------------------------------------
 // Chip options
@@ -155,6 +157,15 @@ function OnboardingPageInner() {
   const router = useRouter();
   const { user, session, loading } = useAuth();
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const ph = usePostHog();
+
+  // Track onboarding started on mount
+  useEffect(() => {
+    ph?.capture(EVENTS.ONBOARDING_STARTED, {
+      has_demo_token: !!demoToken,
+      has_company_url: !!demoCompanyUrl,
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When demo token is present, auto-trigger scrape on mount
   useEffect(() => {
@@ -230,6 +241,7 @@ function OnboardingPageInner() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data.type === 'integration_success') {
+        ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: event.data.provider, source: 'onboarding' });
         setIntegrations((prev) => ({ ...prev, [event.data.provider]: true }));
         setConnectingProvider(null);
       }
@@ -303,9 +315,11 @@ function OnboardingPageInner() {
 
       if (scrapeObservationsRef.current.trim()) {
         setScrapeStatus('done');
+        ph?.capture(EVENTS.ONBOARDING_COMPANY_SCRAPED, { success: true });
       }
     } catch {
       setScrapeStatus('error');
+      ph?.capture(EVENTS.ONBOARDING_COMPANY_SCRAPED, { success: false });
     }
   };
 
@@ -325,15 +339,19 @@ function OnboardingPageInner() {
   // ---------------------------------------------------------------------------
 
   const toggleActivity = (chip: string) => {
-    setDailyActivities((prev) =>
-      prev.includes(chip) ? prev.filter((a) => a !== chip) : [...prev, chip]
-    );
+    setDailyActivities((prev) => {
+      const isAdding = !prev.includes(chip);
+      if (isAdding) ph?.capture(EVENTS.ONBOARDING_ACTIVITY_SELECTED, { activity: chip });
+      return isAdding ? [...prev, chip] : prev.filter((a) => a !== chip);
+    });
   };
 
   const toggleFocus = (chip: string) => {
-    setCurrentFocus((prev) =>
-      prev.includes(chip) ? prev.filter((f) => f !== chip) : [...prev, chip]
-    );
+    setCurrentFocus((prev) => {
+      const isAdding = !prev.includes(chip);
+      if (isAdding) ph?.capture(EVENTS.ONBOARDING_FOCUS_SELECTED, { focus: chip });
+      return isAdding ? [...prev, chip] : prev.filter((f) => f !== chip);
+    });
   };
 
   const addFocusCustom = () => {
@@ -388,6 +406,7 @@ function OnboardingPageInner() {
       });
 
       if (signUpError) throw signUpError;
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 4, step_name: 'sign_up' });
       localStorage.removeItem(DRAFT_KEY);
       setAwaitingConfirmation(true);
     } catch (e: unknown) {
@@ -406,6 +425,15 @@ function OnboardingPageInner() {
   const handleFinish = async () => {
     if (finishing) return;
     setFinishing(true);
+    const connectedProviders = Object.keys(integrations).filter((k) => integrations[k]);
+    if (connectedProviders.length === 0) {
+      ph?.capture(EVENTS.ONBOARDING_SKIPPED_INTEGRATIONS);
+    }
+    ph?.capture(EVENTS.ONBOARDING_COMPLETED, {
+      focus_areas: currentFocus,
+      activity_types: dailyActivities,
+      integrations_connected: connectedProviders,
+    });
     try {
       const accessToken = session?.access_token ?? '';
 
@@ -463,6 +491,7 @@ function OnboardingPageInner() {
 
   const handleConnect = (providerKey: string) => {
     if (!user?.id) return;
+    ph?.capture(EVENTS.INTEGRATION_CONNECT_CLICKED, { provider: providerKey, source: 'onboarding' });
     if (providerKey === 'claude-code') {
       setByokExpanded(true);
       setByokError('');
@@ -503,18 +532,29 @@ function OnboardingPageInner() {
 
   const canAdvanceStep1 = scrapeConfirmed || correctionSubmitted;
 
+  const STEP_NAMES: Record<number, string> = {
+    1: 'profile',
+    2: 'focus_areas',
+    3: 'role',
+    4: 'sign_up',
+    5: 'integrations',
+  };
+
   const handleNext = () => {
     setError('');
     if (step === 1) {
       if (!canAdvanceStep1) { setError('Please confirm or correct the product observations first.'); return; }
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 1, step_name: STEP_NAMES[1] });
       setStep(2);
     } else if (step === 2) {
       if (currentFocus.length === 0) { setError('Please select at least one focus area.'); return; }
       if (dailyActivities.length === 0) { setError('Please select at least one daily activity.'); return; }
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 2, step_name: STEP_NAMES[2] });
       setStep(3);
     } else if (step === 3) {
       if (!role) { setError('Please select your role.'); return; }
       if (role === 'Other' && !roleOther.trim()) { setError('Please describe your role.'); return; }
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 3, step_name: STEP_NAMES[3] });
       setStep(4);
     } else if (step === 4) {
       handleSignUp();

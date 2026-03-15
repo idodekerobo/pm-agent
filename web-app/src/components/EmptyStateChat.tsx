@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabaseClient';
 import { useIntegrations } from '@/lib/IntegrationsContext';
 import { useAuth } from '@/lib/AuthContext';
+import { usePostHog } from 'posthog-js/react';
+import { EVENTS } from '@/lib/analytics';
 
 interface EmptyStateChatProps {
   onPromptSelect: (prompt: string) => void;
@@ -42,20 +44,25 @@ const PROMPT_MAP = {
   ],
 };
 
-function getPrompts(hasGitHub: boolean, hasNotion: boolean, useCase: string): string[] {
-  if (hasGitHub && hasNotion) return PROMPT_MAP.both;
-  if (hasGitHub) return PROMPT_MAP.github;
-  if (hasNotion) return PROMPT_MAP.notion;
+type PromptSet = 'both' | 'github' | 'notion' | 'technicalDefault' | 'default';
+
+function getPrompts(hasGitHub: boolean, hasNotion: boolean, useCase: string): { prompts: string[]; promptSet: PromptSet } {
+  if (hasGitHub && hasNotion) return { prompts: PROMPT_MAP.both, promptSet: 'both' };
+  if (hasGitHub) return { prompts: PROMPT_MAP.github, promptSet: 'github' };
+  if (hasNotion) return { prompts: PROMPT_MAP.notion, promptSet: 'notion' };
   const isTechnical = ['Technical planning', 'Manage backlog & issues'].some((o) =>
     useCase.includes(o)
   );
-  return isTechnical ? PROMPT_MAP.technicalDefault : PROMPT_MAP.default;
+  return isTechnical
+    ? { prompts: PROMPT_MAP.technicalDefault, promptSet: 'technicalDefault' }
+    : { prompts: PROMPT_MAP.default, promptSet: 'default' };
 }
 
 export default function EmptyStateChat({ onPromptSelect }: EmptyStateChatProps) {
   const { integrations, loading: integrationsLoading } = useIntegrations();
   const { user } = useAuth();
   const [useCase, setUseCase] = useState('');
+  const ph = usePostHog();
 
   useEffect(() => {
     if (!user?.id) return;
@@ -70,7 +77,7 @@ export default function EmptyStateChat({ onPromptSelect }: EmptyStateChatProps) 
   const providers = integrations.map((i) => i.provider);
   const hasGitHub = providers.includes('github');
   const hasNotion = providers.includes('notion');
-  const prompts = getPrompts(hasGitHub, hasNotion, useCase);
+  const { prompts, promptSet } = getPrompts(hasGitHub, hasNotion, useCase);
 
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
@@ -87,7 +94,10 @@ export default function EmptyStateChat({ onPromptSelect }: EmptyStateChatProps) 
             {prompts.map((prompt) => (
               <button
                 key={prompt}
-                onClick={() => onPromptSelect(prompt)}
+                onClick={() => {
+                  ph?.capture(EVENTS.EMPTY_STATE_PROMPT_CLICKED, { prompt_text: prompt, prompt_set: promptSet });
+                  onPromptSelect(prompt);
+                }}
                 className="rounded-lg border border-zinc-200 bg-white px-4 py-3 text-left text-sm text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50"
               >
                 {prompt}

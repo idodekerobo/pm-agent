@@ -6,6 +6,7 @@ verified the Slack signature and ACK'd the 200 response.
 
 import re
 
+from app.analytics import capture as analytics_capture, Events
 from app.config import settings
 from app.messaging.slack.client import (
     add_reaction,
@@ -93,6 +94,11 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         raw_channel, raw_thread, bot_user_id, exclude_ts=ts
     )
 
+    analytics_capture(
+        str(installation.user_id),
+        Events.SLACK_AGENT_MENTIONED,
+        {"team_id": installation.slack_team_id, "channel_id": channel, "has_thread": is_in_thread},
+    )
     await _run_agent_for_message(
         channel=channel,
         ts=ts,
@@ -124,6 +130,11 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
     if not prompt_text:
         return
 
+    analytics_capture(
+        str(installation.user_id),
+        Events.SLACK_AGENT_DM,
+        {"team_id": installation.slack_team_id},
+    )
     await _run_agent_for_message(
         channel=channel,
         ts=ts,
@@ -167,6 +178,11 @@ async def handle_member_joined_channel(event: dict, installation: SlackInstallat
         channel_id=channel_id,
         channel_name=channel_name,
     )
+    analytics_capture(
+        str(installation.user_id),
+        Events.SLACK_CHANNEL_ADDED,
+        {"team_id": installation.slack_team_id, "channel_id": channel_id},
+    )
     print(f"[slack] bot joined channel {channel_id!r} ({channel_name!r}) — registered in DB", flush=True)
 
 
@@ -195,6 +211,11 @@ def _handle_revocation(event_payload: dict, installation: SlackInstallation) -> 
     event_type = event_payload.get("event", {}).get("type")
     supabase = get_supabase()
     supabase.table("slack_installations").delete().eq("id", str(installation.id)).execute()
+    analytics_capture(
+        str(installation.user_id),
+        Events.SLACK_APP_UNINSTALLED,
+        {"team_id": installation.slack_team_id},
+    )
     print(f"[slack] installation {installation.id} removed — reason: {event_type!r}", flush=True)
 
 
@@ -404,6 +425,19 @@ async def _run_agent_for_message(
                 except Exception as e:
                     await log_error(user_id, "billing", e, context={"session_id": payload.agent_session_id})
 
+        analytics_capture(
+            user_id,
+            Events.SLACK_AGENT_RUN_COMPLETED,
+            {"event_type": "mention" if is_mention else "dm"},
+        )
+
+    except Exception as exc:
+        analytics_capture(
+            user_id,
+            Events.SLACK_AGENT_RUN_FAILED,
+            {"event_type": "mention" if is_mention else "dm", "error_type": type(exc).__name__},
+        )
+        raise
     finally:
         if workspace_id_to_reset:
             set_workspace_agent_run_status(supabase, workspace_id=workspace_id_to_reset, status="idle")

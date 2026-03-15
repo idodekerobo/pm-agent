@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePostHog } from "posthog-js/react";
+import { EVENTS } from "@/lib/analytics";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
 const STORAGE_KEY = "draft_demo";
@@ -22,6 +24,8 @@ const BULLETS = [
 
 export default function DemoHeroLeft() {
   const [onboardingUrl, setOnboardingUrl] = useState(`${APP_URL}/onboarding`);
+  const ph = usePostHog();
+  const ctaText = "Start building free"
 
   useEffect(() => {
     try {
@@ -169,6 +173,7 @@ export default function DemoHeroLeft() {
       >
         <a
           href={onboardingUrl}
+          onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'hero', cta_text: ctaText })}
           style={{
             display: "inline-flex",
             alignItems: "center",
@@ -197,7 +202,7 @@ export default function DemoHeroLeft() {
             el.style.boxShadow = "none";
           }}
         >
-          Start building free
+          {ctaText}
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <path
               d="M3 8h10M9 4l4 4-4 4"

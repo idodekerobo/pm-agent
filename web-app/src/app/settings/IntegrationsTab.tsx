@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { INTEGRATIONS } from '@/lib/integrations';
+import { usePostHog } from 'posthog-js/react';
+import { EVENTS } from '@/lib/analytics';
 
 interface Integration {
   provider: string;
@@ -36,6 +38,7 @@ function ProviderIcon({ provider }: { provider: string }) {
 export default function IntegrationsTab() {
   const { user, session } = useAuth();
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const ph = usePostHog();
 
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,18 @@ export default function IntegrationsTab() {
     if (user) fetchIntegrations();
   }, [user, fetchIntegrations]);
 
+  // Listen for OAuth popup success messages
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'integration_success') {
+        ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: event.data.provider, source: 'settings' });
+        fetchIntegrations();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [ph, fetchIntegrations]);
+
   const handleDisconnect = async (provider: string) => {
     setDisconnecting((p) => ({ ...p, [provider]: true }));
     try {
@@ -77,6 +92,7 @@ export default function IntegrationsTab() {
       });
       if (!res.ok) throw new Error();
       setIntegrations((p) => p.filter((i) => i.provider !== provider));
+      ph?.capture(EVENTS.INTEGRATION_DISCONNECTED, { provider });
       if (INTEGRATION_META[provider]?.requiresManualRevoke) setNotionRevokeNotice(true);
     } catch {
       /* TODO: show error toast */
@@ -87,6 +103,7 @@ export default function IntegrationsTab() {
 
   const handleConnect = (provider: string) => {
     if (!user) return;
+    ph?.capture(EVENTS.INTEGRATION_CONNECT_CLICKED, { provider, source: 'settings' });
     if (provider === 'claude-code') {
       setByokExpanded(true);
       setByokError(null);
@@ -114,6 +131,7 @@ export default function IntegrationsTab() {
         ...prev.filter((i) => i.provider !== 'claude-code'),
         { provider: 'claude-code', account_label: 'Claude Code Enabled', scopes: [], created_at: new Date().toISOString() },
       ]);
+      ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: 'claude-code', source: 'settings' });
       setByokExpanded(false);
       setByokToken('');
     } catch {

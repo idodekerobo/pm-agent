@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/AuthContext";
 import { BillingProvider } from "@/lib/BillingContext";
 import { IntegrationsProvider } from "@/lib/IntegrationsContext";
+import { PostHogProvider, PostHogUserSync } from "@/lib/PostHogProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -44,13 +45,16 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <BillingProvider>
-            <IntegrationsProvider>
-              {children}
-            </IntegrationsProvider>
-          </BillingProvider>
-        </AuthProvider>
+        <PostHogProvider>
+          <AuthProvider>
+            <PostHogUserSync />
+            <BillingProvider>
+              <IntegrationsProvider>
+                {children}
+              </IntegrationsProvider>
+            </BillingProvider>
+          </AuthProvider>
+        </PostHogProvider>
       </body>
     </html>
   );

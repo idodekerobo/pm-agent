@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { usePostHog } from 'posthog-js/react';
+import { EVENTS } from '@/lib/analytics';
 import { useProfileComplete } from '@/lib/useProfileComplete';
 import AgentFilesTab from './AgentFilesTab';
 import BillingTab from './BillingTab';
@@ -20,6 +22,12 @@ function SettingsContent() {
   const profileComplete = useProfileComplete();
   const activeTab: Tab = (searchParams.get('tab') as Tab) ?? 'profile';
   const [billingBanner, setBillingBanner] = useState<'success' | 'canceled' | null>(null);
+  const ph = usePostHog();
+
+  const navigateToTab = (tab: Tab) => {
+    ph?.capture(EVENTS.SETTINGS_TAB_VIEWED, { tab });
+    router.push(`/settings?tab=${tab}`);
+  };
 
   // Read ?billing= query param on mount, show banner, then clear the URL
   useEffect(() => {
@@ -103,7 +111,7 @@ function SettingsContent() {
             </p>
             <nav className="flex flex-col gap-1">
               <button
-                onClick={() => router.push('/settings?tab=profile')}
+                onClick={() => navigateToTab('profile')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'profile'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -117,7 +125,7 @@ function SettingsContent() {
                 Profile
               </button>
               <button
-                onClick={() => router.push('/settings?tab=integrations')}
+                onClick={() => navigateToTab('integrations')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'integrations'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -133,7 +141,7 @@ function SettingsContent() {
                 Integrations
               </button>
               <button
-                onClick={() => router.push('/settings?tab=agent-files')}
+                onClick={() => navigateToTab('agent-files')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'agent-files'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -146,7 +154,7 @@ function SettingsContent() {
                 Agent Files
               </button>
               <button
-                onClick={() => router.push('/settings?tab=billing')}
+                onClick={() => navigateToTab('billing')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'billing'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
@@ -160,7 +168,7 @@ function SettingsContent() {
                 Billing
               </button>
               <button
-                onClick={() => router.push('/settings?tab=feedback')}
+                onClick={() => navigateToTab('feedback')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'feedback'
                     ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'

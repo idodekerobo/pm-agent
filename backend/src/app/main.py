@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -6,6 +7,7 @@ from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 from app.config import settings
+from app.analytics import shutdown as analytics_shutdown
 from app.api.routes.health import router as health_router
 from app.api.routes.run import router as run_router
 from app.api.routes.integrations import router as integrations_router
@@ -26,7 +28,13 @@ os.environ["OPENAI_API_KEY"] = settings.openai_api_key
 import stripe
 stripe.api_key = settings.stripe_secret_key
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    analytics_shutdown()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
+import { usePostHog } from "posthog-js/react";
+import { EVENTS } from "@/lib/analytics";
 import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
 import FeedbackModal from "@/components/FeedbackModal";
@@ -63,6 +65,7 @@ function ChatPage() {
   const renameInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const ph = usePostHog();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const getToken = () => session?.access_token ?? "";
 
@@ -239,6 +242,7 @@ function ChatPage() {
   };
 
   const loadSession = async (sessionId: string) => {
+    ph?.capture(EVENTS.SESSION_OPENED, { session_id: sessionId });
     try {
       const res = await fetch(`${apiBaseUrl}/sessions/${sessionId}/messages`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -312,6 +316,7 @@ function ChatPage() {
         body: JSON.stringify({ display_name: trimmed }),
       });
       if (res.ok) {
+        ph?.capture(EVENTS.SESSION_RENAMED, { session_id: sessionId });
         setSessions((prev) =>
           prev.map((s) => (s.id === sessionId ? { ...s, display_name: trimmed } : s))
         );
@@ -323,6 +328,7 @@ function ChatPage() {
 
   const handleTogglePin = async (sessionId: string, currentlyPinned: boolean) => {
     const newPinned = !currentlyPinned;
+    ph?.capture(newPinned ? EVENTS.SESSION_PINNED : EVENTS.SESSION_UNPINNED, { session_id: sessionId });
     setSessions((prev) =>
       prev
         .map((s) => (s.id === sessionId ? { ...s, is_pinned: newPinned } : s))
@@ -353,6 +359,7 @@ function ChatPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) {
+        ph?.capture(EVENTS.SESSION_DELETED, { session_id: sessionId });
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
         if (activeSessionId === sessionId) {
           setActiveSessionId(null);
@@ -374,6 +381,7 @@ function ChatPage() {
   };
 
   const handleUpgrade = async () => {
+    ph?.capture(EVENTS.UPGRADE_CLICKED, { trigger: 'banner' });
     try {
       const res = await fetch(`${apiBaseUrl}/billing/checkout`, {
         method: "POST",
@@ -411,9 +419,16 @@ function ChatPage() {
       content: input,
     };
 
+    ph?.capture(EVENTS.AGENT_RUN_STARTED, {
+      session_id: activeSessionId,
+      is_new_session: !activeSessionId,
+      message_length: input.length,
+    });
+
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    let toolCallsCount = 0;
 
     try {
       const body: Record<string, unknown> = { prompt: input };
@@ -430,6 +445,7 @@ function ChatPage() {
       });
 
       if (response.status === 402) {
+        ph?.capture(EVENTS.UPGRADE_PROMPTED, { trigger: 'agent_run' });
         setShowUpgradeBanner(true);
         return;
       }
@@ -459,9 +475,11 @@ function ChatPage() {
             const eventData = JSON.parse(trimmedLine.slice(6));
 
             if (eventData.type === "session_created") {
+              ph?.capture(EVENTS.SESSION_CREATED, { session_id: eventData.agent_session_id });
               setActiveSessionId(eventData.agent_session_id);
               fetchSessions();
             } else if (eventData.type === "tool_call") {
+              toolCallsCount++;
               setMessages((prev) => [
                 ...prev,
                 {
@@ -520,9 +538,17 @@ function ChatPage() {
           }
         }
       }
+      ph?.capture(EVENTS.AGENT_RUN_COMPLETED, {
+        session_id: activeSessionId,
+        tool_calls_count: toolCallsCount,
+      });
       refetchBilling();
     } catch (error) {
       console.error("Error sending message:", error);
+      ph?.capture(EVENTS.AGENT_RUN_FAILED, {
+        session_id: activeSessionId,
+        error_type: error instanceof Error ? error.message : 'unknown',
+      });
       logError(getToken, error instanceof Error ? error.message : "Error sending message", {
         action: "sendMessage",
         session_id: activeSessionId,

@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { usePostHog } from "posthog-js/react";
+import { EVENTS } from "@/lib/analytics";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.draftai.us";
 const API_BASE =
@@ -118,6 +120,7 @@ export default function LiveDemo() {
   const unmountedRef = useRef(false);
   const scrollBodyRef = useRef<HTMLDivElement>(null);
   const isUserScrolledRef = useRef(false);
+  const ph = usePostHog();
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -209,6 +212,7 @@ export default function LiveDemo() {
       if (evt.type === "session_created" && evt.demo_token) {
         resolvedToken = evt.demo_token;
         setDemoToken(resolvedToken);
+        ph?.capture(EVENTS.DEMO_TOKEN_GENERATED);
         const params = new URLSearchParams({ demo_token: resolvedToken });
         if (url) params.set("company_url", url);
         setSignupUrl(`${APP_URL}/onboarding?${params.toString()}`);
@@ -261,6 +265,7 @@ export default function LiveDemo() {
     const question = questionInput.trim();
     if (!question) return;
 
+    ph?.capture(EVENTS.DEMO_STARTED, { question });
     setPhase("streaming");
     setMessages([]);
     setUserTurns(0);
@@ -1110,6 +1115,7 @@ export default function LiveDemo() {
 
             <a
               href={signupUrl}
+              onClick={() => ph?.capture(EVENTS.DEMO_TO_ONBOARDING, { has_company_url: !!demoUrl, has_demo_token: !!demoToken })}
               style={{
                 display: "flex",
                 alignItems: "center",

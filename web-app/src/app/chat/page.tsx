@@ -136,7 +136,7 @@ function ChatPage() {
             setMessages((prev) => [
               ...prev,
               {
-                id: `realtime-${row.id ?? Date.now()}`,
+                id: `${row.id ?? Date.now()}`,
                 role: "assistant" as const,
                 content: text,
               },
@@ -150,8 +150,9 @@ function ChatPage() {
             const text = content?.[0]?.text;
             if (!text) return;
             setMessages((prev) => {
-              // Avoid duplicates if the message is already in state
-              const id = `realtime-${row.id ?? Date.now()}`;
+              // Avoid duplicates — SSE path re-keys its message to the DB row ID
+              // via the item_created event, so this check catches both paths.
+              const id = `${row.id ?? Date.now()}`;
               if (prev.some((m) => m.id === id)) return prev;
               return [...prev, { id, role: "assistant" as const, content: text }];
             });
@@ -621,6 +622,17 @@ function ChatPage() {
                     m.id === targetId ? { ...m, content: snapshot } : m
                   )
                 );
+              }
+            } else if (eventData.type === "item_created" && eventData.role === "assistant") {
+              // Re-key the in-flight message to its DB row ID so the Realtime
+              // dedup check can find it and skip the duplicate.
+              const dbId = eventData.id as string;
+              const targetId = currentAssistantId;
+              if (targetId && dbId) {
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === targetId ? { ...m, id: dbId } : m))
+                );
+                currentAssistantId = dbId;
               }
             } else if (eventData.type === "error") {
               setMessages((prev) => [

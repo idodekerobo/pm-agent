@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { INTEGRATIONS } from '@/lib/integrations';
 
 interface Integration {
   provider: string;
@@ -10,16 +11,8 @@ interface Integration {
   created_at: string;
 }
 
-const INTEGRATION_META: Record<string, { name: string; description: string; color: string; abbr: string; requiresManualRevoke?: boolean; note?: string; isByok?: boolean; comingSoon?: boolean }> = {
-  github:       { name: 'GitHub',       description: 'Repos, issues & pull requests',        color: '#24292F', abbr: 'GH' },
-  linear:       { name: 'Linear',       description: 'Issue tracking & project management',   color: '#5E6AD2', abbr: 'LN' },
-  google:       { name: 'Google Drive', description: 'Write docs & sheets, and sync your knowledge base',         color: '#34A853', abbr: 'GD', comingSoon: true },
-  notion:       { name: 'Notion',       description: 'Docs, databases & sync your knowledge base',          color: '#191919', abbr: 'NT', requiresManualRevoke: true },
-  slack:        { name: 'Slack',        description: 'Team messaging & channel alerts',        color: '#E01E5A', abbr: 'SL', note: 'After connecting, invite the agent to any Slack channels you want it active in.' },
-  'claude-code': { name: 'Claude Code', description: 'AI coding assistant via your Anthropic API key', color: '#D97756', abbr: 'CC', isByok: true },
-};
-
-const ALL_PROVIDERS = ['github', 'linear', 'google', 'notion', 'slack', 'claude-code'];
+const INTEGRATION_META = Object.fromEntries(INTEGRATIONS.map((i) => [i.key, i]));
+const ALL_PROVIDERS = INTEGRATIONS.map((i) => i.key);
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -301,7 +294,7 @@ export default function IntegrationsTab() {
                           <ProviderIcon provider={provider} />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-zinc-800">{meta.name}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">{meta.description}</p>
+                            <p className="mt-0.5 text-xs text-zinc-400">{meta.settingsDescription}</p>
                             {meta.note && (
                               <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
                             )}

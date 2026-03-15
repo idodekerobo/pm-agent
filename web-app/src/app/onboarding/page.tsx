@@ -5,84 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { createClient } from '@/lib/supabaseClient';
 import { ROLES } from '@/lib/profileOptions';
+import { INTEGRATIONS } from '@/lib/integrations';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-
-// ---------------------------------------------------------------------------
-// Integrations config
-// ---------------------------------------------------------------------------
-
-const INTEGRATIONS = [
-  {
-    key: 'github',
-    name: 'GitHub',
-    abbr: 'GH',
-    color: '#24292F',
-    value: 'Open PRs, create issues, and sync your codebase directly from chat.',
-  },
-  {
-    key: 'slack',
-    name: 'Slack',
-    abbr: 'SL',
-    color: '#E01E5A',
-    value: 'Get updates and trigger tasks from Slack. Your agent meets your team where they already work.',
-    note: 'After connecting, invite the agent to any Slack channels you want it active in.',
-  },
-  {
-    key: 'notion',
-    name: 'Notion',
-    abbr: 'NT',
-    color: '#191919',
-    value: 'Read and write your knowledge base. Sync docs and database context automatically.',
-  },
-  {
-    key: 'google',
-    name: 'Google Drive',
-    abbr: 'GD',
-    color: '#34A853',
-    value: 'Write Docs and Sheets directly. Your agent can use Drive as a live knowledge base.',
-    comingSoon: true,
-  },
-  {
-    key: 'linear',
-    name: 'Linear',
-    abbr: 'LN',
-    color: '#5E6AD2',
-    value: 'Create and triage issues automatically. Manage your full backlog and sprint cycles from chat.',
-  },
-  {
-    key: 'claude-code',
-    name: 'Claude Code',
-    abbr: 'CC',
-    color: '#D97756',
-    value: 'Use your own Anthropic API key to power your agent with AI coding capabilities.',
-    isByok: true,
-  },
-  {
-    key: 'figma',
-    name: 'Figma',
-    abbr: 'FG',
-    color: '#F24E1E',
-    value: 'Reference and annotate design files directly in your specs and PRDs.',
-    comingSoon: true,
-  },
-  {
-    key: 'posthog',
-    name: 'PostHog',
-    abbr: 'PH',
-    color: '#FF5A31',
-    value: 'Pull product analytics and user behavior into your planning context automatically.',
-    comingSoon: true,
-  },
-  {
-    key: 'jira',
-    name: 'Jira',
-    abbr: 'JR',
-    color: '#0052CC',
-    value: 'Sync issues and epics. Your agent can create and update Jira tickets from a spec.',
-    comingSoon: true,
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Chip options
@@ -1132,7 +1057,7 @@ function OnboardingPageInner() {
                           <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700">Connected</span>
                         )}
                       </div>
-                      <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{integration.value}</p>
+                      <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{integration.onboardingDescription}</p>
                       {'note' in integration && integration.note && (
                         <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{integration.note}</p>
                       )}

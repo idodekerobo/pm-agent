@@ -1,8 +1,11 @@
 from supabase import Client
 
 
-def make_user_item(text: str) -> dict:
-    return {"type": "message", "role": "user", "content": [{"type": "input_text", "text": text}]}
+def make_user_item(text: str, image_urls: list[str] | None = None) -> dict:
+    content: list[dict] = [{"type": "input_text", "text": text}]
+    for url in (image_urls or []):
+        content.append({"type": "input_image", "image_url": url})
+    return {"type": "message", "role": "user", "content": content}
 
 
 def make_assistant_item(text: str) -> dict:

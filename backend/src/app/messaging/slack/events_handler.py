@@ -24,6 +24,10 @@ _MAX_THREAD_MESSAGES = 30
 _VERBATIM_THREAD_TAIL = 20
 _CHANNEL_HISTORY_LIMIT = 30
 
+# Supported image MIME types for Slack file attachments
+# TODO: expand to support files from slack as well
+_SUPPORTED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
 
 # ---------------------------------------------------------------------------
 # Dispatcher
@@ -71,6 +75,7 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
     full thread history and merges it (deduplicating by ts so the thread parent
     doesn't appear twice). Both are passed to the orchestrator as input_items.
     """
+    print("hitting app mention function")
     bot_token = installation.bot_token
     bot_user_id = installation.slack_bot_user_id
     channel = event["channel"]
@@ -94,6 +99,10 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         raw_channel, raw_thread, bot_user_id, exclude_ts=ts
     )
 
+    image_urls = await _extract_image_urls(
+        bot_token, event.get("files", []), str(installation.user_id)
+    )
+
     analytics_capture(
         str(installation.user_id),
         Events.SLACK_AGENT_MENTIONED,
@@ -109,6 +118,7 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         context_history=context_history,
         installation=installation,
         slack_user_id=event["user"],
+        image_urls=image_urls or None,
     )
 
 
@@ -127,7 +137,12 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         return
 
     prompt_text = event.get("text", "").strip()
-    if not prompt_text:
+    image_urls = await _extract_image_urls(
+        bot_token, event.get("files", []), str(installation.user_id)
+    )
+
+    # Allow image-only messages; skip only if truly empty
+    if not prompt_text and not image_urls:
         return
 
     analytics_capture(
@@ -145,6 +160,7 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         context_history=None,
         installation=installation,
         slack_user_id=event["user"],
+        image_urls=image_urls or None,
     )
 
 
@@ -234,6 +250,7 @@ async def _run_agent_for_message(
     context_history: list[dict] | None,
     installation: SlackInstallation,
     slack_user_id: str,
+    image_urls: list[str] | None = None,
 ) -> None:
     """Core orchestrator flow shared by handle_app_mention and handle_im_message.
 
@@ -335,7 +352,7 @@ async def _run_agent_for_message(
         workspace_id_to_reset = str(payload.workspace_id)
         set_workspace_agent_run_status(supabase, workspace_id=workspace_id_to_reset, status="running")
 
-        user_item = make_user_item(prompt_text)
+        user_item = make_user_item(prompt_text, image_urls)
 
         # Fetch user timezone — cheap call, gives always-current time in user's tz
         user_info: dict = {}
@@ -442,6 +459,42 @@ async def _run_agent_for_message(
         if workspace_id_to_reset:
             set_workspace_agent_run_status(supabase, workspace_id=workspace_id_to_reset, status="idle")
         await remove_reaction(bot_token, channel, ts, "hourglass_flowing_sand")
+
+
+async def _extract_image_urls(
+    bot_token: str,
+    files: list[dict],
+    user_id: str,
+    session_id: str | None = None,
+) -> list[str]:
+    """Download supported image files from Slack and re-host them in Supabase Storage.
+
+    Returns a list of public URLs suitable for passing to the LLM as input_image items.
+    Non-image files and download failures are silently skipped (non-fatal).
+    """
+    from app.messaging.slack.client import download_file
+    from app.storage.attachments import upload_attachment
+
+    urls: list[str] = []
+    for f in files:
+        if f.get("mimetype") not in _SUPPORTED_IMAGE_MIME_TYPES:
+            continue
+        try:
+            file_url = f.get("url_private_download") or f.get("url_private")
+            if not file_url:
+                continue
+            data = await download_file(bot_token, file_url)
+            url = upload_attachment(
+                user_id=user_id,
+                data=data,
+                filename=f.get("name", "image.jpg"),
+                content_type=f["mimetype"],
+                session_id=session_id,
+            )
+            urls.append(url)
+        except Exception as exc:
+            print(f"[slack] failed to process image attachment {f.get('id')!r}: {exc}", flush=True)
+    return urls
 
 
 def _strip_bot_mention(text: str, bot_user_id: str) -> str:

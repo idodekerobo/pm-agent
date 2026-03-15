@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     github_client_secret: str = ""
     github_webhook_secret: str = ""
 
+    # Analytics
+    posthog_api_key: str = ""
+    posthog_host: str = ""
+
     # Code task sandbox hook secret — injected into sandbox env, verified on inbound hook calls
     code_task_hook_secret: str = ""
 

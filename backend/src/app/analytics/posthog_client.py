@@ -1,0 +1,32 @@
+"""Lightweight PostHog wrapper for server-side event capture.
+
+Uses fire-and-forget semantics — analytics must never block or break business logic.
+"""
+
+import posthog as _posthog
+
+from app.config import settings
+
+
+def _init() -> None:
+    api_key = getattr(settings, "posthog_api_key", "")
+    if not api_key:
+        return
+    _posthog.project_api_key = api_key
+    _posthog.host = getattr(settings, "posthog_host", "https://us.i.posthog.com")
+    # Disable the default retry/flush thread noise in logs
+    _posthog.disabled = False
+
+
+_init()
+
+
+def capture(distinct_id: str, event: str, properties: dict | None = None) -> None:
+    """Capture a PostHog event. Silently no-ops if PostHog is not configured."""
+    try:
+        api_key = getattr(settings, "posthog_api_key", "")
+        if not api_key:
+            return
+        _posthog.capture(distinct_id, event, properties or {})
+    except Exception:
+        pass  # analytics must never raise

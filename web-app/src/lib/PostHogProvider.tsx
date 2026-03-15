@@ -3,7 +3,7 @@
 import posthog from 'posthog-js';
 import { PostHogProvider as PHProvider, usePostHog } from 'posthog-js/react';
 import { useEffect, Suspense } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 
 // Init at module level so posthog is ready before the first render.
@@ -21,14 +21,13 @@ if (typeof window !== 'undefined') {
 
 function PostHogPageView() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const ph = usePostHog();
 
   useEffect(() => {
     if (pathname && ph) {
       ph.capture('$pageview', { $current_url: window.location.href });
     }
-  }, [pathname, searchParams, ph]);
+  }, [pathname, ph]);
 
   return null;
 }

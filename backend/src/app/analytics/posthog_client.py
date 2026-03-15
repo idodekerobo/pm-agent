@@ -1,6 +1,7 @@
 """Lightweight PostHog wrapper for server-side event capture.
 
 Uses fire-and-forget semantics — analytics must never block or break business logic.
+Call posthog_client.shutdown() in your app lifespan to flush buffered events on exit.
 """
 
 import posthog as _posthog
@@ -30,3 +31,9 @@ def capture(distinct_id: str, event: str, properties: dict | None = None) -> Non
         _posthog.capture(distinct_id, event, properties or {})
     except Exception:
         pass  # analytics must never raise
+
+
+def shutdown() -> None:
+    """Flush buffered events. Call this in your app lifespan before exit."""
+    if _enabled:
+        _posthog.shutdown()

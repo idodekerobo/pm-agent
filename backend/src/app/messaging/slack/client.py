@@ -174,6 +174,19 @@ async def get_user_info(bot_token: str, user_id: str) -> dict:
     return response.data.get("user", {})
 
 
+async def download_file(bot_token: str, url: str) -> bytes:
+    """Download a private Slack file using the bot token for auth."""
+    import httpx
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {bot_token}"},
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+        return resp.content
+
+
 async def get_thread_history(
     bot_token: str,
     channel: str,

@@ -20,10 +20,21 @@ interface Message {
   id: string;
   role: "user" | "assistant" | "tool_call" | "tool_output";
   content: string;
+  imageUrls?: string[];
   toolName?: string;
   callId?: string;
   toolArguments?: string;
 }
+
+interface AttachedFile {
+  id: string;
+  file: File;
+  previewUrl: string;
+  error: string | null;
+}
+// TODO: expand to accept more file types
+const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 type RenderItem =
   | { type: "message"; message: Message }
@@ -59,11 +70,16 @@ function ChatPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const ph = usePostHog();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -271,12 +287,16 @@ function ChatPage() {
               });
             } else {
               const role = item?.role as "user" | "assistant";
-              const text = item?.content?.[0]?.text;
-              if (!role || !text || !["user", "assistant"].includes(role)) continue;
+              if (!role || !["user", "assistant"].includes(role)) continue;
+              const contentArr = item?.content as Array<{ type: string; text?: string; image_url?: string }> | undefined;
+              const text = contentArr?.find((c) => c.type === "input_text" || c.type === "output_text")?.text ?? "";
+              const imgUrls = contentArr?.filter((c) => c.type === "input_image" && c.image_url).map((c) => c.image_url!) ?? [];
+              if (!text && imgUrls.length === 0) continue;
               mapped.push({
                 id: `${sessionId}-${mapped.length}`,
                 role,
                 content: text,
+                ...(imgUrls.length > 0 ? { imageUrls: imgUrls } : {}),
               });
             }
           } catch (error) {
@@ -409,31 +429,110 @@ function ChatPage() {
     }
   };
 
+  const processFiles = (files: File[]) => {
+    setAttachmentError(null);
+    for (const file of files) {
+      if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+        setAttachmentError("Only image files (JPEG, PNG, GIF, WEBP) are supported.");
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE_BYTES) {
+        setAttachmentError("File must be under 10MB.");
+        continue;
+      }
+      const previewUrl = URL.createObjectURL(file);
+      setAttachedFiles((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), file, previewUrl, error: null },
+      ]);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processFiles(Array.from(e.target.files ?? []));
+    e.target.value = ""; // reset so the same file can be re-selected
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current += 1;
+    if (dragCounterRef.current === 1) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault(); // required to allow drop
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+    processFiles(Array.from(e.dataTransfer.files));
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-    };
+    const pendingFiles = [...attachedFiles];
+    const promptText = input;
 
-    ph?.capture(EVENTS.AGENT_RUN_STARTED, {
-      session_id: activeSessionId,
-      is_new_session: !activeSessionId,
-      message_length: input.length,
-    });
-
-    setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    attachedFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl));
+    setAttachedFiles([]);
+    setAttachmentError(null);
     setIsLoading(true);
     let toolCallsCount = 0;
 
     try {
-      const body: Record<string, unknown> = { prompt: input };
+      // Upload images now, at send time — files are never stored until the user commits
+      const imageUrls: string[] = [];
+      if (pendingFiles.length > 0) {
+        const supabase = createClient();
+        const userId = session?.user?.id;
+        if (!userId) throw new Error("Not authenticated");
+        const sessionPath = activeSessionId ?? crypto.randomUUID();
+        await Promise.all(
+          pendingFiles.map(async (f) => {
+            const fileExt = f.file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+            const path = `${userId}/${sessionPath}/${crypto.randomUUID()}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage
+              .from("conversation-attachments")
+              .upload(path, f.file, { contentType: f.file.type, upsert: false });
+            if (uploadError) throw uploadError;
+            const { data: { publicUrl } } = supabase.storage
+              .from("conversation-attachments")
+              .getPublicUrl(path);
+            imageUrls.push(publicUrl);
+          })
+        );
+      }
+
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: promptText,
+        ...(imageUrls.length > 0 ? { imageUrls } : {}),
+      };
+
+      ph?.capture(EVENTS.AGENT_RUN_STARTED, {
+        session_id: activeSessionId,
+        is_new_session: !activeSessionId,
+        message_length: promptText.length,
+      });
+
+      setMessages((prev) => [...prev, userMessage]);
+
+      const body: Record<string, unknown> = { prompt: promptText };
       if (activeSessionId) body.agent_session_id = activeSessionId;
       if (sessionMetadata) body.session_metadata = sessionMetadata;
+      if (imageUrls.length > 0) body.image_urls = imageUrls;
 
       const response = await fetch(`${apiBaseUrl}/run`, {
         method: "POST",
@@ -905,9 +1004,21 @@ function ChatPage() {
                       }`}
                     >
                       {message.role === "user" ? (
-                        <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                          {message.content}
-                        </p>
+                        <div>
+                          {message.content && (
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                              {message.content}
+                            </p>
+                          )}
+                          {message.imageUrls?.map((url) => (
+                            <img
+                              key={url}
+                              src={url}
+                              alt="attachment"
+                              className="mt-2 max-h-48 max-w-full rounded-md object-cover"
+                            />
+                          ))}
+                        </div>
                       ) : (
                         <div className="prose prose-sm prose-zinc max-w-none text-zinc-900 [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all [&_pre]:bg-zinc-800 [&_pre]:text-zinc-100 [&_code:not(pre_code)]:bg-zinc-200 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:text-zinc-800">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -991,30 +1102,120 @@ function ChatPage() {
         {/* Input Area */}
         <div className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">
           <form onSubmit={handleSendMessage} className="mx-auto max-w-2xl">
-            <div className="flex items-end gap-3">
-              <textarea
-                ref={textareaRef}
-                rows={1}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!isLoading && input.trim()) handleSendMessage(e as unknown as React.FormEvent);
-                  }
-                }}
-                disabled={isLoading}
-                placeholder="Ask me anything..."
-                className="flex-1 max-h-40 resize-none overflow-y-auto rounded-lg border border-zinc-300 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-500"
-              />
-              <button
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="shrink-0 rounded-lg bg-zinc-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-              >
-                Send
-              </button>
+            {/* Attachment error */}
+            {attachmentError && (
+              <p className="mb-2 text-xs text-red-600">{attachmentError}</p>
+            )}
+
+            <div
+              className={`relative rounded-lg border bg-white focus-within:ring-1 focus-within:ring-zinc-900 transition-colors ${
+                isDragging
+                  ? "border-zinc-900 ring-1 ring-zinc-900 bg-zinc-50"
+                  : "border-zinc-300 focus-within:border-zinc-900"
+              }`}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              {/* Drag overlay */}
+              {isDragging && (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg">
+                  <p className="text-sm font-medium text-zinc-500">Drop image to attach</p>
+                </div>
+              )}
+              {/* Thumbnails strip */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-3 pt-3 pb-2">
+                  {attachedFiles.map((f) => (
+                    <div key={f.id} className="relative shrink-0">
+                      <img
+                        src={f.previewUrl}
+                        alt={f.file.name}
+                        className="h-16 w-16 rounded-md object-cover"
+                      />
+                      {/* Remove button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          URL.revokeObjectURL(f.previewUrl);
+                          setAttachedFiles((prev) => prev.filter((x) => x.id !== f.id));
+                        }}
+                        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-700 text-[9px] text-white hover:bg-zinc-900"
+                        aria-label="Remove attachment"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Textarea row */}
+              <div className="flex items-center">
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      const canSend = !isLoading && (input.trim() || attachedFiles.length > 0);
+                      if (canSend) handleSendMessage(e as unknown as React.FormEvent);
+                    }
+                  }}
+                  disabled={isLoading}
+                  placeholder="Ask me anything..."
+                  className="flex-1 max-h-40 resize-none overflow-y-auto bg-transparent px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none disabled:text-zinc-500"
+                  onPaste={(e) => {
+                    const imageFiles = Array.from(e.clipboardData.items)
+                      .filter((item) => item.kind === "file" && ACCEPTED_IMAGE_TYPES.has(item.type))
+                      .map((item) => item.getAsFile())
+                      .filter((f): f is File => f !== null);
+                    if (imageFiles.length > 0) {
+                      e.preventDefault();
+                      processFiles(imageFiles);
+                    }
+                  }}
+                />
+
+                {/* Paperclip button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachmentError(null);
+                    fileInputRef.current?.click();
+                  }}
+                  disabled={isLoading}
+                  className="shrink-0 p-3 text-zinc-400 transition-colors hover:text-zinc-700 disabled:cursor-not-allowed"
+                  aria-label="Attach image"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+                  </svg>
+                </button>
+
+                {/* Send button */}
+                <button
+                  type="submit"
+                  disabled={isLoading || (!input.trim() && attachedFiles.length === 0)}
+                  className="shrink-0 mr-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                >
+                  Send
+                </button>
+              </div>
             </div>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              multiple
+              className="hidden"
+              onChange={handleFileSelect}
+            />
           </form>
         </div>
       </div>

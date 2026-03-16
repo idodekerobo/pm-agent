@@ -465,6 +465,8 @@ def build_skill_section(payload: AgentRunPayload) -> str:
     )
 
 
+# TODO: this needs to be updated to automatically add account creds
+# when you tell it to check github, it says "i dont know your github" instead of trying to find it
 async def build_agent_instructions(payload: AgentRunPayload) -> str:
     """Build the full system prompt for the PM agent.
 

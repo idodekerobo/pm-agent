@@ -9,6 +9,11 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db.supabase_client import get_supabase
+from app.workers.queue import queue
+from app.workers.background_monitoring import process_github_background_event
+
+# Event types dispatched to the passive monitoring event processor (Phase 1).
+_TRACKED_EVENT_TYPES = {"pull_request", "pull_request_review"}
 
 router = APIRouter(prefix="/github")
 
@@ -57,6 +62,7 @@ async def github_webhook(request: Request):
     body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256", "")
     event_type = request.headers.get("X-GitHub-Event", "unknown")
+    print(f"[github webhook] received '{event_type}' event")
 
     if not _verify_signature(body, signature):
         raise HTTPException(status_code=403, detail="Invalid GitHub signature")
@@ -75,9 +81,16 @@ async def github_webhook(request: Request):
         print(f"[github webhook] no user found for installation_id={installation_id} — acking")
         return JSONResponse({"ok": True})
 
-    print(f"[github webhook] event='{event_type}' installation_id={installation_id} user_id={user_id}")
+    delivery_id = request.headers.get("X-GitHub-Delivery", "")
+    print(f"[github webhook] event='{event_type}' delivery_id={delivery_id} installation_id={installation_id} user_id={user_id}")
 
-    # TODO: dispatch specific event handlers (e.g. push, pull_request) via RQ
-    # Example: queue.enqueue(handle_github_event, event_type, payload, user_id)
+    if event_type in _TRACKED_EVENT_TYPES:
+        queue.enqueue(
+            process_github_background_event,
+            event_type,
+            delivery_id,
+            payload,
+            user_id,
+        )
 
     return JSONResponse({"ok": True})

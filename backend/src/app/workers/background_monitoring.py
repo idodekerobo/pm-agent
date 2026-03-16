@@ -313,3 +313,168 @@ async def process_slack_background_event(event: dict, installation) -> None:
 
     await append_event_log(user_id, "slack", resource, event_dict)
     print(f"[slack background] logged message in #{channel_name} user={user_id} thread_reply={is_thread_reply}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Linear background ingestion
+# ---------------------------------------------------------------------------
+
+_PRIORITY_MAP = {0: "no_priority", 1: "urgent", 2: "high", 3: "medium", 4: "low"}
+
+
+def _resolve_issue_event_type(action: str, updated_from: dict) -> str:
+    """Map a Linear Issue action + updatedFrom dict to a specific event type string.
+
+    For updates, inspect which fields changed (priority order: status > assignee > generic).
+    """
+    if action == "create":
+        return "issue.created"
+    if action == "update":
+        if "stateId" in updated_from:
+            return "issue.status_changed"
+        if "assigneeId" in updated_from:
+            return "issue.assigned"
+        return "issue.updated"
+    return f"issue.{action}"
+
+
+def _get_team_for_event(supabase, installation_id: str, team_id: str) -> dict | None:
+    """Look up linear_teams row by installation_id + linear_team_id.
+
+    Returns the full row (team_key, monitoring_enabled) or None.
+    """
+    result = (
+        supabase.table("linear_teams")
+        .select("team_key, monitoring_enabled")
+        .eq("installation_id", installation_id)
+        .eq("linear_team_id", team_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data if result and result.data else None
+
+
+def process_linear_background_event(
+    event_type: str,
+    action: str,
+    payload: dict,
+    user_id: str,
+    installation_id: str,
+) -> None:
+    """RQ task: check monitoring flags, build event, write to event log.
+
+    Called from the Linear webhook handler for Issue and Comment events.
+    Silently no-ops if monitoring is disabled at any level or if the team
+    isn't tracked.
+    """
+    from app.events import append_event_log, LinearEvent
+
+    supabase = get_supabase()
+
+    # Monitoring gate — global + provider level
+    if not _is_monitoring_enabled(supabase, user_id, "linear"):
+        return
+
+    data: dict = payload.get("data", {})
+    updated_from: dict = payload.get("updatedFrom", {})
+
+    # Resolve team — present directly on Issue events; for Comments it's nested
+    # under data.issue.team (if available) or data.team.
+    team_data = data.get("team") or data.get("issue", {}).get("team") or {}
+    team_id: str = team_data.get("id", "")
+
+    if not team_id:
+        print(f"[linear background] could not resolve team_id from payload — skipping", flush=True)
+        return
+
+    team_row = _get_team_for_event(supabase, installation_id, team_id)
+    if not team_row:
+        # Team not in our DB yet (e.g. added after last sync) — skip
+        return
+    if not team_row.get("monitoring_enabled", True):
+        return
+
+    team_key: str = team_row.get("team_key") or team_id
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    if event_type == "Issue":
+        event_dict = _build_linear_issue_event(action, data, updated_from, team_key, now_iso)
+    elif event_type == "Comment":
+        event_dict = _build_linear_comment_event(data, team_key, now_iso)
+    else:
+        return
+
+    if not event_dict:
+        return
+
+    asyncio.run(append_event_log(user_id, "linear", team_key, event_dict))
+    print(f"[linear background] logged {event_dict['type']} for team={team_key} user={user_id}", flush=True)
+
+
+def _build_linear_issue_event(
+    action: str,
+    data: dict,
+    updated_from: dict,
+    team_key: str,
+    now_iso: str,
+) -> dict | None:
+    from app.events import LinearEvent
+
+    issue_id: str = data.get("identifier", "")  # e.g. "ENG-142"
+    issue_uuid: str = data.get("id", "")
+    if not issue_id or not issue_uuid:
+        return None
+
+    event_type_str = _resolve_issue_event_type(action, updated_from)
+    actor = (data.get("creator") or {}).get("name") or "unknown"
+    priority_num = data.get("priority", 0)
+
+    change: dict | None = None
+    if event_type_str == "issue.status_changed":
+        change = {"status": {"from": None, "to": (data.get("state") or {}).get("name")}}
+    elif event_type_str == "issue.assigned":
+        change = {"assignee": {"from": None, "to": (data.get("assignee") or {}).get("name")}}
+
+    cycle_id: str | None = (data.get("cycle") or {}).get("id")
+    raw_ref = f"https://linear.app/issue/{issue_id}"
+
+    return LinearEvent(
+        ts=now_iso,
+        type=event_type_str,
+        resource=team_key,
+        actor=actor,
+        issue_id=issue_id,
+        issue_uuid=issue_uuid,
+        issue_title=data.get("title", ""),
+        priority=_PRIORITY_MAP.get(priority_num),
+        change=change,
+        cycle_id=cycle_id,
+        raw_ref=raw_ref,
+    ).model_dump()
+
+
+def _build_linear_comment_event(data: dict, team_key: str, now_iso: str) -> dict | None:
+    from app.events import LinearEvent
+
+    issue_data = data.get("issue") or {}
+    issue_id: str = issue_data.get("identifier", "")
+    issue_uuid: str = issue_data.get("id", "")
+    if not issue_id or not issue_uuid:
+        return None
+
+    actor = (data.get("user") or {}).get("name") or "unknown"
+    comment_body: str = data.get("body", "")
+    raw_ref = f"https://linear.app/issue/{issue_id}#comment-{data.get('id', '')}"
+
+    return LinearEvent(
+        ts=now_iso,
+        type="comment.created",
+        resource=team_key,
+        actor=actor,
+        issue_id=issue_id,
+        issue_uuid=issue_uuid,
+        issue_title=issue_data.get("title", ""),
+        comment_id=data.get("id"),
+        comment_body=comment_body,
+        raw_ref=raw_ref,
+    ).model_dump()

@@ -1,9 +1,12 @@
 """Linear webhook receiver.
 
-Receives event payloads from Linear and routes them to the appropriate handler.
+Linear OAuth apps support app-level webhooks — one endpoint, one secret,
+all workspaces that install the app send events here. No per-workspace
+webhook subscription creation needed. Route by organizationId → user_id
+via linear_installations.
 
-Security: every request is verified with HMAC-SHA256 using the linear_webhook_secret
-configured in the Linear workspace settings before any processing occurs.
+Security: every request is verified with HMAC-SHA256 using the
+linear_webhook_secret configured in the Linear OAuth app settings.
 
 Endpoint: POST /webhook/linear
 """
@@ -17,6 +20,11 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.db.supabase_client import get_supabase
+from app.workers.queue import queue
+from app.workers.background_monitoring import process_linear_background_event
+
+# Event types dispatched to the background monitoring processor.
+_TRACKED_TYPES = {"Issue", "Comment"}
 
 router = APIRouter(prefix="/linear")
 
@@ -37,19 +45,23 @@ def _verify_signature(body: bytes, signature_header: str) -> bool:
     return hmac.compare_digest(expected, signature_header)
 
 
-def _get_user_id_for_workspace(workspace_id: str) -> str | None:
-    """Look up the user_id for a given Linear workspace (organization) ID."""
+def _get_installation_for_workspace(workspace_id: str) -> tuple[str, str] | tuple[None, None]:
+    """Look up user_id and installation_id for a given Linear workspace (organization) ID.
+
+    Both are needed: user_id for monitoring flag checks, installation_id for
+    team-level lookups in linear_teams.
+    """
     supabase = get_supabase()
     result = (
         supabase.table("linear_installations")
-        .select("user_id")
+        .select("id, user_id")
         .eq("linear_workspace_id", workspace_id)
         .maybe_single()
         .execute()
     )
     if result and result.data:
-        return result.data["user_id"]
-    return None
+        return result.data["user_id"], result.data["id"]
+    return None, None
 
 
 def _handle_authorization_revoked(workspace_id: str, user_id: str) -> None:
@@ -93,14 +105,25 @@ async def linear_webhook(request: Request):
     if not workspace_id:
         return JSONResponse({"ok": True})
 
-    if event_type == "AppUserAuthorizationRevoked":
-        user_id = _get_user_id_for_workspace(workspace_id)
-        if user_id:
-            _handle_authorization_revoked(workspace_id, user_id)
-        else:
-            print(f"[linear webhook] no user found for workspace={workspace_id} — acking")
+    user_id, installation_id = _get_installation_for_workspace(workspace_id)
+    if not user_id:
+        print(f"[linear webhook] no user found for workspace={workspace_id} — acking")
+        return JSONResponse({"ok": True})
 
-    # Phase 1 passive monitoring events will be dispatched here (Issue, Comment, etc.)
-    # See plan 0010 Phase 1.4 for implementation.
+    action = payload.get("action")
+    print(f"[linear webhook] type='{event_type}' action='{action}' workspace={workspace_id} user={user_id}")
+
+    if event_type == "AppUserAuthorizationRevoked":
+        _handle_authorization_revoked(workspace_id, user_id)
+
+    elif event_type in _TRACKED_TYPES and action != "remove":
+        queue.enqueue(
+            process_linear_background_event,
+            event_type,
+            action,
+            payload,
+            user_id,
+            installation_id,
+        )
 
     return JSONResponse({"ok": True})

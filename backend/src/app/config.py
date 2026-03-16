@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     session_secret: str
     linear_client_id: str = ""
     linear_client_secret: str = ""
+    linear_webhook_secret: str = ""
     google_client_id: str = ""
     google_client_secret: str = ""
     notion_client_id: str = ""

@@ -87,7 +87,19 @@ async def slack_callback(
             detail=f"Slack token exchange failed: {token_data.get('error')}",
         )
 
-    save_installation(user_id, token_data)
+    bot_name: str | None = None
+    try:
+        from app.messaging.slack.client import get_user_info
+        bot_user_id = token_data.get("bot_user_id", "")
+        bot_token = token_data.get("access_token", "")
+        if bot_user_id and bot_token:
+            user_info = await get_user_info(bot_token, bot_user_id)
+            profile = user_info.get("profile", {})
+            bot_name = profile.get("display_name") or profile.get("real_name") or None
+    except Exception as e:
+        print(f"[slack] could not resolve bot display name: {e}", flush=True)
+
+    save_installation(user_id, token_data, slack_bot_name=bot_name)
 
     supabase = get_supabase()
     supabase.table("integrations").upsert({

@@ -10,7 +10,6 @@ class BaseEvent(BaseModel):
     provider: str
     type: str      # e.g. "message", "pull_request.opened", "issue.status_changed"
     resource: str  # original provider-scoped identifier — NOT path-sanitized
-    actor: str     # human-readable username
 
 
 class SlackEvent(BaseEvent):
@@ -31,6 +30,8 @@ class SlackEvent(BaseEvent):
 
 class GitHubEvent(BaseEvent):
     provider: Literal["github"] = "github"
+    author: str              # GitHub login of the PR author (pull_request.user.login)
+                             # For reviews: the reviewer's login (review.user.login)
     github_delivery_id: str  # from X-GitHub-Delivery header — dedup key
     pr_number: int
     pr_id: int               # GitHub internal ID
@@ -45,6 +46,7 @@ class GitHubEvent(BaseEvent):
 
 class LinearEvent(BaseEvent):
     provider: Literal["linear"] = "linear"
+    actor: str               # Linear's internal value for the user who triggered the event
     issue_id: str            # human-readable identifier, e.g. "ENG-142"
     issue_uuid: str          # Linear's internal UUID
     issue_title: str

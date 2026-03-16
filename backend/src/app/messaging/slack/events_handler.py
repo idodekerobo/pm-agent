@@ -50,6 +50,11 @@ async def dispatch_event(event_payload: dict, installation: SlackInstallation) -
         print("calling handle_im_message")
         await handle_im_message(event, installation)
 
+    elif event_type == "message":
+        # Non-DM channel message — passive context ingestion, no agent run
+        from app.workers.background_monitoring import process_slack_background_event
+        await process_slack_background_event(event, installation)
+
     elif event_type == "member_joined_channel":
         await handle_member_joined_channel(event, installation)
 

@@ -1,10 +1,11 @@
-"""Background tasks for passive context ingestion.
+"""Background tasks for background context ingestion.
 
-All webhook handlers (GitHub, Slack, Linear) dispatch here via RQ after
-ACKing the webhook. These tasks check monitoring flags, build structured
-event dicts, and call append_event_log to write to the user's Modal Volume.
+GitHub: process_github_background_event — sync RQ task, dispatched from
+  the GitHub webhook handler after ACKing.
 
-RQ tasks must be synchronous. asyncio.run() is used to call async utilities.
+Slack: process_slack_background_event — async, called inline from
+  events_handler.dispatch_event (already running inside asyncio.run in the
+  RQ worker, so no second RQ hop needed).
 """
 
 import asyncio
@@ -173,7 +174,7 @@ def process_github_background_event(
 
     repo_full_name: str = payload.get("repository", {}).get("full_name", "")
     if not repo_full_name:
-        print(f"[github passive] missing repository.full_name in payload — skipping", flush=True)
+        print(f"[github background] missing repository.full_name in payload — skipping", flush=True)
         return
 
     if not _is_repo_monitoring_enabled(supabase, user_id, repo_full_name):
@@ -192,4 +193,123 @@ def process_github_background_event(
         return  # untracked action (e.g. PR labeled, review dismissed)
 
     asyncio.run(append_event_log(user_id, "github", repo_full_name, event_dict))
-    print(f"[github passive] logged {event_dict['type']} for {repo_full_name} user={user_id}", flush=True)
+    print(f"[github background] logged {event_dict['type']} for {repo_full_name} user={user_id}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Slack background ingestion
+# ---------------------------------------------------------------------------
+
+async def process_slack_background_event(event: dict, installation) -> None:
+    """Async — called inline from events_handler.dispatch_event.
+
+    Already runs inside asyncio.run() in the RQ worker, so append_event_log
+    is awaited directly (no second RQ hop needed).
+
+    Filters applied before writing:
+      - Skip bot/integration messages (bot_id present)
+      - Skip message subtypes (edited, deleted, channel_join, etc.)
+      - Skip our own bot's messages
+      - Skip bot @mentions (handled by the app_mention path; don't double-log)
+      - Skip messages with no text and no files
+    """
+    from app.events import append_event_log, SlackEvent
+    from app.db.supabase_client import get_supabase
+
+    # ── Message filters ──────────────────────────────────────────────────────
+
+    # Bot/integration messages
+    if event.get("bot_id"):
+        return
+
+    # Subtypes: message_changed, message_deleted, channel_join, bot_message, etc.
+    # TODO: investigate whether the app should reactively update the jsonl when messages are edited
+    if event.get("subtype"):
+        return
+
+    # Our own bot's messages
+    if event.get("user") == installation.slack_bot_user_id:
+        return
+
+    text = event.get("text", "").strip()
+    files = event.get("files", [])
+    if not text and not files:
+        return
+
+    # ── Monitoring flag checks ───────────────────────────────────────────────
+
+    supabase = get_supabase()
+    user_id = str(installation.user_id)
+    channel_id: str = event.get("channel", "")
+
+    if not _is_monitoring_enabled(supabase, user_id, "slack"):
+        return
+
+    # Channel-level check: look up monitoring_enabled + channel_name in one query.
+    # slack_channels is keyed by (installation_id, slack_channel_id).
+    channel_row = (
+        supabase.table("slack_channels")
+        .select("slack_channel_name, monitoring_enabled")
+        .eq("installation_id", str(installation.id))
+        .eq("slack_channel_id", channel_id)
+        .maybe_single()
+        .execute()
+    )
+
+    if not channel_row or not channel_row.data:
+        # Channel not in our DB — bot was added but member_joined_channel hasn't
+        # fired yet, or the channel was added via another path. Skip safely.
+        return
+
+    if not channel_row.data.get("monitoring_enabled", True):
+        return
+
+    channel_name: str = channel_row.data.get("slack_channel_name") or channel_id
+
+    # ── Build event ──────────────────────────────────────────────────────────
+
+    slack_ts: str = event.get("ts", "")
+    thread_ts: str | None = event.get("thread_ts")
+    is_thread_reply = bool(thread_ts and thread_ts != slack_ts)
+
+    # Convert Slack ts (Unix float string) to ISO 8601 UTC
+    try:
+        ts_iso = datetime.fromtimestamp(float(slack_ts), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError):
+        ts_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # Slack permalink format: p{ts_no_dot}
+    ts_for_url = slack_ts.replace(".", "")
+    raw_ref = f"https://app.slack.com/archives/{channel_id}/p{ts_for_url}"
+
+    # Capture file metadata without downloading — synthesis job can fetch if needed
+    file_entries = [
+        {
+            "id": f.get("id", ""),
+            "name": f.get("name", ""),
+            "mimetype": f.get("mimetype", ""),
+            "url_private": f.get("url_private", ""),
+        }
+        for f in files
+    ]
+
+    resource = f"{channel_id}-{channel_name}"
+
+    event_dict = SlackEvent(
+        ts=ts_iso,
+        type="message",
+        resource=resource,
+        actor=event.get("user", "unknown"),
+        channel_id=channel_id,
+        channel_name=channel_name,
+        actor_id=event.get("user", ""),
+        slack_ts=slack_ts,
+        text=text,
+        thread_ts=thread_ts if is_thread_reply else None,
+        is_thread_reply=is_thread_reply,
+        files=file_entries,
+        raw_ref=raw_ref,
+    ).model_dump()
+
+    await append_event_log(user_id, "slack", resource, event_dict)
+    print(f"[slack background] logged message in #{channel_name} user={user_id} thread_reply={is_thread_reply}", flush=True)

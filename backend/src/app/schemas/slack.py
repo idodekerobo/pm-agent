@@ -50,7 +50,8 @@ class SlackChannelBase(BaseModel):
 
     slack_channel_id: str
     slack_channel_name: Optional[str] = None
-    is_enabled: bool = True
+    is_enabled: bool = True          # controls whether the bot responds in this channel
+    monitoring_enabled: bool = True  # controls whether the agent passively monitors this channel
 
 
 class SlackChannelCreate(SlackChannelBase):
@@ -63,6 +64,12 @@ class SlackChannelUpdate(BaseModel):
     """Schema for toggling is_enabled from the web settings UI."""
 
     is_enabled: bool
+
+
+class SlackChannelMonitoringUpdate(BaseModel):
+    """Schema for toggling monitoring_enabled from the web settings UI."""
+
+    monitoring_enabled: bool
 
 
 class SlackChannel(SlackChannelBase):

@@ -413,7 +413,7 @@ async def _run_agent_for_message(
                     "[slack] agent did not call tool_slack reply — falling back to channel post",
                     flush=True,
                 )
-                await post_message(bot_token, channel, final_output)
+                await post_message(bot_token, channel, final_output, thread_ts=thread_ts or ts)
         else:
             # DMs: always auto-post the final_output as a thread reply
             if final_output:

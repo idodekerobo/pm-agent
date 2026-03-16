@@ -298,5 +298,6 @@ async def linear_disconnect(user_id: str = Depends(auth_protect_route)):
         except Exception as e:
             print(f"[linear] token revocation failed (continuing disconnect): {e}")
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "linear").execute()
+    supabase.table("linear_installations").delete().eq("user_id", user_id).execute()
     queue.enqueue(deprovision_skill, user_id, "linear")
     return {"status": "disconnected"}

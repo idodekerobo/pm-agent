@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.config import settings
@@ -117,3 +118,51 @@ async def slack_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase.table("slack_installations").delete().eq("user_id", user_id).execute()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "slack").execute()
     return {"status": "disconnected"}
+
+
+# ---------------------------------------------------------------------------
+# Monitoring endpoints
+# ---------------------------------------------------------------------------
+
+class ProviderMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+class ChannelMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+@router.patch("/monitoring")
+async def update_slack_monitoring(
+    req: ProviderMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle provider-level monitoring for Slack."""
+    supabase = get_supabase()
+    supabase.table("integrations").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("user_id", user_id).eq("provider", "slack").execute()
+    return {"monitoring_enabled": req.monitoring_enabled}
+
+
+@router.patch("/channels/{channel_id}/monitoring")
+async def update_channel_monitoring(
+    channel_id: str,
+    req: ChannelMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle passive monitoring for a specific Slack channel."""
+    supabase = get_supabase()
+    installation = (
+        supabase.table("slack_installations")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not installation or not installation.data:
+        raise HTTPException(status_code=404, detail="Slack installation not found.")
+    supabase.table("slack_channels").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("installation_id", installation.data["id"]).eq("slack_channel_id", channel_id).execute()
+    return {"channel_id": channel_id, "monitoring_enabled": req.monitoring_enabled}

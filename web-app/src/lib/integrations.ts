@@ -62,7 +62,6 @@ export const INTEGRATIONS: IntegrationConfig[] = [
     color: '#34A853',
     onboardingDescription: 'Write Docs and Sheets directly. Your agent can use Drive as a live knowledge base.',
     settingsDescription: 'Write docs & sheets, and sync your knowledge base',
-    comingSoon: true,
   },
   {
     key: 'figma',

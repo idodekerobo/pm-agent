@@ -1,6 +1,8 @@
-"""Monitoring provider constants and helpers."""
+"""Monitoring provider constants.
 
-# Providers that support passive monitoring.
-# Used by webhook handlers, synthesis jobs, and the monitoring API to determine
-# which integrations are eligible for passive context ingestion.
-MONITORING_PROVIDERS: set[str] = {"github", "slack", "linear"}
+MONITORING_PROVIDERS is derived from the integration registry.
+Import it from here so call sites don't need to know about the registry directly.
+"""
+from app.integrations.registry import MONITORING_PROVIDERS as MONITORING_PROVIDERS  # re-export
+
+__all__ = ["MONITORING_PROVIDERS"]

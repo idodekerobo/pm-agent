@@ -2,8 +2,9 @@ from datetime import datetime, timezone
 
 import httpx
 from authlib.integrations.starlette_client import OAuth
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.config import settings
@@ -13,6 +14,107 @@ from app.workers.queue import queue
 from app.workers.tasks import deprovision_skill, gather_linear_context, provision_skill
 
 router = APIRouter(prefix="/linear")
+
+_LINEAR_TEAMS_QUERY = """
+query {
+  organization {
+    id
+    name
+  }
+  teams {
+    nodes {
+      id
+      name
+      key
+    }
+  }
+}
+"""
+
+
+async def _fetch_linear_workspace_and_teams(access_token: str) -> tuple[dict, list[dict]]:
+    """Call Linear GraphQL API to get organization info and all teams.
+
+    Returns (organization_dict, list_of_team_dicts).
+    """
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://api.linear.app/graphql",
+            json={"query": _LINEAR_TEAMS_QUERY},
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+        )
+        resp.raise_for_status()
+    data = resp.json().get("data", {})
+    org = data.get("organization", {})
+    teams = data.get("teams", {}).get("nodes", [])
+    return org, teams
+
+
+async def _seed_linear_teams(user_id: str, access_token: str) -> None:
+    """Create linear_installations row and seed linear_teams.
+
+    Called as a background task after Linear OAuth callback.
+    All teams default to monitoring_enabled=true.
+    """
+    try:
+        org, teams = await _fetch_linear_workspace_and_teams(access_token)
+        if not org.get("id"):
+            return
+
+        supabase = get_supabase()
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # Upsert the workspace-level installation row
+        result = (
+            supabase.table("linear_installations")
+            .upsert(
+                {
+                    "user_id": user_id,
+                    "linear_workspace_id": org["id"],
+                    "linear_workspace_name": org.get("name"),
+                    "updated_at": now_iso,
+                },
+                on_conflict="user_id,linear_workspace_id",
+            )
+            .execute()
+        )
+        installation_id = (result.data or [{}])[0].get("id")
+        if not installation_id:
+            # Fetch the id since upsert may not return it on conflict
+            row = (
+                supabase.table("linear_installations")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("linear_workspace_id", org["id"])
+                .single()
+                .execute()
+            )
+            installation_id = row.data["id"]
+
+        # Upsert each team; preserve existing monitoring_enabled if already present
+        existing = (
+            supabase.table("linear_teams")
+            .select("linear_team_id, monitoring_enabled")
+            .eq("installation_id", installation_id)
+            .execute()
+        ).data or []
+        existing_map = {t["linear_team_id"]: t["monitoring_enabled"] for t in existing}
+
+        for team in teams:
+            supabase.table("linear_teams").upsert(
+                {
+                    "installation_id": installation_id,
+                    "linear_team_id": team["id"],
+                    "team_name": team.get("name"),
+                    "team_key": team.get("key"),
+                    "monitoring_enabled": existing_map.get(team["id"], True),
+                    "synced_at": now_iso,
+                },
+                on_conflict="installation_id,linear_team_id",
+            ).execute()
+    except Exception as e:
+        print(f"[linear] team seed failed: {e}")
+
 
 oauth = OAuth()
 oauth.register(
@@ -34,7 +136,7 @@ async def linear_connect(request: Request, user_id: str):
 
 # TODO: wrap in try/except
 @router.get("/callback", name="linear_callback")
-async def linear_callback(request: Request):
+async def linear_callback(request: Request, background_tasks: BackgroundTasks):
     user_id = request.session.pop("connecting_user_id", None)
     if not user_id:
         raise HTTPException(
@@ -68,6 +170,10 @@ async def linear_callback(request: Request):
     queue.enqueue(provision_skill, user_id, "linear")
     queue.enqueue(gather_linear_context, user_id)
 
+    # Seed linear_installations + linear_teams in the background
+    plain_token = token["access_token"]
+    background_tasks.add_task(_seed_linear_teams, user_id, plain_token)
+
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/linear/success")
 
 
@@ -81,6 +187,103 @@ async def sync_linear(user_id: str = Depends(auth_protect_route)):
     except Exception as e:
         print(f"ERROR enqueueing Linear job: {e}")
         raise HTTPException(status_code=503, detail=f"Failed to enqueue: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Monitoring endpoints
+# ---------------------------------------------------------------------------
+
+class ProviderMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+class TeamMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+@router.patch("/monitoring")
+async def update_linear_monitoring(
+    req: ProviderMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle provider-level monitoring for Linear."""
+    supabase = get_supabase()
+    supabase.table("integrations").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("user_id", user_id).eq("provider", "linear").execute()
+    return {"monitoring_enabled": req.monitoring_enabled}
+
+
+@router.patch("/teams/{team_id}/monitoring")
+async def update_team_monitoring(
+    team_id: str,
+    req: TeamMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle monitoring for a specific Linear team."""
+    supabase = get_supabase()
+    installation = (
+        supabase.table("linear_installations")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not installation or not installation.data:
+        raise HTTPException(status_code=404, detail="Linear installation not found.")
+    supabase.table("linear_teams").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("installation_id", installation.data["id"]).eq("linear_team_id", team_id).execute()
+    return {"team_id": team_id, "monitoring_enabled": req.monitoring_enabled}
+
+
+@router.post("/teams/sync")
+async def sync_linear_teams(user_id: str = Depends(auth_protect_route)):
+    """Re-fetch teams from Linear and refresh linear_teams rows.
+
+    Preserves existing monitoring_enabled states. Adds new teams as enabled=true.
+    """
+    supabase = get_supabase()
+    row = (
+        supabase.table("integrations")
+        .select("access_token")
+        .eq("user_id", user_id)
+        .eq("provider", "linear")
+        .maybe_single()
+        .execute()
+    )
+    if not row or not row.data:
+        raise HTTPException(status_code=404, detail="Linear integration not found.")
+
+    access_token = decrypt_token(row.data["access_token"])
+    await _seed_linear_teams(user_id, access_token)
+
+    # Return the refreshed team list
+    installation = (
+        supabase.table("linear_installations")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    teams = []
+    if installation and installation.data:
+        team_rows = (
+            supabase.table("linear_teams")
+            .select("linear_team_id, team_name, team_key, monitoring_enabled")
+            .eq("installation_id", installation.data["id"])
+            .execute()
+        ).data or []
+        teams = [
+            {
+                "id": t["linear_team_id"],
+                "name": t.get("team_name") or t["linear_team_id"],
+                "key": t.get("team_key") or "",
+                "monitoring_enabled": t.get("monitoring_enabled", True),
+            }
+            for t in team_rows
+        ]
+    return {"teams": teams}
 
 
 @router.delete("")

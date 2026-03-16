@@ -16,7 +16,9 @@ class SlackEvent(BaseEvent):
     provider: Literal["slack"] = "slack"
     channel_id: str
     channel_name: str
-    actor_id: str
+    actor_id: str                        # Slack user ID, e.g. "U0AHCN9BQ69"
+    actor_display_name: Optional[str] = None  # user-set Slack handle
+    actor_real_name: Optional[str] = None     # full name from Slack profile
     slack_ts: str            # Slack's native message ID, e.g. "1741234500.000100"
                              # Unique key: (channel_id, slack_ts)
                              # Fetch via: conversations.history(channel=channel_id, latest=slack_ts, limit=1, inclusive=true)

@@ -206,11 +206,13 @@ async def process_slack_background_event(event: dict, installation) -> None:
     Already runs inside asyncio.run() in the RQ worker, so append_event_log
     is awaited directly (no second RQ hop needed).
 
-    Filters applied before writing:
-      - Skip bot/integration messages (bot_id present)
+    Logs all channel messages:
+      - Human messages → type "message", actor resolved via get_user_info
+      - Our bot's messages → type "bot_reply", actor = slack_bot_user_id
+      - Third-party bot/integration messages → type "bot_message", actor = bot_id
+
+    Filters:
       - Skip message subtypes (edited, deleted, channel_join, etc.)
-      - Skip our own bot's messages
-      - Skip bot @mentions (handled by the app_mention path; don't double-log)
       - Skip messages with no text and no files
     """
     from app.events import append_event_log, SlackEvent
@@ -218,17 +220,12 @@ async def process_slack_background_event(event: dict, installation) -> None:
 
     # ── Message filters ──────────────────────────────────────────────────────
 
-    # Bot/integration messages
-    if event.get("bot_id"):
-        return
+    is_bot_message = bool(event.get("bot_id"))
+    is_our_bot = is_bot_message and event.get("app_id") == installation.slack_app_id
 
-    # Subtypes: message_changed, message_deleted, channel_join, bot_message, etc.
+    # Subtypes: message_changed, message_deleted, channel_join, etc.
     # TODO: investigate whether the app should reactively update the jsonl when messages are edited
     if event.get("subtype"):
-        return
-
-    # Our own bot's messages
-    if event.get("user") == installation.slack_bot_user_id:
         return
 
     text = event.get("text", "").strip()
@@ -293,16 +290,43 @@ async def process_slack_background_event(event: dict, installation) -> None:
         for f in files
     ]
 
+    # Resolve actor and event type based on message origin
+    # Bot messages carry `username` (display name) directly in the event — no API call needed.
+    # Human messages require a get_user_info call to resolve display/real name.
+    actor_display_name: str | None = None
+    actor_real_name: str | None = None
+
+    if is_our_bot:
+        event_type = "bot_reply"
+        actor_id = installation.slack_bot_user_id
+        actor_display_name = installation.slack_bot_name or event.get("username") or None
+    elif is_bot_message:
+        event_type = "bot_message"
+        actor_id = event.get("bot_id", "unknown")
+        actor_display_name = event.get("username") or None  # best-effort; not always present
+    else:
+        event_type = "message"
+        actor_id = event.get("user", "unknown")
+        try:
+            from app.messaging.slack.client import get_user_info
+            user_info = await get_user_info(installation.bot_token, actor_id)
+            profile = user_info.get("profile", {})
+            actor_display_name = profile.get("display_name") or None
+            actor_real_name = profile.get("real_name") or None
+        except Exception:
+            pass
+
     resource = f"{channel_id}-{channel_name}"
 
     event_dict = SlackEvent(
         ts=ts_iso,
-        type="message",
+        type=event_type,
         resource=resource,
-        actor=event.get("user", "unknown"),
         channel_id=channel_id,
         channel_name=channel_name,
-        actor_id=event.get("user", ""),
+        actor_id=actor_id,
+        actor_display_name=actor_display_name,
+        actor_real_name=actor_real_name,
         slack_ts=slack_ts,
         text=text,
         thread_ts=thread_ts if is_thread_reply else None,

@@ -18,6 +18,7 @@ class SlackInstallationBase(BaseModel):
     slack_team_id: str
     slack_team_name: Optional[str] = None
     slack_bot_user_id: str
+    slack_bot_name: Optional[str] = None
     slack_app_id: str
     bot_token: str
     installer_slack_user_id: Optional[str] = None

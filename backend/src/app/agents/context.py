@@ -66,6 +66,15 @@ BASE_INSTRUCTIONS = [
     "## Workspace layout",
     "- context/: Structured knowledge files about specific topics (company, product, user). Each file covers one domain and needs to be loaded on demand if you need to access it, though you will get a short summary for each session.",
     "- memory/: A single file at `memory/memory.md` loaded into every session. Use this for structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.",
+    "- monitored_updates.md: Auto-updated every 6 hours by the passive monitoring system. Contains a rolling 3-day summary of recent activity from connected integrations (Slack, GitHub, Linear). Loaded into every session so you start with ambient awareness of recent activity. Do not manually overwrite this file — it is managed by the synthesis job. If the user asks about something specific and recent that may not be captured here, use your integration tools (gh CLI, Linear CLI) or read event logs directly.",
+    "- event_logs/: Raw append-only JSONL event logs from connected integrations, written automatically when webhooks fire within minutes of the event occurring. Path format varies by provider:\n"
+    "    Slack:  event_logs/slack/{channel_id}-{channel_name}/{YYYY-MM-DD}.jsonl\n"
+    "            e.g. event_logs/slack/C0AJ0UG63T3-feature-planning/2026-03-16.jsonl\n"
+    "    GitHub: event_logs/github/{github_username}--{repo_name}/{YYYY-MM-DD}.jsonl\n"
+    "            e.g. event_logs/github/idodekerobo--midi-agent/2026-03-16.jsonl\n"
+    "    Linear: event_logs/linear/{team_id}/{YYYY-MM-DD}.jsonl\n"
+    "            e.g. event_logs/linear/ENG/2026-03-16.jsonl\n"
+    "  Event logs are near real-time (few minute delay) whereas monitored_updates.md is refreshed every 6 hours. Use event logs when the user asks something that requires near real-time confirmation from Slack — e.g. 'did Alice send the status update in #general?', 'did someone answer John's question?', 'was this decision communicated in Slack?'. Otherwise, prefer integration tools (gh CLI, Linear CLI) for current state or monitored_updates.md for a recent summary. Do not read event logs speculatively.",
     "- .skills/: Instruction files for integrations. Tell sub-agents which skill to read when delegating integration work.",
     "- templates/: Document templates for execution_agent to use when writing product docs. Each template contains agent instructions, quality bars, and examples.",
     "  - templates/prd.md — Product Requirements Document. Use this plan new features and product scope.",
@@ -296,6 +305,30 @@ async def _load_context_index(payload: "AgentRunPayload") -> list[dict]:
         return index
 
 
+async def _load_monitored_updates(payload: "AgentRunPayload") -> str | None:
+    """Read monitored_updates.md from the workspace volume if it exists.
+
+    Written by the synthesis job every 6 hours. Contains a rolling 3-day
+    summary of activity from connected integrations (Slack, GitHub, Linear).
+    Injected into every agent run for ambient awareness of recent activity.
+    """
+    if settings.workspace_backend == "production":
+        from app.workspace.modal_sandbox import get_or_create_volume
+        vol = get_or_create_volume(payload.user_id)
+        try:
+            chunks = []
+            async for chunk in vol.read_file.aio("/monitored_updates.md"):
+                chunks.append(chunk)
+            return b"".join(chunks).decode("utf-8")
+        except Exception:
+            return None
+    else:
+        from app.workspace.local_workspace_runtime import ensure_workspace
+        root = ensure_workspace(payload.workspace_id, payload.organization_id)
+        path = root / "monitored_updates.md"
+        return path.read_text(encoding="utf-8") if path.exists() else None
+
+
 async def _load_recent_summaries(payload: "AgentRunPayload") -> str | None:
     """Fetch the last 5 summarized sessions for this user and format them for injection.
 
@@ -465,6 +498,8 @@ def build_skill_section(payload: AgentRunPayload) -> str:
     )
 
 
+# TODO: this needs to be updated to automatically add account creds
+# when you tell it to check github, it says "i dont know your github" instead of trying to find it
 async def build_agent_instructions(payload: AgentRunPayload) -> str:
     """Build the full system prompt for the PM agent.
 
@@ -489,6 +524,7 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
 
     memory = await _load_memory(payload)
     context_index = await _load_context_index(payload)
+    monitored_updates = await _load_monitored_updates(payload)
 
     if memory:
         instructions.append(
@@ -496,6 +532,23 @@ async def build_agent_instructions(payload: AgentRunPayload) -> str:
             "The following has been remembered from previous sessions. "
             "Use this to inform how you respond and what you prioritize.\n\n"
             + memory
+        )
+
+    if monitored_updates:
+        instructions.append(
+            "\n## Recent Monitored Activity\n"
+            "Auto-updated summary of recent activity from connected integrations (Slack, GitHub, Linear), "
+            "refreshed every 6 hours. Use this for ambient awareness — you don't need to ask the user "
+            "what's been happening. "
+            "This may be up to 6 hours behind. If the user asks about something specific and current "
+            "(e.g. latest PR comments, a ticket status), go get it directly: use the gh CLI, Linear CLI, "
+            "or the relevant SKILL file. "
+            "For near real-time confirmation in Slack (e.g. 'did Alice send the update?', 'was this communicated in Slack?'), "
+            "read the event logs directly — they are updated within minutes of each event. "
+            "Event log paths: Slack → event_logs/slack/{channel_id}-{channel_name}/{YYYY-MM-DD}.jsonl, "
+            "GitHub → event_logs/github/{github_username}--{repo_name}/{YYYY-MM-DD}.jsonl, "
+            "Linear → event_logs/linear/{team_id}/{YYYY-MM-DD}.jsonl.\n\n"
+            + monitored_updates
         )
 
     recent_summaries = await _load_recent_summaries(payload)

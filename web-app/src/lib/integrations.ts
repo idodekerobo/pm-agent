@@ -9,6 +9,7 @@ export interface IntegrationConfig {
   comingSoon?: boolean;
   isByok?: boolean;
   requiresManualRevoke?: boolean;
+  supportsMonitoring?: boolean;
 }
 
 export const INTEGRATIONS: IntegrationConfig[] = [
@@ -19,6 +20,7 @@ export const INTEGRATIONS: IntegrationConfig[] = [
     color: '#24292F',
     onboardingDescription: 'Open PRs, create issues, and sync your codebase directly from chat.',
     settingsDescription: 'Repos, issues & pull requests',
+    supportsMonitoring: true,
   },
   {
     key: 'slack',
@@ -28,6 +30,7 @@ export const INTEGRATIONS: IntegrationConfig[] = [
     onboardingDescription: 'Get updates and trigger tasks from Slack. Your agent meets your team where they already work.',
     settingsDescription: 'Team messaging & channel alerts',
     note: 'After connecting, invite the agent to any Slack channels you want it active in.',
+    supportsMonitoring: true,
   },
   {
     key: 'notion',
@@ -45,6 +48,7 @@ export const INTEGRATIONS: IntegrationConfig[] = [
     color: '#5E6AD2',
     onboardingDescription: 'Create and triage issues automatically. Manage your full backlog and sprint cycles from chat.',
     settingsDescription: 'Issue tracking & project management',
+    supportsMonitoring: true,
   },
   {
     key: 'claude-code',

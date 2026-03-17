@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.config import settings
@@ -86,7 +87,19 @@ async def slack_callback(
             detail=f"Slack token exchange failed: {token_data.get('error')}",
         )
 
-    save_installation(user_id, token_data)
+    bot_name: str | None = None
+    try:
+        from app.messaging.slack.client import get_user_info
+        bot_user_id = token_data.get("bot_user_id", "")
+        bot_token = token_data.get("access_token", "")
+        if bot_user_id and bot_token:
+            user_info = await get_user_info(bot_token, bot_user_id)
+            profile = user_info.get("profile", {})
+            bot_name = profile.get("display_name") or profile.get("real_name") or None
+    except Exception as e:
+        print(f"[slack] could not resolve bot display name: {e}", flush=True)
+
+    save_installation(user_id, token_data, slack_bot_name=bot_name)
 
     supabase = get_supabase()
     supabase.table("integrations").upsert({
@@ -117,3 +130,51 @@ async def slack_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase.table("slack_installations").delete().eq("user_id", user_id).execute()
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "slack").execute()
     return {"status": "disconnected"}
+
+
+# ---------------------------------------------------------------------------
+# Monitoring endpoints
+# ---------------------------------------------------------------------------
+
+class ProviderMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+class ChannelMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+@router.patch("/monitoring")
+async def update_slack_monitoring(
+    req: ProviderMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle provider-level monitoring for Slack."""
+    supabase = get_supabase()
+    supabase.table("integrations").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("user_id", user_id).eq("provider", "slack").execute()
+    return {"monitoring_enabled": req.monitoring_enabled}
+
+
+@router.patch("/channels/{channel_id}/monitoring")
+async def update_channel_monitoring(
+    channel_id: str,
+    req: ChannelMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle passive monitoring for a specific Slack channel."""
+    supabase = get_supabase()
+    installation = (
+        supabase.table("slack_installations")
+        .select("id")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not installation or not installation.data:
+        raise HTTPException(status_code=404, detail="Slack installation not found.")
+    supabase.table("slack_channels").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("installation_id", installation.data["id"]).eq("slack_channel_id", channel_id).execute()
+    return {"channel_id": channel_id, "monitoring_enabled": req.monitoring_enabled}

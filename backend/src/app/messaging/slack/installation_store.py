@@ -81,7 +81,7 @@ def get_installation_by_user_id(user_id: str) -> SlackInstallation | None:
     return _decrypt_installation(result.data)
 
 
-def save_installation(user_id: str, oauth_response: dict) -> SlackInstallation:
+def save_installation(user_id: str, oauth_response: dict, slack_bot_name: str | None = None) -> SlackInstallation:
     """Persist a new (or updated) Slack installation after the OAuth callback.
 
     Upserts on (user_id, slack_team_id) so re-installs from the same workspace
@@ -90,6 +90,8 @@ def save_installation(user_id: str, oauth_response: dict) -> SlackInstallation:
     Args:
         user_id: PM Agent user UUID.
         oauth_response: The parsed JSON body from Slack's OAuth v2 access response.
+        slack_bot_name: Display name of the bot user, resolved by the caller via
+            users.info(bot_user_id) before calling this function.
 
     Returns:
         The upserted installation with bot_token decrypted for immediate use.
@@ -102,6 +104,7 @@ def save_installation(user_id: str, oauth_response: dict) -> SlackInstallation:
         "slack_team_id": oauth_response["team"]["id"],
         "slack_team_name": oauth_response["team"].get("name"),
         "slack_bot_user_id": oauth_response["bot_user_id"],
+        "slack_bot_name": slack_bot_name,
         "slack_app_id": oauth_response["app_id"],
         "bot_token": encrypt_token(oauth_response["access_token"]),
         "installer_slack_user_id": oauth_response.get("authed_user", {}).get("id"),

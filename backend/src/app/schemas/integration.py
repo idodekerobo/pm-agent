@@ -16,6 +16,8 @@ class IntegrationBase(BaseModel):
     access_token: str
     refresh_token: Optional[str] = None
     expires_at: Optional[datetime] = None
+    monitoring_enabled: bool = True
+    last_synthesized_at: Optional[datetime] = None
 
 
 class IntegrationCreate(IntegrationBase):

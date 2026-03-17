@@ -4,8 +4,9 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt as pyjwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from app.api.deps import auth_protect_route
 from app.errors.logger import log_error
@@ -56,6 +57,63 @@ async def _create_installation_token(installation_id: int) -> dict:
     return resp.json()
 
 
+async def _fetch_installation_repos(bot_token: str) -> list[str]:
+    """Return a list of full_names for all repos the installation has access to."""
+    repos: list[str] = []
+    page = 1
+    async with httpx.AsyncClient() as client:
+        while True:
+            resp = await client.get(
+                "https://api.github.com/installation/repositories",
+                headers={
+                    "Authorization": f"Bearer {bot_token}",
+                    "Accept": "application/vnd.github+json",
+                },
+                params={"per_page": 100, "page": page},
+            )
+            if not resp.is_success:
+                break
+            data = resp.json()
+            batch = [r["full_name"] for r in data.get("repositories", [])]
+            repos.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+    return repos
+
+
+async def _seed_repo_monitoring_config(user_id: str, bot_token: str) -> None:
+    """Fetch all repos for the installation and populate repo_monitoring_config.
+
+    Called as a background task after GitHub App install. All repos default to
+    monitoring_enabled=true. Existing entries are preserved (upsert semantics on
+    keys — new repos added as true, removed repos left in place until next sync).
+    """
+    try:
+        repo_names = await _fetch_installation_repos(bot_token)
+        if not repo_names:
+            return
+        supabase = get_supabase()
+        # Build JSONB update: set each repo to true only if not already present
+        existing_row = (
+            supabase.table("github_installations")
+            .select("repo_monitoring_config")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        existing_config: dict = {}
+        if existing_row and existing_row.data:
+            existing_config = existing_row.data.get("repo_monitoring_config") or {}
+
+        updated_config = {name: existing_config.get(name, True) for name in repo_names}
+        supabase.table("github_installations").update(
+            {"repo_monitoring_config": updated_config}
+        ).eq("user_id", user_id).execute()
+    except Exception as e:
+        print(f"[github] repo monitoring config seed failed: {e}")
+
+
 async def _exchange_user_code(code: str, redirect_uri: str) -> dict:
     """Exchange an OAuth code for a user access token."""
     async with httpx.AsyncClient() as client:
@@ -91,6 +149,7 @@ async def github_connect(user_id: str):
 
 @router.get("/callback", name="github_callback")
 async def github_callback(
+    background_tasks: BackgroundTasks,
     installation_id: int | None = None,
     code: str | None = None,
     state: str | None = None,
@@ -199,6 +258,9 @@ async def github_callback(
     queue.enqueue(provision_skill, user_id, "github")
     queue.enqueue(gather_github_context, user_id)
 
+    # Seed repo_monitoring_config with all repos the installation has access to
+    background_tasks.add_task(_seed_repo_monitoring_config, user_id, bot_token)
+
     return RedirectResponse(f"{settings.client_app_base_url}/integrations/github/success")
 
 
@@ -250,3 +312,107 @@ async def github_disconnect(user_id: str = Depends(auth_protect_route)):
     supabase.table("integrations").delete().eq("user_id", user_id).eq("provider", "github").execute()
     queue.enqueue(deprovision_skill, user_id, "github")
     return {"status": "disconnected"}
+
+
+# ---------------------------------------------------------------------------
+# Monitoring endpoints
+# ---------------------------------------------------------------------------
+
+class ProviderMonitoringUpdate(BaseModel):
+    monitoring_enabled: bool
+
+
+class RepoMonitoringUpdate(BaseModel):
+    full_name: str
+    monitoring_enabled: bool
+
+
+@router.patch("/monitoring")
+async def update_github_monitoring(
+    req: ProviderMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle provider-level monitoring for GitHub."""
+    supabase = get_supabase()
+    supabase.table("integrations").update(
+        {"monitoring_enabled": req.monitoring_enabled}
+    ).eq("user_id", user_id).eq("provider", "github").execute()
+    return {"monitoring_enabled": req.monitoring_enabled}
+
+
+@router.patch("/repos/monitoring")
+async def update_repo_monitoring(
+    req: RepoMonitoringUpdate,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Toggle monitoring for a specific repo. Updates the JSONB key atomically."""
+    supabase = get_supabase()
+    # jsonb_set is the safe way to update a single key without overwriting others.
+    # Supabase Python client doesn't expose jsonb_set directly, so we use rpc.
+    supabase.rpc(
+        "update_repo_monitoring_config",
+        {
+            "p_user_id": user_id,
+            "p_full_name": req.full_name,
+            "p_enabled": req.monitoring_enabled,
+        },
+    ).execute()
+    return {"full_name": req.full_name, "monitoring_enabled": req.monitoring_enabled}
+
+
+@router.post("/repos/sync")
+async def sync_github_repos(
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(auth_protect_route),
+):
+    """Re-fetch the repo list from GitHub and refresh repo_monitoring_config.
+
+    Preserves existing toggle states. Adds new repos as enabled=true.
+    Removes repos that have been de-authorised from the installation.
+    """
+    supabase = get_supabase()
+    row = (
+        supabase.table("github_installations")
+        .select("bot_token, bot_token_expires_at, installation_id, repo_monitoring_config")
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if not row or not row.data:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="GitHub installation not found.")
+
+    bot_token_encrypted = row.data["bot_token"]
+    expires_at_str = row.data["bot_token_expires_at"]
+    installation_id = row.data["installation_id"]
+    existing_config: dict = row.data.get("repo_monitoring_config") or {}
+
+    # Refresh bot token if expired
+    expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) >= expires_at:
+        try:
+            installation_data = await _create_installation_token(installation_id)
+            bot_token = installation_data["token"]
+            supabase.table("github_installations").update(
+                {
+                    "bot_token": encrypt_token(bot_token),
+                    "bot_token_expires_at": installation_data["expires_at"],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("user_id", user_id).execute()
+        except Exception as e:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=502, detail=f"Failed to refresh GitHub token: {e}")
+    else:
+        bot_token = decrypt_token(bot_token_encrypted)
+
+    repo_names = await _fetch_installation_repos(bot_token)
+
+    # Merge: keep existing toggle states, add new repos as true, drop removed ones
+    updated_config = {name: existing_config.get(name, True) for name in repo_names}
+    supabase.table("github_installations").update(
+        {"repo_monitoring_config": updated_config}
+    ).eq("user_id", user_id).execute()
+
+    repos = [{"full_name": k, "monitoring_enabled": v} for k, v in updated_config.items()]
+    return {"repos": repos}

@@ -7,11 +7,13 @@ from .claude_code import router as claude_code_router
 from .github import router as github_router
 from .google import router as google_router
 from .linear import router as linear_router
+from .monitoring import router as monitoring_router
 from .notion import router as notion_router
 from .slack import router as slack_router
 
 router = APIRouter(prefix="/integrations")
 
+router.include_router(monitoring_router)
 router.include_router(claude_code_router)
 router.include_router(github_router)
 router.include_router(linear_router)

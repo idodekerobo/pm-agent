@@ -76,7 +76,7 @@ async def dispatch_slack_action(
             asyncio.create_task(log_error(ctx.user_id, "agent",
                 Exception("tool_slack reply called outside of a Slack mention context"), context=_missing_params_ctx))
             return "reply can only be used when responding to a Slack @-mention."
-        post_thread_ts = mention_ctx["thread_ts"] if reply_in_thread else None
+        post_thread_ts = (mention_ctx["thread_ts"] or mention_ctx["ts"]) if reply_in_thread else None
         await post_message(bot_token, mention_ctx["channel_id"], message, thread_ts=post_thread_ts)
         ctx.slack_mention_replied = True
         placement = "in thread" if reply_in_thread else "in channel"

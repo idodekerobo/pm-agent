@@ -14,7 +14,7 @@ this process will NOT create duplicate cron entries.
 """
 from rq_scheduler import Scheduler
 
-from app.workers.cron_tasks import enqueue_stale_session_summaries
+from app.workers.cron_tasks import enqueue_stale_session_summaries, enqueue_synthesis_for_active_users
 from app.workers.queue import get_redis_connection
 
 
@@ -32,6 +32,15 @@ def main():
     )
 
     print("[scheduler] registered cron: summarize_stale_sessions (every hour)", flush=True)
+
+    scheduler.cron(
+        "0 */6 * * *",
+        func=enqueue_synthesis_for_active_users,
+        id="synthesize_monitored_updates",
+        use_local_timezone=False,
+    )
+
+    print("[scheduler] registered cron: synthesize_monitored_updates (every 6 hours)", flush=True)
     scheduler.run()
 
 

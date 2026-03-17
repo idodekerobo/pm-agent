@@ -50,6 +50,11 @@ async def dispatch_event(event_payload: dict, installation: SlackInstallation) -
         print("calling handle_im_message")
         await handle_im_message(event, installation)
 
+    elif event_type == "message":
+        # Non-DM channel message — passive context ingestion, no agent run
+        from app.workers.background_monitoring import process_slack_background_event
+        await process_slack_background_event(event, installation)
+
     elif event_type == "member_joined_channel":
         await handle_member_joined_channel(event, installation)
 
@@ -218,15 +223,18 @@ def handle_member_left_channel(event: dict, installation: SlackInstallation) -> 
 # ---------------------------------------------------------------------------
 
 def _handle_revocation(event_payload: dict, installation: SlackInstallation) -> None:
-    """Delete the installation record on app_uninstalled or tokens_revoked.
+    """Delete all records when the app is uninstalled or tokens are revoked.
 
-    CASCADE on the FK means all associated slack_channels rows are also deleted.
+    Deletes slack_installations (slack_channels CASCADE), and the integrations
+    row so the Settings UI reflects the disconnected state.
     """
     from app.db.supabase_client import get_supabase
 
     event_type = event_payload.get("event", {}).get("type")
     supabase = get_supabase()
+    # slack_channels are removed via CASCADE on slack_installations FK
     supabase.table("slack_installations").delete().eq("id", str(installation.id)).execute()
+    supabase.table("integrations").delete().eq("user_id", str(installation.user_id)).eq("provider", "slack").execute()
     analytics_capture(
         str(installation.user_id),
         Events.SLACK_APP_UNINSTALLED,
@@ -405,7 +413,7 @@ async def _run_agent_for_message(
                     "[slack] agent did not call tool_slack reply — falling back to channel post",
                     flush=True,
                 )
-                await post_message(bot_token, channel, final_output)
+                await post_message(bot_token, channel, final_output, thread_ts=thread_ts or ts)
         else:
             # DMs: always auto-post the final_output as a thread reply
             if final_output:

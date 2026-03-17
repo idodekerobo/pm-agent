@@ -22,6 +22,7 @@ class UserBase(BaseModel):
     onboarding_scrape_correction: Optional[str] = None
     current_focus: Optional[list[str]] = None
     daily_activities: Optional[list[str]] = None
+    enable_agent_monitoring: bool = True
 
 
 class UserCreate(UserBase):

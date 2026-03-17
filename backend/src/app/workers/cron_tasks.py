@@ -160,3 +160,39 @@ def enqueue_stale_session_summaries(max_per_run: int = 20):
 
     print(f"[cron] enqueued {enqueued} summarize_session jobs", flush=True)
     return {"status": "success", "enqueued": enqueued}
+
+
+# ---------------------------------------------------------------------------
+# enqueue_synthesis_for_active_users  (the sweeper — called by cron)
+# ---------------------------------------------------------------------------
+
+def enqueue_synthesis_for_active_users():
+    """Find users with active passive monitoring and enqueue synthesis tasks.
+
+    A user is eligible when they have at least one integration with
+    monitoring_enabled = true for a supported provider (slack, github, linear).
+    The per-user global flag (enable_agent_monitoring) is checked inside
+    the synthesis task itself, keeping this sweeper lightweight.
+
+    Safe to run repeatedly — synthesis tasks skip gracefully when there are
+    no new events.
+    """
+    from app.workers.synthesis_tasks import synthesize_monitored_updates
+
+    supabase = get_supabase()
+    q = get_queue()
+
+    result = (
+        supabase.table("integrations")
+        .select("user_id")
+        .eq("monitoring_enabled", True)
+        .in_("provider", ["slack", "github", "linear"])
+        .execute()
+    )
+
+    user_ids = list({row["user_id"] for row in (result.data or [])})
+    for user_id in user_ids:
+        q.enqueue(synthesize_monitored_updates, user_id)
+
+    print(f"[cron] enqueued {len(user_ids)} synthesize_monitored_updates jobs", flush=True)
+    return {"status": "success", "enqueued": len(user_ids)}

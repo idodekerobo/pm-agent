@@ -37,6 +37,9 @@ Follow this structure in order:
 
 1. **What Draft is** (2–3 sentences). Lead with this — the user needs to understand what they have
    before anything else. Explain what makes Draft different from ChatGPT or Claude:
+   - With other AI tools, you need to constantly bring them up to speed -> importing docs, dropping in data, giving it context.
+     Draft is different because it stays up to speed by design.
+     Its an agent that can work autonomously as well as doing one off tasks.
    - Draft builds persistent memory across sessions. It learns your product, team, and decisions
      and gets sharper the more you use it — unlike starting from scratch every time.
    - It connects to the tools you already use: Slack, Linear, Google Drive, Notion, GitHub, and more.

@@ -21,6 +21,7 @@ interface Message {
   role: "user" | "assistant" | "tool_call" | "tool_output";
   content: string;
   imageUrls?: string[];
+  textFileNames?: string[];
   toolName?: string;
   callId?: string;
   toolArguments?: string;
@@ -29,12 +30,23 @@ interface Message {
 interface AttachedFile {
   id: string;
   file: File;
-  previewUrl: string;
+  kind: "image" | "text";
+  previewUrl: string | null;
+  textContent: string | null;
   error: string | null;
 }
-// TODO: expand to accept more file types
+
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+// Known binary/proprietary formats we can't process — show a targeted error
+const KNOWN_UNSUPPORTED_EXTENSIONS = new Set([
+  "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx",
+  "zip", "tar", "gz", "rar", "7z",
+  "exe", "dmg", "pkg", "deb", "rpm",
+  "mp3", "mp4", "wav", "avi", "mov", "mkv",
+  "ttf", "otf", "woff", "woff2",
+]);
 
 type RenderItem =
   | { type: "message"; message: Message }
@@ -433,19 +445,39 @@ function ChatPage() {
   const processFiles = (files: File[]) => {
     setAttachmentError(null);
     for (const file of files) {
-      if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
-        setAttachmentError("Only image files (JPEG, PNG, GIF, WEBP) are supported.");
+      if (ACCEPTED_IMAGE_TYPES.has(file.type)) {
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+          setAttachmentError("File must be under 10MB.");
+          continue;
+        }
+        const previewUrl = URL.createObjectURL(file);
+        setAttachedFiles((prev) => [
+          ...prev,
+          { id: crypto.randomUUID(), file, kind: "image", previewUrl, textContent: null, error: null },
+        ]);
         continue;
       }
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        setAttachmentError("File must be under 10MB.");
+
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      if (KNOWN_UNSUPPORTED_EXTENSIONS.has(ext)) {
+        setAttachmentError("PDF, Word, PowerPoint, and spreadsheet files aren't supported yet. Try plain text or code files.");
         continue;
       }
-      const previewUrl = URL.createObjectURL(file);
+
+      // Attempt to read as text — catches all code files, .txt, .csv, etc.
+      const fileId = crypto.randomUUID();
       setAttachedFiles((prev) => [
         ...prev,
-        { id: crypto.randomUUID(), file, previewUrl, error: null },
+        { id: fileId, file, kind: "text", previewUrl: null, textContent: null, error: null },
       ]);
+      file.text().then((content) => {
+        setAttachedFiles((prev) =>
+          prev.map((f) => (f.id === fileId ? { ...f, textContent: content } : f))
+        );
+      }).catch(() => {
+        setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
+        setAttachmentError(`"${file.name}" couldn't be read as text.`);
+      });
     }
   };
 
@@ -485,22 +517,28 @@ function ChatPage() {
     const promptText = input;
 
     setInput("");
-    attachedFiles.forEach((f) => URL.revokeObjectURL(f.previewUrl));
+    attachedFiles.forEach((f) => { if (f.kind === "image" && f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
     setAttachedFiles([]);
     setAttachmentError(null);
     setIsLoading(true);
     let toolCallsCount = 0;
 
     try {
-      // Upload images now, at send time — files are never stored until the user commits
+      // Upload all attachments to Supabase Storage under a shared session path
+      const imageFiles = pendingFiles.filter((f) => f.kind === "image");
+      const textFiles = pendingFiles.filter((f) => f.kind === "text" && f.textContent !== null);
+
       const imageUrls: string[] = [];
-      if (pendingFiles.length > 0) {
+      const textFilePayloads: { filename: string; content: string }[] = [];
+
+      if (imageFiles.length > 0 || textFiles.length > 0) {
         const supabase = createClient();
         const userId = session?.user?.id;
         if (!userId) throw new Error("Not authenticated");
         const sessionPath = activeSessionId ?? crypto.randomUUID();
-        await Promise.all(
-          pendingFiles.map(async (f) => {
+
+        await Promise.all([
+          ...imageFiles.map(async (f) => {
             const fileExt = f.file.name.split(".").pop()?.toLowerCase() ?? "jpg";
             const path = `${userId}/${sessionPath}/${crypto.randomUUID()}.${fileExt}`;
             const { error: uploadError } = await supabase.storage
@@ -511,8 +549,17 @@ function ChatPage() {
               .from("conversation-attachments")
               .getPublicUrl(path);
             imageUrls.push(publicUrl);
-          })
-        );
+          }),
+          ...textFiles.map(async (f) => {
+            const fileExt = f.file.name.split(".").pop()?.toLowerCase() ?? "txt";
+            const path = `${userId}/${sessionPath}/${crypto.randomUUID()}.${fileExt}`;
+            const { error: uploadError } = await supabase.storage
+              .from("conversation-attachments")
+              .upload(path, f.file, { contentType: f.file.type || "text/plain", upsert: false });
+            if (uploadError) throw uploadError;
+            textFilePayloads.push({ filename: f.file.name, content: f.textContent! });
+          }),
+        ]);
       }
 
       const userMessage: Message = {
@@ -520,6 +567,7 @@ function ChatPage() {
         role: "user",
         content: promptText,
         ...(imageUrls.length > 0 ? { imageUrls } : {}),
+        ...(textFilePayloads.length > 0 ? { textFileNames: textFilePayloads.map((f) => f.filename) } : {}),
       };
 
       ph?.capture(EVENTS.AGENT_RUN_STARTED, {
@@ -534,6 +582,7 @@ function ChatPage() {
       if (activeSessionId) body.agent_session_id = activeSessionId;
       if (sessionMetadata) body.session_metadata = sessionMetadata;
       if (imageUrls.length > 0) body.image_urls = imageUrls;
+      if (textFilePayloads.length > 0) body.text_files = textFilePayloads;
 
       const response = await fetch(`${apiBaseUrl}/run`, {
         method: "POST",
@@ -1030,6 +1079,15 @@ function ChatPage() {
                               className="mt-2 max-h-48 max-w-full rounded-md object-cover"
                             />
                           ))}
+                          {message.textFileNames?.map((name) => (
+                            <div key={name} className="mt-2 flex items-center gap-1.5 rounded-md bg-zinc-700 px-2 py-1">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-300">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <polyline points="14 2 14 8 20 8" />
+                              </svg>
+                              <span className="truncate text-xs text-zinc-200">{name}</span>
+                            </div>
+                          ))}
                         </div>
                       ) : (
                         <div className="prose prose-sm prose-zinc max-w-none text-zinc-900 [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all [&_pre]:bg-zinc-800 [&_pre]:text-zinc-100 [&_code:not(pre_code)]:bg-zinc-200 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:text-zinc-800">
@@ -1141,16 +1199,30 @@ function ChatPage() {
                 <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-3 pt-3 pb-2">
                   {attachedFiles.map((f) => (
                     <div key={f.id} className="relative shrink-0">
-                      <img
-                        src={f.previewUrl}
-                        alt={f.file.name}
-                        className="h-16 w-16 rounded-md object-cover"
-                      />
+                      {f.kind === "image" ? (
+                        <img
+                          src={f.previewUrl!}
+                          alt={f.file.name}
+                          className="h-16 w-16 rounded-md object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-md border border-zinc-200 bg-zinc-100 px-1">
+                          <div className="flex flex-col items-center gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-500">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                              <polyline points="14 2 14 8 20 8" />
+                            </svg>
+                            <span className="w-full truncate text-center text-[9px] leading-tight text-zinc-600">
+                              {f.file.name}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                       {/* Remove button */}
                       <button
                         type="button"
                         onClick={() => {
-                          URL.revokeObjectURL(f.previewUrl);
+                          if (f.kind === "image" && f.previewUrl) URL.revokeObjectURL(f.previewUrl);
                           setAttachedFiles((prev) => prev.filter((x) => x.id !== f.id));
                         }}
                         className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-700 text-[9px] text-white hover:bg-zinc-900"
@@ -1173,7 +1245,7 @@ function ChatPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      const canSend = !isLoading && (input.trim() || attachedFiles.length > 0);
+                      const canSend = !isLoading && (input.trim() || attachedFiles.length > 0) && !attachedFiles.some((f) => f.kind === "text" && f.textContent === null);
                       if (canSend) handleSendMessage(e as unknown as React.FormEvent);
                     }
                   }}
@@ -1181,13 +1253,13 @@ function ChatPage() {
                   placeholder="Ask me anything..."
                   className="flex-1 max-h-40 resize-none overflow-y-auto bg-transparent px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none disabled:text-zinc-500"
                   onPaste={(e) => {
-                    const imageFiles = Array.from(e.clipboardData.items)
-                      .filter((item) => item.kind === "file" && ACCEPTED_IMAGE_TYPES.has(item.type))
+                    const pastedFiles = Array.from(e.clipboardData.items)
+                      .filter((item) => item.kind === "file")
                       .map((item) => item.getAsFile())
                       .filter((f): f is File => f !== null);
-                    if (imageFiles.length > 0) {
+                    if (pastedFiles.length > 0) {
                       e.preventDefault();
-                      processFiles(imageFiles);
+                      processFiles(pastedFiles);
                     }
                   }}
                 />
@@ -1211,7 +1283,7 @@ function ChatPage() {
                 {/* Send button */}
                 <button
                   type="submit"
-                  disabled={isLoading || (!input.trim() && attachedFiles.length === 0)}
+                  disabled={isLoading || (!input.trim() && attachedFiles.length === 0) || attachedFiles.some((f) => f.kind === "text" && f.textContent === null)}
                   className="shrink-0 mr-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
                 >
                   Send
@@ -1223,7 +1295,6 @@ function ChatPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
               multiple
               className="hidden"
               onChange={handleFileSelect}

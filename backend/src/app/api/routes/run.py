@@ -30,6 +30,7 @@ class SessionMetadata(BaseModel):
 class RunRequest(BaseModel):
     prompt: str
     image_urls: Optional[list[str]] = None
+    text_files: Optional[list[dict]] = None  # [{"filename": str, "content": str}]
     agent_session_id: Optional[str] = None
     parent_item_id: Optional[str] = None
     session_metadata: Optional[SessionMetadata] = None
@@ -63,7 +64,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
             limit=MAX_HISTORY_ITEMS,
         )
 
-    user_item = make_user_item(req.prompt, req.image_urls)
+    user_item = make_user_item(req.prompt, req.image_urls, req.text_files)
     user_item_id = append_conversation_item(
         supabase,
         agent_session_id=payload.agent_session_id,

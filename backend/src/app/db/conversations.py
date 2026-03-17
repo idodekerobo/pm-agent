@@ -1,10 +1,15 @@
 from supabase import Client
 
 
-def make_user_item(text: str, image_urls: list[str] | None = None) -> dict:
+def make_user_item(text: str, image_urls: list[str] | None = None, text_files: list[dict] | None = None) -> dict:
     content: list[dict] = [{"type": "input_text", "text": text}]
     for url in (image_urls or []):
         content.append({"type": "input_image", "image_url": url})
+    for tf in (text_files or []):
+        content.append({
+            "type": "input_text",
+            "text": f'[Attached file: {tf["filename"]}]\n```\n{tf["content"]}\n```',
+        })
     return {"type": "message", "role": "user", "content": content}
 
 

@@ -7,7 +7,11 @@
       "WebFetch(domain:cli.github.com)",
       "WebFetch(domain:station.railway.com)",
       "WebFetch(domain:docs.railway.com)",
-      "WebFetch(domain:www.notion.so)"
+      "WebFetch(domain:www.notion.so)",
+      "WebFetch(domain:posthog.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:app.posthog.com)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

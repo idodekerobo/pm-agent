@@ -25,8 +25,16 @@ _VERBATIM_THREAD_TAIL = 20
 _CHANNEL_HISTORY_LIMIT = 30
 
 # Supported image MIME types for Slack file attachments
-# TODO: expand to support files from slack as well
 _SUPPORTED_IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+# File extensions we know can't be read as text — skip and notify the user
+_KNOWN_UNSUPPORTED_EXTENSIONS = {
+    "pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx",
+    "zip", "tar", "gz", "rar", "7z",
+    "exe", "dmg", "pkg", "deb", "rpm",
+    "mp3", "mp4", "wav", "avi", "mov", "mkv",
+    "ttf", "otf", "woff", "woff2",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +112,7 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         raw_channel, raw_thread, bot_user_id, exclude_ts=ts
     )
 
-    image_urls = await _extract_image_urls(
+    image_urls, text_files, skipped_filenames = await _extract_file_attachments(
         bot_token, event.get("files", []), str(installation.user_id)
     )
 
@@ -124,6 +132,8 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         installation=installation,
         slack_user_id=event["user"],
         image_urls=image_urls or None,
+        text_files=text_files or None,
+        skipped_filenames=skipped_filenames or None,
     )
 
 
@@ -133,6 +143,7 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
     Guards against the bot replying to its own messages (infinite loop
     prevention) and ignores empty or bot-originated messages.
     """
+    bot_token = installation.bot_token
     bot_user_id = installation.slack_bot_user_id
     channel = event["channel"]
     ts = event["ts"]
@@ -142,12 +153,12 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         return
 
     prompt_text = event.get("text", "").strip()
-    image_urls = await _extract_image_urls(
+    image_urls, text_files, skipped_filenames = await _extract_file_attachments(
         bot_token, event.get("files", []), str(installation.user_id)
     )
 
-    # Allow image-only messages; skip only if truly empty
-    if not prompt_text and not image_urls:
+    # Allow file-only messages; skip only if truly empty
+    if not prompt_text and not image_urls and not text_files:
         return
 
     analytics_capture(
@@ -166,6 +177,8 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         installation=installation,
         slack_user_id=event["user"],
         image_urls=image_urls or None,
+        text_files=text_files or None,
+        skipped_filenames=skipped_filenames or None,
     )
 
 
@@ -259,6 +272,8 @@ async def _run_agent_for_message(
     installation: SlackInstallation,
     slack_user_id: str,
     image_urls: list[str] | None = None,
+    text_files: list[dict] | None = None,
+    skipped_filenames: list[str] | None = None,
 ) -> None:
     """Core orchestrator flow shared by handle_app_mention and handle_im_message.
 
@@ -360,7 +375,11 @@ async def _run_agent_for_message(
         workspace_id_to_reset = str(payload.workspace_id)
         set_workspace_agent_run_status(supabase, workspace_id=workspace_id_to_reset, status="running")
 
-        user_item = make_user_item(prompt_text, image_urls)
+        if skipped_filenames:
+            names = ", ".join(skipped_filenames)
+            prompt_text += f"\n\n[System note: The following attached files could not be processed and were not included: {names}]"
+
+        user_item = make_user_item(prompt_text, image_urls, text_files)
 
         # Fetch user timezone — cheap call, gives always-current time in user's tz
         user_info: dict = {}
@@ -469,40 +488,71 @@ async def _run_agent_for_message(
         await remove_reaction(bot_token, channel, ts, "hourglass_flowing_sand")
 
 
-async def _extract_image_urls(
+async def _extract_file_attachments(
     bot_token: str,
     files: list[dict],
     user_id: str,
     session_id: str | None = None,
-) -> list[str]:
-    """Download supported image files from Slack and re-host them in Supabase Storage.
+) -> tuple[list[str], list[dict], list[str]]:
+    """Download file attachments from Slack and classify them.
 
-    Returns a list of public URLs suitable for passing to the LLM as input_image items.
-    Non-image files and download failures are silently skipped (non-fatal).
+    Returns:
+        image_urls: public Supabase Storage URLs for image files
+        text_files: list of {"filename": str, "content": str} for readable text/code files
+        skipped_filenames: filenames that could not be processed (so the agent can inform the user)
     """
     from app.messaging.slack.client import download_file
     from app.storage.attachments import upload_attachment
 
-    urls: list[str] = []
+    image_urls: list[str] = []
+    text_files: list[dict] = []
+    skipped_filenames: list[str] = []
+
     for f in files:
-        if f.get("mimetype") not in _SUPPORTED_IMAGE_MIME_TYPES:
+        filename = f.get("name", "")
+        mimetype = f.get("mimetype", "")
+
+        if mimetype in _SUPPORTED_IMAGE_MIME_TYPES:
+            try:
+                file_url = f.get("url_private_download") or f.get("url_private")
+                if not file_url:
+                    continue
+                data = await download_file(bot_token, file_url)
+                url = upload_attachment(
+                    user_id=user_id,
+                    data=data,
+                    filename=filename or "image.jpg",
+                    content_type=mimetype,
+                    session_id=session_id,
+                )
+                image_urls.append(url)
+            except Exception as exc:
+                print(f"[slack] failed to process image attachment {f.get('id')!r}: {exc}", flush=True)
+                if filename:
+                    skipped_filenames.append(filename)
             continue
+
+        # Check extension against known-unsupported binary formats
+        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        if ext in _KNOWN_UNSUPPORTED_EXTENSIONS:
+            if filename:
+                skipped_filenames.append(filename)
+            continue
+
+        # Everything else: attempt UTF-8 decode and treat as a text/code file
         try:
             file_url = f.get("url_private_download") or f.get("url_private")
             if not file_url:
                 continue
             data = await download_file(bot_token, file_url)
-            url = upload_attachment(
-                user_id=user_id,
-                data=data,
-                filename=f.get("name", "image.jpg"),
-                content_type=f["mimetype"],
-                session_id=session_id,
-            )
-            urls.append(url)
+            content = data.decode("utf-8")
+            text_files.append({"filename": filename, "content": content})
         except Exception as exc:
-            print(f"[slack] failed to process image attachment {f.get('id')!r}: {exc}", flush=True)
-    return urls
+            print(f"[slack] failed to process text attachment {f.get('id')!r}: {exc}", flush=True)
+            if filename:
+                skipped_filenames.append(filename)
+
+    return image_urls, text_files, skipped_filenames
 
 
 def _strip_bot_mention(text: str, bot_user_id: str) -> str:

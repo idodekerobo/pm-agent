@@ -156,8 +156,12 @@ function ChatPage() {
             return;
           }
 
-          // Handle agent-initiated messages written by background tasks (e.g. welcome session)
-          if (item?.type === "message" && item?.role === "assistant") {
+          // Handle assistant messages written by background workers (e.g. Slack-initiated runs).
+          // We explicitly exclude source_platform "web" because those messages are already
+          // delivered and rendered via the active SSE stream in handleSendMessage — letting
+          // Realtime also handle them causes a duplicate-key collision when both paths race
+          // to insert the same DB row ID into React state.
+          if (item?.type === "message" && item?.role === "assistant" && row.source_platform !== "web") {
             const content = item.content as Array<{ text?: string }> | undefined;
             const text = content?.[0]?.text;
             if (!text) return;

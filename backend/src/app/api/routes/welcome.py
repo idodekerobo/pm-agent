@@ -243,6 +243,10 @@ async def generate_welcome_message(
                 supabase,
                 agent_session_id=welcome_session_id,
                 item=make_assistant_item(final_text),
+                # "background" ensures the Realtime handler in chat/page.tsx
+                # delivers this message — the frontend gates type:"message" items
+                # on source_platform != "web" to avoid SSE/Realtime collisions.
+                source_platform="background",
             )
             try:
                 deduct_credit(

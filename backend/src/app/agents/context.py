@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass, field
 
 from app.config import settings
+from app.integrations.registry import PROVIDER_SKILL_MAP
 
 
 # ---------------------------------------------------------------------------
@@ -174,16 +175,6 @@ execution_agent always writes the document and returns three things: a status si
 3. Delegate the actual work to execution_agent with a full brief.
 4. If anything new and durable was learned, call learning_agent to persist it.
 """
-
-# Maps integration provider names (as stored in the integrations table) to the
-# skill directory names they unlock. Add new entries here as skills are added.
-PROVIDER_SKILL_MAP: dict[str, list[str]] = {
-    "claude-code": ["coding-agent"],
-    "github": ["github"],
-    "google": ["google-drive", "google-docs"],
-    "linear": ["linear-cli"],
-    "notion": ["notion"],
-}
 
 
 # ---------------------------------------------------------------------------

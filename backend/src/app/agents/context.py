@@ -727,6 +727,7 @@ def build_agent_run_payload(
     user_id: str,
     *,
     agent_session_id: str | None = None,
+    new_session_id: str | None = None,
     slack_mention_context: dict | None = None,
     session_start_platform: str = "web",
     external_thread_id: str | None = None,
@@ -759,6 +760,7 @@ def build_agent_run_payload(
             workspace_id=workspace_id,
             session_start_platform=session_start_platform,
             external_thread_id=external_thread_id,
+            session_id=new_session_id,
         )
 
     integrations_response = (

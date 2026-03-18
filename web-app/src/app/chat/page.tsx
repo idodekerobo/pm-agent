@@ -515,6 +515,7 @@ function ChatPage() {
 
     const pendingFiles = [...attachedFiles];
     const promptText = input;
+    const newSessionId = !activeSessionId ? crypto.randomUUID() : null;
 
     setInput("");
     attachedFiles.forEach((f) => { if (f.kind === "image" && f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
@@ -535,7 +536,7 @@ function ChatPage() {
         const supabase = createClient();
         const userId = session?.user?.id;
         if (!userId) throw new Error("Not authenticated");
-        const sessionPath = activeSessionId ?? crypto.randomUUID();
+        const sessionPath = activeSessionId ?? newSessionId!;
 
         await Promise.all([
           ...imageFiles.map(async (f) => {
@@ -580,6 +581,7 @@ function ChatPage() {
 
       const body: Record<string, unknown> = { prompt: promptText };
       if (activeSessionId) body.agent_session_id = activeSessionId;
+      if (newSessionId) body.new_session_id = newSessionId;
       if (sessionMetadata) body.session_metadata = sessionMetadata;
       if (imageUrls.length > 0) body.image_urls = imageUrls;
       if (textFilePayloads.length > 0) body.text_files = textFilePayloads;

@@ -32,6 +32,7 @@ class RunRequest(BaseModel):
     image_urls: Optional[list[str]] = None
     text_files: Optional[list[dict]] = None  # [{"filename": str, "content": str}]
     agent_session_id: Optional[str] = None
+    new_session_id: Optional[str] = None
     parent_item_id: Optional[str] = None
     session_metadata: Optional[SessionMetadata] = None
 
@@ -53,6 +54,7 @@ async def run(req: RunRequest, user_id: str = Depends(auth_protect_route)):
         supabase,
         user_id,
         agent_session_id=req.agent_session_id,
+        new_session_id=req.new_session_id,
     )
 
     if req.parent_item_id:

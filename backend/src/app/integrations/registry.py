@@ -77,6 +77,14 @@ INTEGRATIONS: tuple[IntegrationConfig, ...] = (
         has_webhook=False,
         is_byok=True,
     ),
+    IntegrationConfig(
+        key="posthog",
+        name="PostHog",
+        skill_keys=("posthog",),
+        supports_monitoring=False,
+        has_webhook=False,
+        is_byok=True,
+    ),
 )
 
 # ---------------------------------------------------------------------------

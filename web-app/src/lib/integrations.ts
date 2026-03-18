@@ -83,7 +83,8 @@ export const INTEGRATIONS: IntegrationConfig[] = [
     color: '#FF5A31',
     onboardingDescription: 'Pull product analytics and user behavior into your planning context automatically.',
     settingsDescription: 'Product analytics & user insights',
-    comingSoon: true,
+    isByok: true,
+    note: 'Create your API key in PostHog under Settings → Personal API keys. Grant read access for:\n- Query\n- Feature Flag\n- Project\n- Organization\n- Experiment\n- Cohort\n- Insight',
   },
   {
     key: 'jira',

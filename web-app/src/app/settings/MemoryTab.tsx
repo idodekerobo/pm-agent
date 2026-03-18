@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import {
   BASE_MEMORY_PROMPT,
   getMemoryPrompt,
+  getNextOtherLabel,
   MEMORY_PROVIDERS,
   type MemoryProvider,
   type ImportedMemory,
@@ -140,12 +141,15 @@ export default function MemoryTab() {
             </button>
             {showProviderDropdown && (
               <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-zinc-200 bg-white shadow-sm">
-                {MEMORY_PROVIDERS.filter((p) => !importedMemories.find((m) => m.provider === p.key)).map((p) => (
+                {MEMORY_PROVIDERS.filter((p) => p.key === 'other' || !importedMemories.find((m) => m.provider === p.key)).map((p) => (
                   <button
                     key={p.key}
                     type="button"
                     onClick={() => {
-                      setImportedMemories((prev) => [...prev, { provider: p.key as MemoryProvider, content: '', customLabel: p.key === 'other' ? 'Other' : undefined }]);
+                      setImportedMemories((prev) => {
+                        const label = p.key === 'other' ? getNextOtherLabel(prev) : undefined;
+                        return [...prev, { provider: p.key as MemoryProvider, content: '', customLabel: label, _id: Math.random().toString(36).slice(2) }];
+                      });
                       setShowProviderDropdown(false);
                     }}
                     className="block w-full text-left px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 first:rounded-t-md last:rounded-b-md"
@@ -153,9 +157,6 @@ export default function MemoryTab() {
                     {p.label}
                   </button>
                 ))}
-                {MEMORY_PROVIDERS.every((p) => importedMemories.find((m) => m.provider === p.key)) && (
-                  <p className="px-4 py-2 text-xs text-zinc-400">All providers added</p>
-                )}
               </div>
             )}
           </div>
@@ -168,7 +169,7 @@ export default function MemoryTab() {
         {importedMemories.map((mem, idx) => {
           const displayLabel = mem.provider === 'other' ? (mem.customLabel ?? 'Other') : MEMORY_PROVIDERS.find((p) => p.key === mem.provider)?.label ?? mem.provider;
           return (
-            <div key={mem.provider} className="space-y-1.5">
+            <div key={mem._id ?? mem.provider} className="space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 {mem.provider === 'other' ? (
                   <input

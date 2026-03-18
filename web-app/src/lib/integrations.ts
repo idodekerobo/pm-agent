@@ -84,7 +84,14 @@ export const INTEGRATIONS: IntegrationConfig[] = [
     onboardingDescription: 'Pull product analytics and user behavior into your planning context automatically.',
     settingsDescription: 'Product analytics & user insights',
     isByok: true,
-    note: 'Create your API key in PostHog under Settings → Personal API keys. Grant read access for:\n- Query\n- Feature Flag\n- Project\n- Organization\n- Experiment\n- Cohort\n- Insight',
+    note: `Create your API key in PostHog under Settings → Personal API keys. Choose an Organization and grant READ only access for:
+- Query
+- Feature Flag
+- Project
+- Organization
+- Experiment
+- Cohort
+- Insight`,
   },
   {
     key: 'jira',

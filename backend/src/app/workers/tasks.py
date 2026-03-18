@@ -338,24 +338,65 @@ def gather_onboarding_context(user_id: str, profile: dict):
                 f"(treat as authoritative where it conflicts):\n{scrape_correction}"
             )
 
-        prompt = f"""Write the following user-provided onboarding information to the appropriate workspace context files.
-This information was gathered during onboarding — treat it as authoritative.
+        imported_memories = profile.get("imported_memories") or []
+        memory_sections = []
+        for entry in imported_memories:
+            provider_label = (entry.get("customLabel") or entry.get("provider") or "unknown").capitalize()
+            content = (entry.get("content") or "").strip()
+            if content:
+                memory_sections.append(f"### {provider_label} Export\n{content}")
 
-Full name: {full_name}
-Role: {role}
-Company URL: {company_url}
-Current focus: {current_focus}
-Daily activities: {daily_activities_str}
+        imported_memories_block = ""
+        if memory_sections:
+            memories_str = "\n\n".join(memory_sections)
+            imported_memories_block = f"""
 
-{product_context}
+### Imported AI Memories
+The user imported memory exports from external AI assistants. Extract any additional context about the user, company, or product and merge it into the appropriate files alongside the onboarding data above.
 
-Write to:
-- context/user.md — full name, role, current focus, and daily activities
-- context/company.md — company URL and anything inferable about the company from the product observations
-- context/product.md — synthesized product description derived from the observations (and correction if present)
+{memories_str}"""
 
-Ensure each file has valid YAML frontmatter (name, description using > block scalar, last_updated).
-Read each file before writing so you merge rather than overwrite any existing content."""
+        prompt = f"""## Task: Seed Workspace Context Files
+
+You are writing structured context files for a new user's AI agent workspace.
+Below is data collected during onboarding. Follow the write instructions precisely.
+
+---
+
+## Source Data
+
+### New User Profile
+- **Full name**: {full_name}
+- **Role**: {role}
+- **Company URL**: {company_url}
+- **Current focus**: {current_focus}
+- **Daily activities**: {daily_activities_str}
+
+### Product / Company Observations
+{product_context}{imported_memories_block}
+
+---
+
+## Write Instructions
+
+### `context/user.md`
+Write the user's full name, role, current focus, and daily activities.
+
+### `context/company.md`
+Write the company URL and anything inferable about the company from the product observations above.
+
+### `context/product.md`
+Write a synthesized product description derived from the observations and the user's correction if present.
+
+### `memory/memory.md`
+Write any structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.
+
+---
+
+## Rules
+- This data is authoritative — do not fabricate or infer beyond what is provided.
+- Read each file before writing to **merge** rather than overwrite existing content.
+- Every file must have valid YAML frontmatter: `name`, `description` (using `>` block scalar), `last_updated`."""
 
         await run_learning_agent(payload, prompt)
 
@@ -368,6 +409,74 @@ Read each file before writing so you merge rather than overwrite any existing co
         return asyncio.run(_run())
     except Exception as e:
         print(f"Error gathering onboarding context for user {user_id}: {str(e)}")
+        raise
+
+
+def merge_imported_memories(user_id: str, imported_memories: list[dict]):
+    """
+    Merges memory exports from external AI providers into the user's workspace context files.
+    Called from the settings Memory tab — can be run multiple times, always merges additively.
+    """
+    async def _run():
+        from app.agents.learning_agent import run_learning_agent
+
+        memory_sections = []
+        for entry in imported_memories:
+            provider_label = (entry.get("customLabel") or entry.get("provider") or "unknown").capitalize()
+            content = (entry.get("content") or "").strip()
+            if content:
+                memory_sections.append(f"### {provider_label} Export\n{content}")
+
+        if not memory_sections:
+            return {"status": "skipped", "reason": "no content provided"}
+
+        memories_str = "\n\n".join(memory_sections)
+
+        supabase = get_supabase()
+        payload = build_agent_run_payload(supabase, user_id, session_start_platform="background")
+
+        prompt = f"""## Task: Merge AI Memory Exports
+
+You are merging memory exports from external AI assistants into an existing agent workspace.
+Extract relevant information and write it to the appropriate context files.
+
+---
+
+## Memory Exports
+
+{memories_str}
+
+---
+
+## Write Instructions
+
+### `context/user.md`
+Write: the user's identity (name, role), working style, preferences, and any behavioral instructions they've explicitly set.
+
+### `context/company.md`
+Write: information about companies, teams, or organizations the user is part of or has worked with.
+
+### `context/product.md`
+Write: products, projects, or technical work the user has built, contributed to, or is currently building.
+
+### `memory/memory.md`
+Write any structured observations about the user's preferences, goals, and working style — especially things that don't fit cleanly into one context file or that connect multiple topics.
+
+---
+
+## Rules
+- Read each file before writing to **merge** — add new information, update what has changed, never delete existing content.
+- Skip purely personal, social, or leisure content that has no bearing on work.
+- Every file must maintain valid YAML frontmatter: `name`, `description` (using `>` block scalar), `last_updated`."""
+
+        await run_learning_agent(payload, prompt)
+
+        return {"status": "success", "user_id": user_id}
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        print(f"[merge_imported_memories] error for user {user_id}: {e}")
         raise
 
 

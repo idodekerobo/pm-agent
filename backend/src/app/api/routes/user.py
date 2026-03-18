@@ -16,6 +16,11 @@ class ProfilePayload(BaseModel):
     onboarding_scrape_correction: str | None = None
     current_focus: list[str] | None = None
     daily_activities: list[str] | None = None
+    imported_memories: list[dict] | None = None  # [{provider: str, content: str}]
+
+
+class ImportMemoriesPayload(BaseModel):
+    imported_memories: list[dict]
 
 
 @router.get("/profile", response_model=User)
@@ -70,6 +75,18 @@ async def _upsert_profile(user_id: str, body: ProfilePayload, enqueue_context: b
         from app.workers.tasks import gather_onboarding_context, seed_workspace
         q = get_queue("default")
         q.enqueue(seed_workspace, user_id)
-        q.enqueue(gather_onboarding_context, user_id, update_data)
+        context_profile = {**update_data, "imported_memories": body.imported_memories}
+        q.enqueue(gather_onboarding_context, user_id, context_profile)
 
+    return {"status": "ok"}
+
+
+@router.post("/memories/import", status_code=200)
+async def import_memories(body: ImportMemoriesPayload, user_id: str = Depends(auth_protect_route)):
+    if not body.imported_memories:
+        raise HTTPException(status_code=400, detail="No memories provided")
+    from app.workers.queue import get_queue
+    from app.workers.tasks import merge_imported_memories
+    q = get_queue("default")
+    q.enqueue(merge_imported_memories, user_id, body.imported_memories)
     return {"status": "ok"}

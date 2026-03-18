@@ -77,6 +77,7 @@ BASE_INSTRUCTIONS = [
     "            e.g. event_logs/linear/ENG/2026-03-16.jsonl\n"
     "  Event logs are near real-time (few minute delay) whereas monitored_updates.md is refreshed every 6 hours. Use event logs when the user asks something that requires near real-time confirmation from Slack — e.g. 'did Alice send the status update in #general?', 'did someone answer John's question?', 'was this decision communicated in Slack?'. Otherwise, prefer integration tools (gh CLI, Linear CLI) for current state or monitored_updates.md for a recent summary. Do not read event logs speculatively.",
     "- .skills/: Instruction files for integrations. Tell sub-agents which skill to read when delegating integration work.",
+    "  If you're going to delegate to a sub-agent or agent tool to a task, you do not need to read the SKILL yourself, just tell the sub-agent to read the SKILL.",
     "- templates/: Document templates for execution_agent to use when writing product docs. Each template contains agent instructions, quality bars, and examples.",
     "  - templates/prd.md — Product Requirements Document. Use this plan new features and product scope.",
     "  - templates/fang-decision-doc.md — FANG Decision Document. Use this to decide important decisions.",

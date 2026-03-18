@@ -566,7 +566,7 @@ export default function IntegrationsTab() {
   return (
     <div className="max-w-xl">
       <h2 className="text-2xl font-semibold tracking-tight text-zinc-900">Integrations</h2>
-      <p className="mt-1.5 text-sm text-zinc-500">
+      <p className="mt-1.5 text-sm text-zinc-700">
         Manage the tools and services your PM agent can access.
       </p>
 
@@ -799,9 +799,9 @@ export default function IntegrationsTab() {
                           <ProviderIcon provider={provider} />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-zinc-800">{meta.name}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">{meta.settingsDescription}</p>
+                            <p className="mt-0.5 text-xs text-zinc-600">{meta.settingsDescription}</p>
                             {meta.note && (
-                              <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
+                              <p className="mt-1 text-[10px] text-zinc-600 leading-relaxed">{meta.note}</p>
                             )}
                           </div>
                           {meta.comingSoon ? (

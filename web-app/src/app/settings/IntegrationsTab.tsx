@@ -129,6 +129,16 @@ export default function IntegrationsTab() {
   const [byokSaving, setByokSaving] = useState(false);
   const [byokError, setByokError] = useState<string | null>(null);
 
+  // PostHog BYOK state
+  const [posthogExpanded, setPosthogExpanded] = useState(false);
+  const [posthogForm, setPosthogForm] = useState<{ api_key: string; project_id: string; region: 'us' | 'eu' }>({
+    api_key: '',
+    project_id: '',
+    region: 'us',
+  });
+  const [posthogSaving, setPosthogSaving] = useState(false);
+  const [posthogError, setPosthogError] = useState<string | null>(null);
+
   // Monitoring state
   const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
   const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
@@ -212,8 +222,13 @@ export default function IntegrationsTab() {
     if (!user) return;
     ph?.capture(EVENTS.INTEGRATION_CONNECT_CLICKED, { provider, source: 'settings' });
     if (provider === 'claude-code') {
-      setByokExpanded(true);
+      setByokExpanded((o) => !o);
       setByokError(null);
+      return;
+    }
+    if (provider === 'posthog') {
+      setPosthogExpanded((o) => !o);
+      setPosthogError(null);
       return;
     }
     window.open(`${apiBase}/integrations/${provider}/connect?user_id=${user.id}`, '_blank');
@@ -244,6 +259,46 @@ export default function IntegrationsTab() {
       setByokError('Failed to save token. Please try again.');
     } finally {
       setByokSaving(false);
+    }
+  };
+
+  const handleSavePostHog = async () => {
+    if (!posthogForm.api_key.trim()) {
+      setPosthogError('API key is required.');
+      return;
+    }
+    if (!posthogForm.project_id.trim()) {
+      setPosthogError('Project ID is required.');
+      return;
+    }
+    setPosthogSaving(true);
+    setPosthogError(null);
+    try {
+      const res = await fetch(`${apiBase}/integrations/posthog/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          api_key: posthogForm.api_key.trim(),
+          project_id: posthogForm.project_id.trim(),
+          region: posthogForm.region,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPosthogError(data?.detail ?? 'Failed to connect. Please check your credentials.');
+        return;
+      }
+      setIntegrations((prev) => [
+        ...prev.filter((i) => i.provider !== 'posthog'),
+        { provider: 'posthog', account_label: data.account_label, scopes: ['query:read', 'feature_flag:read'], created_at: new Date().toISOString() },
+      ]);
+      ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: 'posthog', source: 'settings' });
+      setPosthogExpanded(false);
+      setPosthogForm({ api_key: '', project_id: '', region: 'us' });
+    } catch {
+      setPosthogError('Failed to connect. Please try again.');
+    } finally {
+      setPosthogSaving(false);
     }
   };
 
@@ -566,7 +621,7 @@ export default function IntegrationsTab() {
   return (
     <div className="max-w-xl">
       <h2 className="text-2xl font-semibold tracking-tight text-zinc-900">Integrations</h2>
-      <p className="mt-1.5 text-sm text-zinc-500">
+      <p className="mt-1.5 text-sm text-zinc-700">
         Manage the tools and services your PM agent can access.
       </p>
 
@@ -793,15 +848,19 @@ export default function IntegrationsTab() {
                     const meta = INTEGRATION_META[provider];
                     const isLast = idx === available.length - 1;
                     const isByokExpanded = provider === 'claude-code' && byokExpanded;
+                    const isPosthogExpanded = provider === 'posthog' && posthogExpanded;
+                    const isAnyFormExpanded = isByokExpanded || isPosthogExpanded;
                     return (
                       <div key={provider} className={!isLast ? 'border-b border-zinc-100' : ''}>
                         <div className="row-hover flex items-center gap-4 px-5 py-4">
                           <ProviderIcon provider={provider} />
                           <div className="flex-1">
                             <p className="text-sm font-medium text-zinc-800">{meta.name}</p>
-                            <p className="mt-0.5 text-xs text-zinc-400">{meta.settingsDescription}</p>
+                            <p className="mt-0.5 text-xs text-zinc-600">{meta.settingsDescription}</p>
                             {meta.note && (
-                              <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{meta.note}</p>
+                              // The note contains newlines (e.g., PostHog's multi-line list), but <p> treats
+                              // whitespace as a single space. Need to use whitespace-pre-wrap or split into multiple elements.
+                              <p className="mt-1 text-[11px] text-zinc-600 leading-relaxed whitespace-pre-wrap">{meta.note}</p>
                             )}
                           </div>
                           {meta.comingSoon ? (
@@ -810,10 +869,10 @@ export default function IntegrationsTab() {
                             </span>
                           ) : meta.isByok ? (
                             <button
-                              onClick={() => { setByokExpanded((o) => !o); setByokError(null); }}
+                              onClick={() => handleConnect(provider)}
                               className="flex-shrink-0 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 transition-all hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900"
                             >
-                              {isByokExpanded ? 'Cancel' : 'Connect →'}
+                              {isAnyFormExpanded ? 'Cancel' : 'Connect →'}
                             </button>
                           ) : (
                             <button
@@ -825,7 +884,7 @@ export default function IntegrationsTab() {
                           )}
                         </div>
 
-                        {/* Inline BYOK token form */}
+                        {/* Inline BYOK token form — Claude Code */}
                         {isByokExpanded && (
                           <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4 space-y-3">
                             <div>
@@ -868,6 +927,63 @@ export default function IntegrationsTab() {
                               </button>
                             </div>
                             {byokError && <p className="text-xs text-red-600">{byokError}</p>}
+                          </div>
+                        )}
+
+                        {/* Inline BYOK form — PostHog */}
+                        {isPosthogExpanded && (
+                          <div className="border-t border-zinc-100 bg-zinc-50 px-5 py-4 space-y-3">
+                            <div>
+                              <p className="text-xs font-medium text-zinc-700 mb-2">How to connect PostHog:</p>
+                              <ol className="space-y-1 text-xs text-zinc-500 list-none">
+                                <li className="flex items-start gap-2">
+                                  <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
+                                  <span>Go to PostHog → Settings → Personal API keys and create a new key. Grant <strong>Query Read</strong> and <strong>Feature Flag Read</strong> permissions only.</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                  <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">2</span>
+                                  <span>Find your Project ID in PostHog → Settings → Project → Project ID.</span>
+                                </li>
+                                <li className="flex items-start gap-2">
+                                  <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">3</span>
+                                  Paste both below — your key is encrypted and stored securely.
+                                </li>
+                              </ol>
+                            </div>
+                            <div className="space-y-2">
+                              <input
+                                type="password"
+                                value={posthogForm.api_key}
+                                onChange={(e) => setPosthogForm((f) => ({ ...f, api_key: e.target.value }))}
+                                placeholder="phx_..."
+                                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                              />
+                              <input
+                                type="text"
+                                value={posthogForm.project_id}
+                                onChange={(e) => setPosthogForm((f) => ({ ...f, project_id: e.target.value }))}
+                                placeholder="Project ID (e.g. 12345)"
+                                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                              />
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={posthogForm.region}
+                                  onChange={(e) => setPosthogForm((f) => ({ ...f, region: e.target.value as 'us' | 'eu' }))}
+                                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                                >
+                                  <option value="us">US Cloud (us.posthog.com)</option>
+                                  <option value="eu">EU Cloud (eu.posthog.com)</option>
+                                </select>
+                                <button
+                                  onClick={handleSavePostHog}
+                                  disabled={posthogSaving}
+                                  className="flex-1 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-300"
+                                >
+                                  {posthogSaving ? 'Connecting...' : 'Connect'}
+                                </button>
+                              </div>
+                            </div>
+                            {posthogError && <p className="text-xs text-red-600">{posthogError}</p>}
                           </div>
                         )}
                       </div>

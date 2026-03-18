@@ -3,7 +3,7 @@
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 
 class IntegrationBase(BaseModel):
@@ -18,6 +18,7 @@ class IntegrationBase(BaseModel):
     expires_at: Optional[datetime] = None
     monitoring_enabled: bool = True
     last_synthesized_at: Optional[datetime] = None
+    metadata: Optional[dict[str, Any]] = None
 
 
 class IntegrationCreate(IntegrationBase):

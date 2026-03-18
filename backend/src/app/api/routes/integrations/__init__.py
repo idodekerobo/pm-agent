@@ -9,6 +9,7 @@ from .google import router as google_router
 from .linear import router as linear_router
 from .monitoring import router as monitoring_router
 from .notion import router as notion_router
+from .posthog import router as posthog_router
 from .slack import router as slack_router
 
 router = APIRouter(prefix="/integrations")
@@ -19,6 +20,7 @@ router.include_router(github_router)
 router.include_router(linear_router)
 router.include_router(google_router)
 router.include_router(notion_router)
+router.include_router(posthog_router)
 router.include_router(slack_router)
 
 

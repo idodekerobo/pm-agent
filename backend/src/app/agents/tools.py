@@ -1,4 +1,5 @@
 import asyncio
+import re
 from typing import Any, Optional
 
 from agents import RunContextWrapper, function_tool
@@ -8,6 +9,33 @@ from app.db.supabase_client import get_supabase
 from app.errors import log_error
 from app.integrations.manager import get_valid_token
 from app.messaging.slack import dispatch_slack_action
+
+
+def _assert_posthog_read_only(command: str) -> None:
+    """Raise if a curl command targeting posthog.com uses a mutating HTTP method.
+
+    The query endpoint (POST /query/) is the only POST allowed — it is a read
+    operation that PostHog exposes as POST for payload reasons.
+    All other POST, PATCH, PUT, and DELETE requests are blocked.
+    """
+    if "posthog.com" not in command:
+        return
+
+    # Block explicit mutating methods unconditionally
+    if re.search(r"-X\s+(PATCH|PUT|DELETE)", command):
+        print(f"Blocking agent attempt at a posthog write: {command}")
+        raise ValueError("PostHog writes are not permitted. Only read requests are allowed.")
+
+    # Block POST to any endpoint other than /query/
+    if re.search(r"-X\s+POST", command) and "/query/" not in command:
+        print(f"Blocking agent attempt at a POST to posthog endpoint that is not /query/: {command}")
+        raise ValueError("PostHog writes are not permitted. POST is only allowed to the /query/ endpoint.")
+
+    # curl sends POST implicitly when -d/--data is present without an explicit -X.
+    # Block that pattern too, unless it targets /query/.
+    if re.search(r"\s(-d|--data)\s", command) and "/query/" not in command:
+        print(f"Blocking agent attempt at a posthog write: {command}")
+        raise ValueError("PostHog writes are not permitted. Only GET and POST /query/ are allowed.")
 
 if settings.workspace_backend == "production":
     from app.workspace.workspace_runtime import bash as ws_bash
@@ -83,6 +111,7 @@ async def tool_fs_list(context: RunContextWrapper[AgentContext], path: str = "."
         }))
         raise
 
+# TODO: improve this function to dynamically env_var mappings instead of if/else chain
 @function_tool
 async def tool_bash(
     context: RunContextWrapper[AgentContext],
@@ -120,6 +149,21 @@ async def tool_bash(
                 env_vars["SLACK_BOT_TOKEN"] = token
             elif required_provider_auth == "github":
                 env_vars["GITHUB_TOKEN"] = token
+            elif required_provider_auth == "posthog":
+                env_vars["POSTHOG_API_KEY"] = token
+                # Fetch project_id and region from integration metadata
+                integration_resp = (
+                    supabase.table("integrations")
+                    .select("metadata")
+                    .eq("user_id", context.context.user_id)
+                    .eq("provider", "posthog")
+                    .maybe_single()
+                    .execute()
+                )
+                if integration_resp.data and integration_resp.data.get("metadata"):
+                    meta = integration_resp.data["metadata"]
+                    env_vars["POSTHOG_PROJECT_ID"] = str(meta.get("project_id", ""))
+                    env_vars["POSTHOG_REGION"] = meta.get("region", "us")
 
         except Exception as e:
             asyncio.create_task(log_error(context.context.user_id, "agent", e, context={
@@ -131,6 +175,13 @@ async def tool_bash(
                 "stderr": f"Authentication failed for {required_provider_auth}: {str(e)}",
                 "exit_code": 1
             }
+
+    # Enforce read-only access for PostHog before executing any command
+    if required_provider_auth == "posthog":
+        try:
+            _assert_posthog_read_only(command)
+        except ValueError as e:
+            return {"stdout": "", "stderr": str(e), "exit_code": 1}
 
     try:
         result = await ws_bash(

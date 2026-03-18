@@ -146,4 +146,16 @@ export interface ImportedMemory {
   provider: MemoryProvider;
   content: string;
   customLabel?: string; // editable display name, used when provider === 'other'
+  _id?: string;         // client-only stable React key, not sent to backend
+}
+
+/** Returns a unique label for a new 'other' entry given existing entries. */
+export function getNextOtherLabel(existing: ImportedMemory[]): string {
+  const taken = new Set(
+    existing.filter((m) => m.provider === 'other').map((m) => m.customLabel ?? 'Other')
+  );
+  if (!taken.has('Other')) return 'Other';
+  let i = 1;
+  while (taken.has(`Other_${i}`)) i++;
+  return `Other_${i}`;
 }

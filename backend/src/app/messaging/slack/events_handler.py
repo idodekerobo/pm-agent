@@ -112,10 +112,6 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         raw_channel, raw_thread, bot_user_id, exclude_ts=ts
     )
 
-    image_urls, text_files, skipped_filenames = await _extract_file_attachments(
-        bot_token, event.get("files", []), str(installation.user_id)
-    )
-
     analytics_capture(
         str(installation.user_id),
         Events.SLACK_AGENT_MENTIONED,
@@ -131,9 +127,7 @@ async def handle_app_mention(event: dict, installation: SlackInstallation) -> No
         context_history=context_history,
         installation=installation,
         slack_user_id=event["user"],
-        image_urls=image_urls or None,
-        text_files=text_files or None,
-        skipped_filenames=skipped_filenames or None,
+        files=event.get("files", []),
     )
 
 
@@ -153,12 +147,10 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         return
 
     prompt_text = event.get("text", "").strip()
-    image_urls, text_files, skipped_filenames = await _extract_file_attachments(
-        bot_token, event.get("files", []), str(installation.user_id)
-    )
+    raw_files = event.get("files", [])
 
     # Allow file-only messages; skip only if truly empty
-    if not prompt_text and not image_urls and not text_files:
+    if not prompt_text and not raw_files:
         return
 
     analytics_capture(
@@ -176,9 +168,7 @@ async def handle_im_message(event: dict, installation: SlackInstallation) -> Non
         context_history=None,
         installation=installation,
         slack_user_id=event["user"],
-        image_urls=image_urls or None,
-        text_files=text_files or None,
-        skipped_filenames=skipped_filenames or None,
+        files=raw_files,
     )
 
 
@@ -271,9 +261,7 @@ async def _run_agent_for_message(
     context_history: list[dict] | None,
     installation: SlackInstallation,
     slack_user_id: str,
-    image_urls: list[str] | None = None,
-    text_files: list[dict] | None = None,
-    skipped_filenames: list[str] | None = None,
+    files: list[dict] | None = None,
 ) -> None:
     """Core orchestrator flow shared by handle_app_mention and handle_im_message.
 
@@ -355,6 +343,10 @@ async def _run_agent_for_message(
             external_thread_id=external_thread_id,
             max_age_hours=36,
         )
+
+    image_urls, text_files, skipped_filenames = await _extract_file_attachments(
+        bot_token, files or [], user_id, session_id=existing_session_id
+    )
 
     workspace_id_to_reset: str | None = None
     await add_reaction(bot_token, channel, ts, "hourglass_flowing_sand")

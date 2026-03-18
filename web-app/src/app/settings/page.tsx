@@ -11,9 +11,10 @@ import AgentFilesTab from './AgentFilesTab';
 import BillingTab from './BillingTab';
 import FeedbackTab from './FeedbackTab';
 import IntegrationsTab from './IntegrationsTab';
+import MemoryTab from './MemoryTab';
 import ProfileTab from './ProfileTab';
 
-type Tab = 'integrations' | 'agent-files' | 'billing' | 'profile' | 'feedback';
+type Tab = 'integrations' | 'agent-files' | 'billing' | 'profile' | 'feedback' | 'memory';
 
 function SettingsContent() {
   const router = useRouter();
@@ -154,6 +155,19 @@ function SettingsContent() {
                 Agent Files
               </button>
               <button
+                onClick={() => navigateToTab('memory')}
+                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  activeTab === 'memory'
+                    ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
+                }`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                </svg>
+                Memory
+              </button>
+              <button
                 onClick={() => navigateToTab('billing')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
                   activeTab === 'billing'
@@ -243,6 +257,7 @@ function SettingsContent() {
             {activeTab === 'profile'      && <ProfileTab />}
             {activeTab === 'integrations' && <IntegrationsTab />}
             {activeTab === 'agent-files'  && <div className="flex h-full flex-col"><AgentFilesTab /></div>}
+            {activeTab === 'memory'       && <MemoryTab />}
             {activeTab === 'billing'      && <BillingTab />}
             {activeTab === 'feedback'     && <FeedbackTab />}
 

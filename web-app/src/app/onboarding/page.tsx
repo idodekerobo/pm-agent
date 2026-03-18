@@ -6,6 +6,13 @@ import { useAuth } from '@/lib/AuthContext';
 import { createClient } from '@/lib/supabaseClient';
 import { ROLES } from '@/lib/profileOptions';
 import { INTEGRATIONS } from '@/lib/integrations';
+import {
+  BASE_MEMORY_PROMPT,
+  getMemoryPrompt,
+  MEMORY_PROVIDERS,
+  type MemoryProvider,
+  type ImportedMemory,
+} from '@/lib/memoryImport';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { usePostHog } from 'posthog-js/react';
@@ -55,7 +62,7 @@ const ACTIVITY_REACTIONS: Record<string, string> = {
 // Types
 // ---------------------------------------------------------------------------
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface IntegrationStatus {
   [key: string]: boolean;
@@ -72,7 +79,7 @@ const DRAFT_EXPIRY_MS = 18 * 60 * 60 * 1000; // 18 hours
 function StepIndicator({ current }: { current: Step }) {
   return (
     <div className="flex items-center gap-2">
-      {([1, 2, 3, 4, 5] as Step[]).map((s) => (
+      {([1, 2, 3, 4, 5, 6] as Step[]).map((s) => (
         <div key={s} className="flex items-center gap-2">
           <div
             className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium transition-colors ${
@@ -91,7 +98,7 @@ function StepIndicator({ current }: { current: Step }) {
               s
             )}
           </div>
-          {s < 5 && <div className={`h-px w-6 ${s < current ? 'bg-zinc-300' : 'bg-zinc-100'}`} />}
+          {s < 6 && <div className={`h-px w-6 ${s < current ? 'bg-zinc-300' : 'bg-zinc-100'}`} />}
         </div>
       ))}
     </div>
@@ -135,13 +142,21 @@ function OnboardingPageInner() {
   const [role, setRole] = useState('');
   const [roleOther, setRoleOther] = useState('');
 
-  // Step 4 — sign up
+  // Step 4 — memory import
+  const [importedMemories, setImportedMemories] = useState<ImportedMemory[]>([]);
+  const [memoryWorkOnly, setMemoryWorkOnly] = useState(false);
+  const [memoryRedactPII, setMemoryRedactPII] = useState(false);
+  const [memoryPromptText, setMemoryPromptText] = useState(BASE_MEMORY_PROMPT);
+  const [memoryCopied, setMemoryCopied] = useState(false);
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
+
+  // Step 5 — sign up
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Step 5 — connect tools
+  // Step 6 — connect tools
   const [finishing, setFinishing] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationStatus>({});
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
@@ -175,6 +190,11 @@ function OnboardingPageInner() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Rebuild memory prompt when add-on checkboxes change
+  useEffect(() => {
+    setMemoryPromptText(getMemoryPrompt(memoryWorkOnly, memoryRedactPII));
+  }, [memoryWorkOnly, memoryRedactPII]);
+
   // Detect email confirmation return
   useEffect(() => {
     if (loading) return;
@@ -183,7 +203,7 @@ function OnboardingPageInner() {
     if (!awaiting) return;
     localStorage.removeItem('onboarding_awaiting');
     setAwaitingConfirmation(false);
-    setStep(5);
+    setStep(6);
   }, [user, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Restore in-progress draft from localStorage on mount (18hr expiry)
@@ -210,7 +230,8 @@ function OnboardingPageInner() {
       if (draft.dailyActivities?.length) setDailyActivities(draft.dailyActivities);
       if (draft.role) setRole(draft.role);
       if (draft.roleOther) setRoleOther(draft.roleOther);
-      if (draft.step && draft.step <= 3) setStep(draft.step);
+      if (draft.importedMemories?.length) setImportedMemories(draft.importedMemories);
+      if (draft.step && draft.step <= 4) setStep(draft.step);
     } catch {
       localStorage.removeItem(DRAFT_KEY);
     }
@@ -233,9 +254,10 @@ function OnboardingPageInner() {
       dailyActivities,
       role,
       roleOther,
+      importedMemories,
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }, [step, fullName, companyUrl, scrapeConfirmed, correctionSubmitted, correction, currentFocus, dailyActivities, role, roleOther, awaitingConfirmation]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, fullName, companyUrl, scrapeConfirmed, correctionSubmitted, correction, currentFocus, dailyActivities, role, roleOther, importedMemories, awaitingConfirmation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Integration success messages from OAuth popup
   useEffect(() => {
@@ -387,6 +409,7 @@ function OnboardingPageInner() {
       onboarding_scrape_correction: correctionSubmitted ? correction : '',
       current_focus: currentFocus,
       daily_activities: dailyActivities,
+      imported_memories: importedMemories,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profileSnapshot));
     localStorage.setItem('onboarding_awaiting', 'true');
@@ -404,7 +427,7 @@ function OnboardingPageInner() {
       });
 
       if (oauthError) throw oauthError;
-      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 4, step_name: 'sign_up_google' });
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 5, step_name: 'sign_up_google' });
       localStorage.removeItem(DRAFT_KEY);
       // signInWithOAuth redirects the browser — no further action needed
     } catch (e: unknown) {
@@ -431,6 +454,7 @@ function OnboardingPageInner() {
       onboarding_scrape_correction: correctionSubmitted ? correction : '',
       current_focus: currentFocus,
       daily_activities: dailyActivities,
+      imported_memories: importedMemories,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profileSnapshot));
 
@@ -447,7 +471,7 @@ function OnboardingPageInner() {
       });
 
       if (signUpError) throw signUpError;
-      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 4, step_name: 'sign_up' });
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 5, step_name: 'sign_up' });
       localStorage.removeItem(DRAFT_KEY);
       setAwaitingConfirmation(true);
     } catch (e: unknown) {
@@ -487,6 +511,7 @@ function OnboardingPageInner() {
         onboarding_scrape_correction: correctionSubmitted ? correction : '',
         current_focus: currentFocus,
         daily_activities: dailyActivities,
+        imported_memories: importedMemories,
       };
 
       await fetch(`${apiBase}/user/profile`, {
@@ -577,8 +602,9 @@ function OnboardingPageInner() {
     1: 'profile',
     2: 'focus_areas',
     3: 'role',
-    4: 'sign_up',
-    5: 'integrations',
+    4: 'memory_import',
+    5: 'sign_up',
+    6: 'integrations',
   };
 
   const handleNext = () => {
@@ -598,6 +624,9 @@ function OnboardingPageInner() {
       ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 3, step_name: STEP_NAMES[3] });
       setStep(4);
     } else if (step === 4) {
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 4, step_name: STEP_NAMES[4], providers_imported: importedMemories.map((m) => m.provider) });
+      setStep(5);
+    } else if (step === 5) {
       handleSignUp();
     }
   };
@@ -623,7 +652,7 @@ function OnboardingPageInner() {
                   We sent a confirmation link to <span className="font-medium text-zinc-800">{email}</span>.
                 </p>
               </div>
-              <StepIndicator current={4} />
+              <StepIndicator current={5} />
             </div>
           </div>
           <div className="px-8 py-10 flex flex-col items-center gap-4 text-center">
@@ -652,9 +681,14 @@ function OnboardingPageInner() {
   const STEP_LABELS: Record<Step, { title: string; subtitle: string; note?: string }> = {
     1: { title: 'Your product', subtitle: `Let's start by understanding what you're building.` },
     2: { title: 'Your priorities', subtitle: 'Help your agent focus on what matters most to you.' },
-    3: { title: 'Your role', subtitle: 'One last thing before we set up your account.' },
-    4: { title: 'Create your account', subtitle: 'Save your progress and activate your workspace.' },
-    5: {
+    3: { title: 'Your role', subtitle: 'One last thing before we import your memories.' },
+    4: {
+      title: 'Import AI memories',
+      subtitle: 'Give your agent a head start with context from other AI tools.',
+      note: 'Optional — you can skip this and do it later in Settings.',
+    },
+    5: { title: 'Create your account', subtitle: 'Save your progress and activate your workspace.' },
+    6: {
       title: 'Connect your tools',
       subtitle: 'Extend where your agent can help you work.',
       note: 'All integrations are optional — you can connect more later in Settings.',
@@ -1067,8 +1101,159 @@ function OnboardingPageInner() {
           </div>
         )}
 
-        {/* ── Step 4 — Sign-up wall ─────────────────────────────────────────── */}
+        {/* ── Step 4 — Import AI memories ───────────────────────────────────── */}
         {step === 4 && (
+          <div className="px-8 py-6 space-y-5">
+            {/* Add-on checkboxes */}
+            <div className="space-y-2.5">
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Prompt options</p>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={memoryWorkOnly}
+                  onChange={(e) => setMemoryWorkOnly(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                />
+                <span className="text-sm text-zinc-700">Only include work and business related items</span>
+              </label>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={memoryRedactPII}
+                  onChange={(e) => setMemoryRedactPII(e.target.checked)}
+                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
+                />
+                <span className="text-sm text-zinc-700">Redact personal data (names, locations, etc.)</span>
+              </label>
+            </div>
+
+            {/* Editable prompt textarea */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Prompt to copy</p>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard.writeText(memoryPromptText); setMemoryCopied(true); setTimeout(() => setMemoryCopied(false), 2000); }}
+                  className="rounded border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 transition-colors"
+                >
+                  {memoryCopied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <p className="text-xs text-zinc-400">Feel free to edit the prompt to your needs.</p>
+              <textarea
+                value={memoryPromptText}
+                onChange={(e) => setMemoryPromptText(e.target.value)}
+                rows={7}
+                className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-700 font-mono leading-relaxed focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-y"
+              />
+            </div>
+
+            {/* Provider links */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-xs text-zinc-400 mr-1">Open in:</p>
+              {MEMORY_PROVIDERS.filter((p) => p.url).map((p) => (
+                <a
+                  key={p.key}
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-colors"
+                >
+                  {p.label} ↗
+                </a>
+              ))}
+            </div>
+
+            {/* Per-provider paste areas */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Paste responses</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">Works with any AI tool — Claude Code, Cursor, Devin, Dia, and more.</p>
+                </div>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowProviderDropdown((v) => !v)}
+                    className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-colors"
+                  >
+                    + Add provider
+                  </button>
+                  {showProviderDropdown && (
+                    <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-zinc-200 bg-white shadow-sm">
+                      {MEMORY_PROVIDERS.filter((p) => !importedMemories.find((m) => m.provider === p.key)).map((p) => (
+                        <button
+                          key={p.key}
+                          type="button"
+                          onClick={() => {
+                            setImportedMemories((prev) => [...prev, { provider: p.key as MemoryProvider, content: '', customLabel: p.key === 'other' ? 'Other' : undefined }]);
+                            setShowProviderDropdown(false);
+                          }}
+                          className="block w-full text-left px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 first:rounded-t-md last:rounded-b-md"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                      {MEMORY_PROVIDERS.every((p) => importedMemories.find((m) => m.provider === p.key)) && (
+                        <p className="px-4 py-2 text-xs text-zinc-400">All providers added</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {importedMemories.length === 0 && (
+                <p className="text-xs text-zinc-400 italic">No providers added yet. Run the prompt above in any AI assistant, then paste the response here.</p>
+              )}
+
+              {importedMemories.map((mem, idx) => {
+                const displayLabel = mem.provider === 'other' ? (mem.customLabel ?? 'Other') : MEMORY_PROVIDERS.find((p) => p.key === mem.provider)?.label ?? mem.provider;
+                return (
+                  <div key={mem.provider} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      {mem.provider === 'other' ? (
+                        <input
+                          type="text"
+                          value={mem.customLabel ?? 'Other'}
+                          onChange={(e) => {
+                            const updated = [...importedMemories];
+                            updated[idx] = { ...updated[idx], customLabel: e.target.value };
+                            setImportedMemories(updated);
+                          }}
+                          placeholder="Provider name"
+                          className="rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 w-36"
+                        />
+                      ) : (
+                        <p className="text-xs font-medium text-zinc-700">{displayLabel}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setImportedMemories((prev) => prev.filter((_, i) => i !== idx))}
+                        className="text-xs text-zinc-400 hover:text-red-500 transition-colors flex-shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <textarea
+                      value={mem.content}
+                      onChange={(e) => {
+                        const updated = [...importedMemories];
+                        updated[idx] = { ...updated[idx], content: e.target.value };
+                        setImportedMemories(updated);
+                      }}
+                      rows={5}
+                      placeholder={`Paste your ${displayLabel} response here…`}
+                      className="block w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 placeholder-zinc-300 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-y"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 5 — Sign-up wall ─────────────────────────────────────────── */}
+        {step === 5 && (
           <div className="px-8 py-6 space-y-4">
             <p className="text-sm text-zinc-600">
               Your workspace is being set up — create an account to save your progress.
@@ -1129,8 +1314,8 @@ function OnboardingPageInner() {
           </div>
         )}
 
-        {/* ── Step 5 — Connect tools ────────────────────────────────────────── */}
-        {step === 5 && (
+        {/* ── Step 6 — Connect tools ────────────────────────────────────────── */}
+        {step === 6 && (
           <div className="px-8 py-6 space-y-2.5">
             {INTEGRATIONS.map((integration) => {
               const connected = !!integrations[integration.key];
@@ -1277,7 +1462,24 @@ function OnboardingPageInner() {
             ← Back
           </button>
 
-          {step < 5 ? (
+          {step === 4 ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => { ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 4, step_name: 'memory_import_skipped' }); setStep(5); }}
+                className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                Skip
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
+              >
+                Continue →
+              </button>
+            </div>
+          ) : step < 6 ? (
             <button
               type="button"
               onClick={handleNext}
@@ -1290,9 +1492,9 @@ function OnboardingPageInner() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  {step === 4 ? 'Creating account…' : 'Loading…'}
+                  {step === 5 ? 'Creating account…' : 'Loading…'}
                 </span>
-              ) : step === 4 ? (
+              ) : step === 5 ? (
                 'Create Account →'
               ) : (
                 'Continue →'

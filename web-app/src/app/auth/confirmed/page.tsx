@@ -44,6 +44,7 @@ export default function ConfirmedPage() {
           onboarding_scrape_correction: string;
           current_focus: string;
           daily_activities: string[];
+          imported_memories?: { provider: string; content: string }[];
         };
         await fetch(`${apiBase}/user/profile`, {
           method: 'POST',
@@ -56,6 +57,7 @@ export default function ConfirmedPage() {
             onboarding_scrape_correction: profile.onboarding_scrape_correction || null,
             current_focus: profile.current_focus || null,
             daily_activities: profile.daily_activities?.length ? profile.daily_activities : null,
+            imported_memories: profile.imported_memories?.length ? profile.imported_memories : null,
           }),
         });
       } finally {

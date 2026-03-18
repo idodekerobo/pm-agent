@@ -22,11 +22,12 @@ def upload_attachment(
     """
     supabase = get_supabase()
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    original_name = filename.rsplit(".", 1)[0] if "." in filename else filename
     file_uuid = str(uuid.uuid4())
     path = (
-        f"{user_id}/{session_id}/{file_uuid}.{ext}"
+        f"{user_id}/{session_id}/{file_uuid}-{original_name}.{ext}"
         if session_id
-        else f"{user_id}/{file_uuid}.{ext}"
+        else f"{user_id}/{file_uuid}-{original_name}.{ext}"
     )
     supabase.storage.from_(BUCKET).upload(path, data, {"content-type": content_type})
     return f"{settings.supabase_url}/storage/v1/object/public/{BUCKET}/{path}"

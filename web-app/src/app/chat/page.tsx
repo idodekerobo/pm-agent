@@ -541,7 +541,8 @@ function ChatPage() {
         await Promise.all([
           ...imageFiles.map(async (f) => {
             const fileExt = f.file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-            const path = `${userId}/${sessionPath}/${crypto.randomUUID()}.${fileExt}`;
+            const originalName = f.file.name.includes(".") ? f.file.name.slice(0, f.file.name.lastIndexOf(".")) : f.file.name;
+            const path = `${userId}/${sessionPath}/${crypto.randomUUID()}-${originalName}.${fileExt}`;
             const { error: uploadError } = await supabase.storage
               .from("conversation-attachments")
               .upload(path, f.file, { contentType: f.file.type, upsert: false });
@@ -553,7 +554,8 @@ function ChatPage() {
           }),
           ...textFiles.map(async (f) => {
             const fileExt = f.file.name.split(".").pop()?.toLowerCase() ?? "txt";
-            const path = `${userId}/${sessionPath}/${crypto.randomUUID()}.${fileExt}`;
+            const originalName = f.file.name.includes(".") ? f.file.name.slice(0, f.file.name.lastIndexOf(".")) : f.file.name;
+            const path = `${userId}/${sessionPath}/${crypto.randomUUID()}-${originalName}.${fileExt}`;
             const { error: uploadError } = await supabase.storage
               .from("conversation-attachments")
               .upload(path, f.file, { contentType: f.file.type || "text/plain", upsert: false });

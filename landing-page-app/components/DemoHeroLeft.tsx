@@ -9,16 +9,20 @@ const STORAGE_KEY = "draft_demo";
 
 const BULLETS = [
   {
-    label: "Think.",
-    text: "Write specs, PRDs, and strategy docs in minutes — grounded in your stack and context.",
+    label: "Context.",
+    text: "Import your CLAUDE.md, GitHub repos, and AI memory in one click.",
   },
   {
     label: "Execute.",
-    text: "Hand off tasks directly to coding agents through GitHub, Notion, Linear, and Slack.",
+    text: "Ship specs as PRs. No copy-paste. No context switching.",
   },
   {
-    label: "Scale.",
-    text: "Built for founders who move fast and need leverage — not another tool to manage.",
+    label: "Slack.",
+    text: "Add Draft to any Slack channel — it reads and responds like a new IC.",
+  },
+  {
+    label: "Loop.",
+    text: "Draft tracks what ships. Planning and building stay connected.",
   },
 ];
 
@@ -77,7 +81,7 @@ export default function DemoHeroLeft() {
             textTransform: "uppercase",
           }}
         >
-          AI Product Manager
+          For PM-Builders
         </span>
       </div>
 
@@ -95,7 +99,7 @@ export default function DemoHeroLeft() {
           margin: "0 0 1.25rem 0",
         }}
       >
-        Scale yourself.
+        The PM brain
         <br />
         <span
           style={{
@@ -103,7 +107,7 @@ export default function DemoHeroLeft() {
             fontStyle: "italic",
           }}
         >
-          Not your headcount.
+          behind Claude Code.
         </span>
       </h1>
 
@@ -119,8 +123,8 @@ export default function DemoHeroLeft() {
           maxWidth: "380px",
         }}
       >
-        Draft is your AI product manager — connected to every tool your team
-        already uses.
+        Draft sits between your product decisions and what actually ships —
+        connected to GitHub, Linear, PostHog, Notion, and more.
       </p>
 
       {/* Bullets */}

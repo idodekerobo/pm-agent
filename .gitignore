@@ -16,3 +16,4 @@ dump.rdb
 .cursorrules
 .cursor/
 .claude/CLAUDE.md
+.gstack/

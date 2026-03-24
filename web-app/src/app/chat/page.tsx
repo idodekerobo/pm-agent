@@ -10,31 +10,13 @@ import { EVENTS } from "@/lib/analytics";
 import { logError } from "@/lib/errorLogger";
 import { useProfileComplete } from "@/lib/useProfileComplete";
 import FeedbackModal from "@/components/FeedbackModal";
-import ToolCallBlock from "@/components/ToolCallBlock";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabaseClient";
-import EmptyStateChat from "@/components/EmptyStateChat";
+import ChatSidebar from "@/components/chat/ChatSidebar";
+import ChatHeader from "@/components/chat/ChatHeader";
+import ChatMessageFeed from "@/components/chat/ChatMessageFeed";
+import ChatInputBar from "@/components/chat/ChatInputBar";
+import type { Message, AttachedFile, RenderItem, Session } from "@/app/chat/types";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant" | "tool_call" | "tool_output";
-  content: string;
-  imageUrls?: string[];
-  textFileNames?: string[];
-  toolName?: string;
-  callId?: string;
-  toolArguments?: string;
-}
-
-interface AttachedFile {
-  id: string;
-  file: File;
-  kind: "image" | "text";
-  previewUrl: string | null;
-  textContent: string | null;
-  error: string | null;
-}
 
 const ACCEPTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -48,19 +30,6 @@ const KNOWN_UNSUPPORTED_EXTENSIONS = new Set([
   "ttf", "otf", "woff", "woff2",
 ]);
 
-type RenderItem =
-  | { type: "message"; message: Message }
-  | { type: "tool_pair"; id: string; call: Message; output: Message | null };
-
-interface Session {
-  id: string;
-  created_at: string;
-  display_name?: string | null;
-  is_pinned: boolean;
-  initiated_by: string;
-  last_read_at: string | null;
-  last_message_at: string;
-}
 
 function ChatPage() {
   const router = useRouter();
@@ -773,356 +742,44 @@ function ChatPage() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-white">
-      {/* Sidebar */}
-      <div
-        className={`flex shrink-0 flex-col border-r border-zinc-200 bg-zinc-50 transition-all duration-200 ${
-          sidebarOpen ? "w-64" : "w-10"
-        }`}
-      >
-        {sidebarOpen ? (
-          <>
-            {/* Sidebar Header */}
-            <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-4">
-              <span className="text-sm font-semibold text-zinc-900">Chats</span>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-                aria-label="Collapse sidebar"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M15 18l-6-6 6-6" />
-                </svg>
-              </button>
-            </div>
+      <ChatSidebar
+        sessions={sessions}
+        activeSessionId={activeSessionId}
+        sidebarOpen={sidebarOpen}
+        hoveredSessionId={hoveredSessionId}
+        openMenuId={openMenuId}
+        renamingSessionId={renamingSessionId}
+        renameValue={renameValue}
+        renameInputRef={renameInputRef}
+        setSidebarOpen={setSidebarOpen}
+        setHoveredSessionId={setHoveredSessionId}
+        setOpenMenuId={setOpenMenuId}
+        setRenamingSessionId={setRenamingSessionId}
+        setRenameValue={setRenameValue}
+        startNewSession={startNewSession}
+        loadSession={loadSession}
+        handleRenameSubmit={handleRenameSubmit}
+        handleTogglePin={handleTogglePin}
+        handleDelete={handleDelete}
+        formatSessionTime={formatSessionTime}
+      />
 
-            {/* New Chat Button */}
-            <div className="px-3 py-3">
-              <button
-                onClick={startNewSession}
-                className="flex w-full items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                New Chat
-              </button>
-            </div>
-
-            {/* Session List */}
-            <div className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
-              {sessions.map((s) => (
-                <div
-                  key={s.id}
-                  className="relative"
-                  onMouseEnter={() => setHoveredSessionId(s.id)}
-                  onMouseLeave={() => setHoveredSessionId(null)}
-                >
-                  {renamingSessionId === s.id ? (
-                    <div className="rounded-lg px-3 py-2.5">
-                      <input
-                        ref={renameInputRef}
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleRenameSubmit(s.id);
-                          if (e.key === "Escape") setRenamingSessionId(null);
-                        }}
-                        onBlur={() => handleRenameSubmit(s.id)}
-                        className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900 focus:border-zinc-900 focus:outline-none"
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => loadSession(s.id)}
-                      className={`w-full rounded-lg px-3 py-2.5 text-left text-xs transition-colors ${
-                        s.id === activeSessionId
-                          ? "bg-zinc-200 text-zinc-900"
-                          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-                      }`}
-                    >
-                      <span className="flex items-center gap-1.5 pr-5">
-                        {s.is_pinned && (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-zinc-400">
-                            <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6h2v-6h5v-2l-2-2z"/>
-                          </svg>
-                        )}
-                        <span className="truncate font-medium">
-                          {s.display_name ?? formatSessionTime(s.created_at)}
-                        </span>
-                        {(!s.last_read_at || new Date(s.last_message_at) > new Date(s.last_read_at)) && s.id !== activeSessionId && (
-                          <span className="ml-auto shrink-0 h-2 w-2 rounded-full bg-rose-700" />
-                        )}
-                      </span>
-                      {s.display_name && (
-                        <span className="mt-0.5 block truncate text-[11px] text-zinc-400">
-                          {formatSessionTime(s.created_at)}
-                        </span>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Ellipsis button */}
-                  {renamingSessionId !== s.id && (hoveredSessionId === s.id || openMenuId === s.id) && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setOpenMenuId((prev) => (prev === s.id ? null : s.id));
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
-                      aria-label="Session options"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <circle cx="5" cy="12" r="2" />
-                        <circle cx="12" cy="12" r="2" />
-                        <circle cx="19" cy="12" r="2" />
-                      </svg>
-                    </button>
-                  )}
-
-                  {/* Dropdown menu */}
-                  {openMenuId === s.id && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute right-2 top-full z-10 mt-1 w-32 rounded-lg border border-zinc-200 bg-white py-1 shadow-md"
-                    >
-                      <button
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          setRenamingSessionId(s.id);
-                          setRenameValue(s.display_name ?? "");
-                        }}
-                        className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100"
-                      >
-                        Rename
-                      </button>
-                      <button
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          handleTogglePin(s.id, s.is_pinned);
-                        }}
-                        className="w-full px-3 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-100"
-                      >
-                        {s.is_pinned ? "Unpin" : "Pin"}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setOpenMenuId(null);
-                          handleDelete(s.id);
-                        }}
-                        className="w-full px-3 py-1.5 text-left text-xs text-red-600 hover:bg-zinc-100"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          /* Collapsed icon strip */
-          <div className="flex flex-col items-center gap-2 py-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-              aria-label="Expand sidebar"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </button>
-            <button
-              onClick={startNewSession}
-              className="rounded p-1.5 text-zinc-500 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
-              aria-label="New chat"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Main Chat Column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-6 py-4">
-          <div>
-            <h1 className="text-lg font-semibold text-zinc-900">Product Manager Agent</h1>
-            <p className="mt-1 text-sm text-zinc-500">
-              Chat with your AI-powered product strategy assistant
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {creditsRemaining !== null && (
-              <div className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm">
-                <span className="text-zinc-500">Credits</span>
-                <span className="ml-1.5 font-medium text-zinc-900">{creditsRemaining}</span>
-              </div>
-            )}
-            <button
-              onClick={() => setShowFeedbackModal(true)}
-              className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
-            >
-              Feedback
-            </button>
-            <Link
-              href="/settings"
-              className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
-            >
-              Settings
-            </Link>
-            <div className="border-l border-zinc-200 pl-3">
-              <button
-                onClick={handleSignOut}
-                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
+        <ChatHeader
+          creditsRemaining={creditsRemaining}
+          onFeedbackClick={() => setShowFeedbackModal(true)}
+          onSignOut={handleSignOut}
+        />
 
-        {/* Messages */}
-        <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="mx-auto max-w-2xl space-y-6">
-            {messages.length === 0 ? (
-              !sessionsLoaded ? null : activeSession?.initiated_by === "agent" ? (
-                <div className="flex h-full items-center justify-center text-center">
-                  <div>
-                    <p className="text-lg text-zinc-600">Your agent is preparing a welcome...</p>
-                    <p className="mt-2 text-sm text-zinc-400">
-                      It&apos;s reviewing your profile and will be right with you.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <EmptyStateChat onPromptSelect={(p) => setInput(p)} />
-              )
-            ) : (
-              renderItems.map((item) => {
-                if (item.type === "tool_pair") {
-                  return (
-                    <div key={item.id} className="flex justify-start">
-                      <ToolCallBlock
-                        toolName={item.call.toolName ?? item.call.content}
-                        toolArguments={item.call.toolArguments ?? item.call.content}
-                        output={item.output ? item.output.content : null}
-                      />
-                    </div>
-                  );
-                }
-                const message = item.message;
-                return (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-lg rounded-lg px-4 py-3 ${
-                        message.role === "user"
-                          ? "bg-zinc-900 text-white"
-                          : "bg-zinc-100 text-zinc-900"
-                      }`}
-                    >
-                      {message.role === "user" ? (
-                        <div>
-                          {message.content && (
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                              {message.content}
-                            </p>
-                          )}
-                          {message.imageUrls?.map((url) => (
-                            <img
-                              key={url}
-                              src={url}
-                              alt="attachment"
-                              className="mt-2 max-h-48 max-w-full rounded-md object-cover"
-                            />
-                          ))}
-                          {message.textFileNames?.map((name) => (
-                            <div key={name} className="mt-2 flex items-center gap-1.5 rounded-md bg-zinc-700 px-2 py-1">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-300">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <polyline points="14 2 14 8 20 8" />
-                              </svg>
-                              <span className="truncate text-xs text-zinc-200">{name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="prose prose-sm prose-zinc max-w-none text-zinc-900 [&_a]:text-blue-600 [&_a]:underline [&_a]:break-all [&_pre]:bg-zinc-800 [&_pre]:text-zinc-100 [&_code:not(pre_code)]:bg-zinc-200 [&_code:not(pre_code)]:px-1 [&_code:not(pre_code)]:rounded [&_code:not(pre_code)]:text-zinc-800">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-3">
-                  <div className="flex gap-1">
-                    <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400" />
-                    <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 animation-delay-200" />
-                    <div className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 animation-delay-400" />
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
+        <ChatMessageFeed
+          renderItems={renderItems}
+          isLoading={isLoading}
+          sessionsLoaded={sessionsLoaded}
+          activeSession={activeSession}
+          messagesEndRef={messagesEndRef}
+          chatContainerRef={chatContainerRef}
+          onPromptSelect={(p) => setInput(p)}
+        />
 
         {/* Incomplete profile banner */}
         {profileComplete === false && (
@@ -1177,138 +834,24 @@ function ChatPage() {
           </div>
         )}
 
-        {/* Input Area */}
-        <div className="shrink-0 border-t border-zinc-200 bg-white px-6 py-4">
-          <form onSubmit={handleSendMessage} className="mx-auto max-w-2xl">
-            {/* Attachment error */}
-            {attachmentError && (
-              <p className="mb-2 text-xs text-red-600">{attachmentError}</p>
-            )}
-
-            <div
-              className={`relative rounded-lg border bg-white focus-within:ring-1 focus-within:ring-zinc-900 transition-colors ${
-                isDragging
-                  ? "border-zinc-900 ring-1 ring-zinc-900 bg-zinc-50"
-                  : "border-zinc-300 focus-within:border-zinc-900"
-              }`}
-              onDragEnter={handleDragEnter}
-              onDragLeave={handleDragLeave}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              {/* Drag overlay */}
-              {isDragging && (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg">
-                  <p className="text-sm font-medium text-zinc-500">Drop image to attach</p>
-                </div>
-              )}
-              {/* Thumbnails strip */}
-              {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 border-b border-zinc-100 px-3 pt-3 pb-2">
-                  {attachedFiles.map((f) => (
-                    <div key={f.id} className="relative shrink-0">
-                      {f.kind === "image" ? (
-                        <img
-                          src={f.previewUrl!}
-                          alt={f.file.name}
-                          className="h-16 w-16 rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-16 w-16 items-center justify-center rounded-md border border-zinc-200 bg-zinc-100 px-1">
-                          <div className="flex flex-col items-center gap-1">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-zinc-500">
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                              <polyline points="14 2 14 8 20 8" />
-                            </svg>
-                            <span className="w-full truncate text-center text-[9px] leading-tight text-zinc-600">
-                              {f.file.name}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      {/* Remove button */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (f.kind === "image" && f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-                          setAttachedFiles((prev) => prev.filter((x) => x.id !== f.id));
-                        }}
-                        className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-700 text-[9px] text-white hover:bg-zinc-900"
-                        aria-label="Remove attachment"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Textarea row */}
-              <div className="flex items-center">
-                <textarea
-                  ref={textareaRef}
-                  rows={1}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      const canSend = !isLoading && (input.trim() || attachedFiles.length > 0) && !attachedFiles.some((f) => f.kind === "text" && f.textContent === null);
-                      if (canSend) handleSendMessage(e as unknown as React.FormEvent);
-                    }
-                  }}
-                  disabled={isLoading}
-                  placeholder="Ask me anything..."
-                  className="flex-1 max-h-40 resize-none overflow-y-auto bg-transparent px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 focus:outline-none disabled:text-zinc-500"
-                  onPaste={(e) => {
-                    const pastedFiles = Array.from(e.clipboardData.items)
-                      .filter((item) => item.kind === "file")
-                      .map((item) => item.getAsFile())
-                      .filter((f): f is File => f !== null);
-                    if (pastedFiles.length > 0) {
-                      e.preventDefault();
-                      processFiles(pastedFiles);
-                    }
-                  }}
-                />
-
-                {/* Paperclip button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachmentError(null);
-                    fileInputRef.current?.click();
-                  }}
-                  disabled={isLoading}
-                  className="shrink-0 p-3 text-zinc-400 transition-colors hover:text-zinc-700 disabled:cursor-not-allowed"
-                  aria-label="Attach image"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-                  </svg>
-                </button>
-
-                {/* Send button */}
-                <button
-                  type="submit"
-                  disabled={isLoading || (!input.trim() && attachedFiles.length === 0) || attachedFiles.some((f) => f.kind === "text" && f.textContent === null)}
-                  className="shrink-0 mr-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleFileSelect}
-            />
-          </form>
-        </div>
+        <ChatInputBar
+          input={input}
+          setInput={setInput}
+          isLoading={isLoading}
+          attachedFiles={attachedFiles}
+          setAttachedFiles={setAttachedFiles}
+          attachmentError={attachmentError}
+          isDragging={isDragging}
+          textareaRef={textareaRef}
+          fileInputRef={fileInputRef}
+          onSubmit={handleSendMessage}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onFileSelect={handleFileSelect}
+          processFiles={processFiles}
+        />
       </div>
 
       {showFeedbackModal && (

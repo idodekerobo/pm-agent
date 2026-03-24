@@ -186,7 +186,7 @@ export default function StepProfile({
         <div className="rounded-lg border border-green-200 bg-green-50 overflow-hidden">
           <button
             type="button"
-            onClick={() => setShowScrapeDetail((v) => !v)}
+            onClick={() => setShowScrapeDetail(!showScrapeDetail)}
             className="w-full flex items-center justify-between px-4 py-3 text-left"
           >
             <div className="flex items-center gap-2.5">

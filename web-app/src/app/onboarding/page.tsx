@@ -4,60 +4,19 @@ import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import { createClient } from '@/lib/supabaseClient';
-import { ROLES } from '@/lib/profileOptions';
-import { INTEGRATIONS } from '@/lib/integrations';
 import {
   BASE_MEMORY_PROMPT,
   getMemoryPrompt,
-  getNextOtherLabel,
-  MEMORY_PROVIDERS,
-  type MemoryProvider,
   type ImportedMemory,
 } from '@/lib/memoryImport';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { usePostHog } from 'posthog-js/react';
 import { EVENTS } from '@/lib/analytics';
-
-// ---------------------------------------------------------------------------
-// Chip options
-// ---------------------------------------------------------------------------
-
-const FOCUS_CHIPS = [
-  'Shipping features',
-  'Reducing bugs',
-  'Growing users',
-  'Cutting costs',
-  'Managing stakeholders',
-];
-
-const ACTIVITY_CHIPS = [
-  'Design & specs',
-  'Data & analytics',
-  'Customer support',
-  'Engineering collaboration',
-  'Strategy & planning',
-];
-
-// ---------------------------------------------------------------------------
-// Templated reactions
-// ---------------------------------------------------------------------------
-
-const FOCUS_REACTIONS: Record<string, string> = {
-  'Shipping features': "Shipping focus — I'll keep sprint planning, spec writing, and engineering handoffs front of mind.",
-  'Reducing bugs': "Bug reduction focus — I'll prioritize helping you triage issues and write clear bug specs.",
-  'Growing users': "Growth focus — I'll keep user metrics, retention, and acquisition context front of mind.",
-  'Cutting costs': "Cost focus — I'll look for opportunities to surface efficiency signals in your planning.",
-  'Managing stakeholders': "Stakeholder focus — I'll help you communicate clearly and keep everyone aligned.",
-};
-
-const ACTIVITY_REACTIONS: Record<string, string> = {
-  'Design & specs': "Got it — spec writing and design alignment will be where I add the most value for you.",
-  'Data & analytics': "Got it — I'll lean into helping you interpret data and turn it into decisions.",
-  'Customer support': "Got it — I'll help you turn customer signals into actionable product insights.",
-  'Engineering collaboration': "Got it — I'll focus on making engineering handoffs and technical planning smoother.",
-  'Strategy & planning': "Got it — I'll help you think through roadmaps, trade-offs, and strategic decisions.",
-};
+import StepProfile from './steps/StepProfile';
+import StepPriorities from './steps/StepPriorities';
+import StepRole from './steps/StepRole';
+import StepMemoryImport from './steps/StepMemoryImport';
+import StepSignUp from './steps/StepSignUp';
+import StepConnectTools from './steps/StepConnectTools';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -731,726 +690,103 @@ function OnboardingPageInner() {
           </div>
         )}
 
-        {/* ── Step 1 — URL + Name + Scrape ─────────────────────────────────── */}
         {step === 1 && (
-          <div className="px-8 py-6 space-y-5">
-            {/* Name + URL inputs */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Your name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  disabled={scrapeStatus === 'loading'}
-                  className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 disabled:opacity-50"
-                  placeholder="Ada Lovelace"
-                />
-              </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Company or product URL</label>
-                <div className="flex items-center rounded-md border border-zinc-300 bg-zinc-50/50 focus-within:border-zinc-900 focus-within:ring-1 focus-within:ring-zinc-900">
-                  <span className="flex items-center self-stretch pl-3 pr-2 text-sm text-zinc-400 select-none bg-zinc-100 border-r border-zinc-300 rounded-l-md">https://</span>
-                  <input
-                    type="text"
-                    value={companyUrl.replace(/^https?:\/\//, '')}
-                    onChange={(e) => {
-                      setCompanyUrl(e.target.value);
-                      // Reset scrape if URL changes after a scrape
-                      if (scrapeStatus !== 'idle') {
-                        setScrapeStatus('idle');
-                        setScrapeObservations('');
-                        setScrapeConfirmed(false);
-                        setShowCorrection(false);
-                        setCorrectionSubmitted(false);
-                      }
-                    }}
-                    disabled={scrapeStatus === 'loading'}
-                    className="flex-1 bg-transparent py-2.5 pl-3 pr-3 text-sm text-zinc-900 focus:outline-none disabled:opacity-50"
-                    placeholder="acme.com"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Analyze button — shown before scrape */}
-            {scrapeStatus === 'idle' && (
-              <button
-                type="button"
-                onClick={runScrape}
-                className="w-full rounded-md bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
-              >
-                Analyze →
-              </button>
-            )}
-
-            {/* Loading state */}
-            {scrapeStatus === 'loading' && (
-              <div className="rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-4">
-                <div className="flex items-center gap-2.5 text-sm text-zinc-500">
-                  <svg className="animate-spin h-4 w-4 flex-shrink-0 text-zinc-400" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Reading your product page…
-                </div>
-                {scrapeObservations && (
-                  <div className="mt-3 text-sm text-zinc-700 leading-relaxed [&>p]:mb-1.5 [&>ul]:pl-4 [&>ul]:list-disc [&>ul>li]:mb-0.5 [&>strong]:font-semibold">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{scrapeObservations}</ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Scrape result */}
-            {scrapeStatus === 'done' && !scrapeConfirmed && !correctionSubmitted && (
-              <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-4 space-y-4">
-                <div>
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Here&apos;s what I found</p>
-                  <div className="text-sm text-zinc-800 leading-relaxed [&>p]:mb-1.5 [&>ul]:pl-4 [&>ul]:list-disc [&>ul>li]:mb-0.5 [&>ol]:pl-4 [&>ol]:list-decimal [&>strong]:font-semibold">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{scrapeObservations}</ReactMarkdown>
-                  </div>
-                </div>
-
-                {!showCorrection ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleConfirmScrape}
-                      className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 transition-colors"
-                    >
-                      Yes, that&apos;s right
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowCorrection(true)}
-                      className="rounded-md border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-colors"
-                    >
-                      Not quite
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <textarea
-                      value={correction}
-                      onChange={(e) => setCorrection(e.target.value)}
-                      rows={3}
-                      className="block w-full rounded-md border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
-                      placeholder="e.g. 'This is actually a different product' or 'I work on a specific team within this company'"
-                      autoFocus
-                    />
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSubmitCorrection}
-                        disabled={!correction.trim()}
-                        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:bg-zinc-400 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Submit correction
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setShowCorrection(false); setCorrection(''); }}
-                        className="text-sm text-zinc-500 hover:text-zinc-800 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Confirmed state — collapsible toggle */}
-            {(scrapeConfirmed || correctionSubmitted) && (
-              <div className="rounded-lg border border-green-200 bg-green-50 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowScrapeDetail((v) => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 text-green-600">
-                      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
-                      <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    <p className="text-sm text-green-800">
-                      {correctionSubmitted ? `Got it — I've noted your correction.` : 'Your product context is saved.'}
-                    </p>
-                  </div>
-                  <svg
-                    width="14" height="14" viewBox="0 0 16 16" fill="none"
-                    className={`flex-shrink-0 text-green-600 transition-transform ${showScrapeDetail ? 'rotate-180' : ''}`}
-                  >
-                    <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-
-                {showScrapeDetail && (
-                  <div className="border-t border-green-200 px-4 py-3 space-y-3 bg-green-50/60">
-                    <div className="text-sm text-zinc-700 leading-relaxed [&>p]:mb-1.5 [&>ul]:pl-4 [&>ul]:list-disc [&>ul>li]:mb-0.5 [&>strong]:font-semibold">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{scrapeObservations}</ReactMarkdown>
-                    </div>
-                    {correctionSubmitted && correction && (
-                      <div className="border-t border-green-200 pt-3">
-                        <p className="text-xs font-medium text-green-700 mb-1">Your correction</p>
-                        <p className="text-sm text-zinc-700 italic">{correction}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Scrape error with manual fallback */}
-            {scrapeStatus === 'error' && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 space-y-3">
-                <p className="text-sm text-amber-800">
-                  I wasn&apos;t able to read that page. You can describe your product instead — I&apos;ll use it as context.
-                </p>
-                <textarea
-                  value={correction}
-                  onChange={(e) => setCorrection(e.target.value)}
-                  rows={3}
-                  className="block w-full rounded-md border border-amber-200 bg-white px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-none"
-                  placeholder="We build a B2B SaaS platform that helps logistics teams track shipments in real time…"
-                />
-                <button
-                  type="button"
-                  onClick={() => { if (correction.trim()) { setCorrectionSubmitted(true); setScrapeObservations(''); } }}
-                  disabled={!correction.trim()}
-                  className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:bg-zinc-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  Save and continue
-                </button>
-              </div>
-            )}
-          </div>
+          <StepProfile
+            fullName={fullName}
+            setFullName={setFullName}
+            companyUrl={companyUrl}
+            setCompanyUrl={setCompanyUrl}
+            scrapeStatus={scrapeStatus}
+            setScrapeStatus={setScrapeStatus}
+            scrapeObservations={scrapeObservations}
+            setScrapeObservations={setScrapeObservations}
+            scrapeConfirmed={scrapeConfirmed}
+            setScrapeConfirmed={setScrapeConfirmed}
+            showCorrection={showCorrection}
+            setShowCorrection={setShowCorrection}
+            correction={correction}
+            setCorrection={setCorrection}
+            correctionSubmitted={correctionSubmitted}
+            setCorrectionSubmitted={setCorrectionSubmitted}
+            showScrapeDetail={showScrapeDetail}
+            setShowScrapeDetail={setShowScrapeDetail}
+            runScrape={runScrape}
+            handleConfirmScrape={handleConfirmScrape}
+            handleSubmitCorrection={handleSubmitCorrection}
+          />
         )}
 
-        {/* ── Step 2 — Chip questions ───────────────────────────────────────── */}
         {step === 2 && (
-          <div className="px-8 py-6 space-y-6">
-            {/* Correction acknowledgment */}
-            {step2Intro && (
-              <p className="text-sm text-zinc-600 italic">{step2Intro}</p>
-            )}
-
-            {/* Focus chips */}
-            <div>
-              <p className="text-sm font-medium text-zinc-700 mb-1">What are your biggest focus areas?</p>
-              <p className="text-xs text-zinc-400 mb-3">Select all that apply.</p>
-              <div className="flex flex-wrap gap-2">
-                {FOCUS_CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => toggleFocus(chip)}
-                    className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
-                      currentFocus.includes(chip)
-                        ? 'border-zinc-900 bg-zinc-900 text-white'
-                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
-                    }`}
-                  >
-                    {chip}
-                  </button>
-                ))}
-                {/* Persisted custom focus chips */}
-                {currentFocus.filter((f) => !FOCUS_CHIPS.includes(f)).map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => toggleFocus(chip)}
-                    className="rounded-full border border-zinc-900 bg-zinc-900 text-white px-3.5 py-1.5 text-sm transition-colors"
-                  >
-                    {chip}
-                  </button>
-                ))}
-                {!showFocusCustom && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFocusCustom(true)}
-                    className="rounded-full border border-dashed border-zinc-300 px-3.5 py-1.5 text-sm text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 transition-colors"
-                  >
-                    + Add your own
-                  </button>
-                )}
-                {showFocusCustom && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={focusCustom}
-                      onChange={(e) => setFocusCustom(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') addFocusCustom(); }}
-                      autoFocus
-                      placeholder="Your focus…"
-                      className="rounded-full border border-zinc-300 px-3.5 py-1.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                    />
-                    <button type="button" onClick={addFocusCustom} className="text-xs text-zinc-600 hover:text-zinc-900">Add</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Templated focus reaction — show for last selected */}
-              {currentFocus.length > 0 && (
-                <p className="mt-3 text-sm text-zinc-500 italic">
-                  {FOCUS_REACTIONS[currentFocus[currentFocus.length - 1]] ?? `${currentFocus[currentFocus.length - 1]} — got it, I'll keep that front of mind.`}
-                </p>
-              )}
-            </div>
-
-            {/* Activity chips */}
-            <div>
-              <p className="text-sm font-medium text-zinc-700 mb-1">What do you spend most of your time on?</p>
-              <p className="text-xs text-zinc-400 mb-3">Select all that apply.</p>
-              <div className="flex flex-wrap gap-2">
-                {ACTIVITY_CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => toggleActivity(chip)}
-                    className={`rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
-                      dailyActivities.includes(chip)
-                        ? 'border-zinc-900 bg-zinc-900 text-white'
-                        : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50'
-                    }`}
-                  >
-                    {chip}
-                  </button>
-                ))}
-                {/* Persisted custom activity chips */}
-                {dailyActivities.filter((a) => !ACTIVITY_CHIPS.includes(a)).map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => toggleActivity(chip)}
-                    className="rounded-full border border-zinc-900 bg-zinc-900 text-white px-3.5 py-1.5 text-sm transition-colors"
-                  >
-                    {chip}
-                  </button>
-                ))}
-                {!showActivityCustom && (
-                  <button
-                    type="button"
-                    onClick={() => setShowActivityCustom(true)}
-                    className="rounded-full border border-dashed border-zinc-300 px-3.5 py-1.5 text-sm text-zinc-400 hover:border-zinc-400 hover:text-zinc-600 transition-colors"
-                  >
-                    + Add your own
-                  </button>
-                )}
-                {showActivityCustom && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={activityCustom}
-                      onChange={(e) => setActivityCustom(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') addActivityCustom(); }}
-                      autoFocus
-                      placeholder="Your activity…"
-                      className="rounded-full border border-zinc-300 px-3.5 py-1.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                    />
-                    <button type="button" onClick={addActivityCustom} className="text-xs text-zinc-600 hover:text-zinc-900">Add</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Templated activity reaction — show for last selected */}
-              {dailyActivities.length > 0 && (
-                <p className="mt-3 text-sm text-zinc-500 italic">
-                  {ACTIVITY_REACTIONS[dailyActivities[dailyActivities.length - 1]] ?? `${dailyActivities[dailyActivities.length - 1]} — noted.`}
-                </p>
-              )}
-            </div>
-          </div>
+          <StepPriorities
+            step2Intro={step2Intro}
+            currentFocus={currentFocus}
+            dailyActivities={dailyActivities}
+            focusCustom={focusCustom}
+            setFocusCustom={setFocusCustom}
+            activityCustom={activityCustom}
+            setActivityCustom={setActivityCustom}
+            showFocusCustom={showFocusCustom}
+            setShowFocusCustom={setShowFocusCustom}
+            showActivityCustom={showActivityCustom}
+            setShowActivityCustom={setShowActivityCustom}
+            toggleFocus={toggleFocus}
+            toggleActivity={toggleActivity}
+            addFocusCustom={addFocusCustom}
+            addActivityCustom={addActivityCustom}
+          />
         )}
 
-        {/* ── Step 3 — Role ─────────────────────────────────────────────────── */}
         {step === 3 && (
-          <div className="px-8 py-6 space-y-5">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 mb-1.5">Role</label>
-                <select
-                  value={role}
-                  onChange={(e) => { setRole(e.target.value); setRoleOther(''); }}
-                  className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                >
-                  <option value="">Select your role</option>
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </div>
-
-              {role === 'Other' && (
-                <input
-                  type="text"
-                  value={roleOther}
-                  onChange={(e) => setRoleOther(e.target.value)}
-                  autoFocus
-                  placeholder="Describe your role…"
-                  className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                />
-              )}
-            </div>
-
-            {/* Templated role acknowledgment */}
-            {resolvedRole && (
-              <p className="text-sm text-zinc-500 italic">
-                Got it — as a <span className="font-medium text-zinc-700">{resolvedRole}</span>, I&apos;ll tailor how I communicate and prioritize what&apos;s most relevant for your perspective.
-              </p>
-            )}
-          </div>
+          <StepRole
+            role={role}
+            setRole={setRole}
+            roleOther={roleOther}
+            setRoleOther={setRoleOther}
+            resolvedRole={resolvedRole}
+          />
         )}
 
-        {/* ── Step 4 — Import AI memories ───────────────────────────────────── */}
         {step === 4 && (
-          <div className="px-8 py-6 space-y-5">
-            {/* Add-on checkboxes */}
-            <div className="space-y-2.5">
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Prompt options</p>
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={memoryWorkOnly}
-                  onChange={(e) => setMemoryWorkOnly(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
-                />
-                <span className="text-sm text-zinc-700">Only include work and business related items</span>
-              </label>
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={memoryRedactPII}
-                  onChange={(e) => setMemoryRedactPII(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
-                />
-                <span className="text-sm text-zinc-700">Redact personal data (names, locations, etc.)</span>
-              </label>
-            </div>
-
-            {/* Editable prompt textarea */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Prompt to copy</p>
-                <button
-                  type="button"
-                  onClick={() => { navigator.clipboard.writeText(memoryPromptText); setMemoryCopied(true); setTimeout(() => setMemoryCopied(false), 2000); }}
-                  className="rounded border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 transition-colors"
-                >
-                  {memoryCopied ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <p className="text-xs text-zinc-400">Feel free to edit the prompt to your needs.</p>
-              <textarea
-                value={memoryPromptText}
-                onChange={(e) => setMemoryPromptText(e.target.value)}
-                rows={7}
-                className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-700 font-mono leading-relaxed focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-y"
-              />
-            </div>
-
-            {/* Provider links */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <p className="text-xs text-zinc-400 mr-1">Open in:</p>
-              {MEMORY_PROVIDERS.filter((p) => p.url).map((p) => (
-                <a
-                  key={p.key}
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-colors"
-                >
-                  {p.label} ↗
-                </a>
-              ))}
-            </div>
-
-            {/* Per-provider paste areas */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Paste responses</p>
-                  <p className="text-xs text-zinc-400 mt-0.5">Works with any AI tool — Claude Code, Cursor, Devin, Dia, and more.</p>
-                </div>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowProviderDropdown((v) => !v)}
-                    className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-colors"
-                  >
-                    + Add provider
-                  </button>
-                  {showProviderDropdown && (
-                    <div className="absolute right-0 top-full mt-1 z-10 min-w-[140px] rounded-md border border-zinc-200 bg-white shadow-sm">
-                      {MEMORY_PROVIDERS.filter((p) => p.key === 'other' || !importedMemories.find((m) => m.provider === p.key)).map((p) => (
-                        <button
-                          key={p.key}
-                          type="button"
-                          onClick={() => {
-                            setImportedMemories((prev) => {
-                              const label = p.key === 'other' ? getNextOtherLabel(prev) : undefined;
-                              return [...prev, { provider: p.key as MemoryProvider, content: '', customLabel: label, _id: Math.random().toString(36).slice(2) }];
-                            });
-                            setShowProviderDropdown(false);
-                          }}
-                          className="block w-full text-left px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50 first:rounded-t-md last:rounded-b-md"
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {importedMemories.length === 0 && (
-                <p className="text-xs text-zinc-400 italic">No providers added yet. Run the prompt above in any AI assistant, then paste the response here.</p>
-              )}
-
-              {importedMemories.map((mem, idx) => {
-                const displayLabel = mem.provider === 'other' ? (mem.customLabel ?? 'Other') : MEMORY_PROVIDERS.find((p) => p.key === mem.provider)?.label ?? mem.provider;
-                return (
-                  <div key={mem._id ?? mem.provider} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      {mem.provider === 'other' ? (
-                        <input
-                          type="text"
-                          value={mem.customLabel ?? 'Other'}
-                          onChange={(e) => {
-                            const updated = [...importedMemories];
-                            updated[idx] = { ...updated[idx], customLabel: e.target.value };
-                            setImportedMemories(updated);
-                          }}
-                          placeholder="Provider name"
-                          className="rounded border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-medium text-zinc-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 w-36"
-                        />
-                      ) : (
-                        <p className="text-xs font-medium text-zinc-700">{displayLabel}</p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setImportedMemories((prev) => prev.filter((_, i) => i !== idx))}
-                        className="text-xs text-zinc-400 hover:text-red-500 transition-colors flex-shrink-0"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                    <textarea
-                      value={mem.content}
-                      onChange={(e) => {
-                        const updated = [...importedMemories];
-                        updated[idx] = { ...updated[idx], content: e.target.value };
-                        setImportedMemories(updated);
-                      }}
-                      rows={5}
-                      placeholder={`Paste your ${displayLabel} response here…`}
-                      className="block w-full rounded-md border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-700 placeholder-zinc-300 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 resize-y"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <StepMemoryImport
+            importedMemories={importedMemories}
+            setImportedMemories={setImportedMemories}
+            memoryWorkOnly={memoryWorkOnly}
+            setMemoryWorkOnly={setMemoryWorkOnly}
+            memoryRedactPII={memoryRedactPII}
+            setMemoryRedactPII={setMemoryRedactPII}
+            memoryPromptText={memoryPromptText}
+            setMemoryPromptText={setMemoryPromptText}
+            memoryCopied={memoryCopied}
+            setMemoryCopied={setMemoryCopied}
+            showProviderDropdown={showProviderDropdown}
+            setShowProviderDropdown={setShowProviderDropdown}
+          />
         )}
 
-        {/* ── Step 5 — Sign-up wall ─────────────────────────────────────────── */}
         {step === 5 && (
-          <div className="px-8 py-6 space-y-4">
-            <p className="text-sm text-zinc-600">
-              Your workspace is being set up — create an account to save your progress.
-            </p>
-
-            <button
-              type="button"
-              onClick={handleGoogleSignUp}
-              disabled={submitting}
-              className="w-full flex items-center justify-center gap-3 rounded-lg border border-zinc-300 px-4 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
-                <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-                <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
-                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
-              </svg>
-              Continue with Google
-            </button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-200" />
-              </div>
-              <div className="relative flex justify-center text-xs text-zinc-400 uppercase tracking-wide">
-                <span className="bg-white px-3">or</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1.5">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                placeholder="ada@acme.com"
-                autoComplete="email"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 mb-1.5">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-md border border-zinc-300 bg-zinc-50/50 px-3 py-2.5 text-sm focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                placeholder="At least 8 characters"
-                autoComplete="new-password"
-              />
-            </div>
-            <p className="text-xs text-zinc-400">
-              Already have an account?{' '}
-              <a href="/auth/sign-in" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">
-                Sign in
-              </a>
-            </p>
-          </div>
+          <StepSignUp
+            email={email}
+            setEmail={setEmail}
+            password={password}
+            setPassword={setPassword}
+            submitting={submitting}
+            handleGoogleSignUp={handleGoogleSignUp}
+          />
         )}
 
-        {/* ── Step 6 — Connect tools ────────────────────────────────────────── */}
         {step === 6 && (
-          <div className="px-8 py-6 space-y-2.5">
-            {INTEGRATIONS.map((integration) => {
-              const connected = !!integrations[integration.key];
-              const connecting = connectingProvider === integration.key;
-              const isByok = 'isByok' in integration && integration.isByok;
-              const isComingSoon = 'comingSoon' in integration && integration.comingSoon;
-              const isByokOpen = isByok && byokExpanded && !connected;
-
-              return (
-                <div
-                  key={integration.key}
-                  className={`rounded-lg border overflow-hidden transition-colors ${
-                    connected ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 bg-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-4 p-4">
-                    <div
-                      className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-white"
-                      style={{ backgroundColor: integration.color }}
-                    >
-                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-geist-mono)' }}>
-                        {integration.abbr}
-                      </span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-zinc-900">{integration.name}</p>
-                        {connected && (
-                          <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700">Connected</span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{integration.onboardingDescription}</p>
-                      {'note' in integration && integration.note && (
-                        <p className="mt-1 text-[10px] text-amber-600 leading-relaxed">{integration.note}</p>
-                      )}
-                    </div>
-
-                    {isComingSoon ? (
-                      // TODO: wire up PostHog analytics event on click — track intent per integration
-                      <button
-                        type="button"
-                        onClick={() => { /* TODO: PostHog track('coming_soon_clicked', { integration: integration.key }) */ }}
-                        className="flex-shrink-0 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:border-zinc-300 hover:text-zinc-500 transition-colors cursor-pointer"
-                      >
-                        Coming soon
-                      </button>
-                    ) : isByok ? (
-                      <button
-                        type="button"
-                        onClick={() => { if (!connected) { setByokExpanded((o) => !o); setByokError(''); } }}
-                        disabled={connected}
-                        className={`flex-shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                          connected
-                            ? 'border-transparent bg-transparent text-zinc-400 cursor-default'
-                            : 'border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
-                        }`}
-                      >
-                        {connected ? 'Connected' : isByokOpen ? 'Cancel' : 'Connect'}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => !connected && handleConnect(integration.key)}
-                        disabled={connected || connecting}
-                        className={`flex-shrink-0 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-                          connected
-                            ? 'border-transparent bg-transparent text-zinc-400 cursor-default'
-                            : 'border-zinc-300 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-900'
-                        }`}
-                      >
-                        {connecting ? (
-                          <span className="flex items-center gap-1.5">
-                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
-                            Connecting…
-                          </span>
-                        ) : connected ? 'Connected' : 'Connect'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Inline BYOK form */}
-                  {isByokOpen && (
-                    <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-3 space-y-3">
-                      <div>
-                        <p className="text-xs font-medium text-zinc-700 mb-2">How to get your API key:</p>
-                        <ol className="space-y-1 text-xs text-zinc-500 list-none">
-                          <li className="flex items-start gap-2">
-                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">1</span>
-                            <span>Go to <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-zinc-600 underline underline-offset-2 hover:text-zinc-900">platform.claude.com/settings/keys</a> and create a new API key</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">2</span>
-                            Copy the key — it starts with <code className="rounded bg-zinc-200 px-1 py-0.5 font-mono text-[10px] text-zinc-700">sk-ant-...</code>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="flex-shrink-0 flex h-4 w-4 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-semibold text-zinc-600 mt-0.5">3</span>
-                            Paste it below — your key is encrypted and stored securely
-                          </li>
-                        </ol>
-                        <div className="mt-4 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-3">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 flex-shrink-0 text-amber-500">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                          </svg>
-                          <p className="text-[10px] text-amber-700 leading-relaxed">Coding tasks are billed directly to your Anthropic account at API pricing. Charges apply each time the coding agent runs.</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="password"
-                          value={byokToken}
-                          onChange={(e) => setByokToken(e.target.value)}
-                          placeholder="sk-ant-..."
-                          className="flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs text-zinc-900 placeholder-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveClaudeCodeToken}
-                          disabled={byokSaving}
-                          className="flex-shrink-0 rounded-md bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-800 disabled:bg-zinc-400"
-                        >
-                          {byokSaving ? 'Saving…' : 'Save'}
-                        </button>
-                      </div>
-                      {byokError && <p className="text-xs text-red-600">{byokError}</p>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <StepConnectTools
+            integrations={integrations}
+            connectingProvider={connectingProvider}
+            byokExpanded={byokExpanded}
+            setByokExpanded={setByokExpanded}
+            byokToken={byokToken}
+            setByokToken={setByokToken}
+            byokSaving={byokSaving}
+            byokError={byokError}
+            handleConnect={handleConnect}
+            handleSaveClaudeCodeToken={handleSaveClaudeCodeToken}
+          />
         )}
 
         {/* Footer */}

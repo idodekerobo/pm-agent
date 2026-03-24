@@ -108,7 +108,7 @@ export default function StepMemoryImport({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowProviderDropdown((v) => !v)}
+              onClick={() => setShowProviderDropdown(!showProviderDropdown)}
               className="rounded border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 transition-colors"
             >
               + Add provider

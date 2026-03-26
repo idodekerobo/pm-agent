@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from slack_sdk.signature import SignatureVerifier
 
+from app.bridge import registry as bridge_registry
 from app.config import settings
 from app.messaging.slack import get_installation_by_team_id
 from app.workers.queue import get_queue
@@ -58,7 +59,24 @@ async def slack_events(request: Request):
     if not installation:
         # Unknown workspace — installation may have been revoked; silently ack
         return JSONResponse({"ok": True})
+    # TODO: confirm whether this logic needs to change (i.e., background monitoring, etc.)
 
+    user_id = str(installation.user_id)
+    ws = bridge_registry.get(user_id)
+    if ws is not None:
+        # Bridge is connected — forward the event directly over WebSocket
+        try:
+            await ws.send_text(json.dumps({
+                "type": "slack_event",
+                "payload": payload,
+                "installation_id": str(installation.id),
+            }))
+            return JSONResponse({"ok": True})
+        except Exception:
+            # WS send failed — bridge may have just disconnected; fall through to RQ
+            bridge_registry.deregister(user_id)
+
+    # TODO: will need to remove the rq addition here
     get_queue("high").enqueue(handle_slack_message, payload, str(installation.id))
 
     return JSONResponse({"ok": True})

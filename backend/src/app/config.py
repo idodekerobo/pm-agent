@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     posthog_api_key: str = ""
     posthog_host: str = ""
 
+    # Bridge TLS — cert + key for local.draftai.us, served to bridge during auth
+    bridge_tls_cert: str = ""  # fullchain.cer contents
+    bridge_tls_key: str = ""   # private key contents (never commit)
+
     # Code task sandbox hook secret — injected into sandbox env, verified on inbound hook calls
     code_task_hook_secret: str = ""
 

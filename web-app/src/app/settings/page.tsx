@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { useBridge } from '@/lib/BridgeContext';
 import { usePostHog } from 'posthog-js/react';
 import { EVENTS } from '@/lib/analytics';
 import { useProfileComplete } from '@/lib/useProfileComplete';
@@ -20,8 +21,11 @@ function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, session, signOut } = useAuth();
+  const { isLocal } = useBridge();
   const profileComplete = useProfileComplete();
-  const activeTab: Tab = (searchParams.get('tab') as Tab) ?? 'profile';
+  const rawTab = searchParams.get('tab') as Tab;
+  // Agent Files tab is not available in local mode — redirect to profile
+  const activeTab: Tab = (rawTab === 'agent-files' && isLocal) ? 'profile' : (rawTab ?? 'profile');
   const [billingBanner, setBillingBanner] = useState<'success' | 'canceled' | null>(null);
   const ph = usePostHog();
 
@@ -141,19 +145,21 @@ function SettingsContent() {
                 </svg>
                 Integrations
               </button>
-              <button
-                onClick={() => navigateToTab('agent-files')}
-                className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
-                  activeTab === 'agent-files'
-                    ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
-                    : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
-                }`}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                </svg>
-                Agent Files
-              </button>
+              {!isLocal && (
+                <button
+                  onClick={() => navigateToTab('agent-files')}
+                  className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
+                    activeTab === 'agent-files'
+                      ? 'border border-zinc-200 bg-white text-zinc-900 shadow-sm'
+                      : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800'
+                  }`}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                  Agent Files
+                </button>
+              )}
               <button
                 onClick={() => navigateToTab('memory')}
                 className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${
@@ -256,7 +262,7 @@ function SettingsContent() {
 
             {activeTab === 'profile'      && <ProfileTab />}
             {activeTab === 'integrations' && <IntegrationsTab />}
-            {activeTab === 'agent-files'  && <div className="flex h-full flex-col"><AgentFilesTab /></div>}
+            {activeTab === 'agent-files' && !isLocal && <div className="flex h-full flex-col"><AgentFilesTab /></div>}
             {activeTab === 'memory'       && <MemoryTab />}
             {activeTab === 'billing'      && <BillingTab />}
             {activeTab === 'feedback'     && <FeedbackTab />}

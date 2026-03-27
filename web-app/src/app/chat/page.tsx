@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/AuthContext";
 import { useBilling } from "@/lib/BillingContext";
+import { useBridge } from "@/lib/BridgeContext";
 import { usePostHog } from "posthog-js/react";
 import { EVENTS } from "@/lib/analytics";
 import { logError } from "@/lib/errorLogger";
@@ -36,6 +37,7 @@ function ChatPage() {
   const searchParams = useSearchParams();
   const { session, signOut } = useAuth();
   const { creditsRemaining, planName, refetch: refetchBilling } = useBilling();
+  const { isLocal, bridgeUrl } = useBridge();
   const profileComplete = useProfileComplete();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -498,6 +500,165 @@ function ChatPage() {
     let toolCallsCount = 0;
 
     try {
+      // ── LOCAL PATH (bridge connected) ─────────────────────────────────────
+      if (isLocal) {
+        // Build prompt — inline text file content, images not supported in Phase 1
+        const textParts: string[] = [promptText];
+        for (const f of pendingFiles.filter((f) => f.kind === 'text' && f.textContent)) {
+          textParts.push(`\n\n--- ${f.file.name} ---\n${f.textContent}`);
+        }
+        const fullPrompt = textParts.join('');
+
+        const userMessage: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: promptText,
+          ...(pendingFiles.filter((f) => f.kind === 'text').length > 0
+            ? { textFileNames: pendingFiles.filter((f) => f.kind === 'text').map((f) => f.file.name) }
+            : {}),
+        };
+        setMessages((prev) => [...prev, userMessage]);
+
+        ph?.capture(EVENTS.AGENT_RUN_STARTED, {
+          session_id: activeSessionId,
+          is_new_session: !activeSessionId,
+          message_length: promptText.length,
+          mode: 'local',
+        });
+
+        // Pre-create session if this is the first message
+        let sessionId = activeSessionId;
+        if (!sessionId) {
+          const newId = crypto.randomUUID();
+          const sessionRes = await fetch(`${apiBaseUrl}/sessions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({ session_id: newId }),
+          });
+          if (!sessionRes.ok) throw new Error('Failed to create session');
+          const { agent_session_id } = await sessionRes.json();
+          sessionId = agent_session_id;
+          ph?.capture(EVENTS.SESSION_CREATED, { session_id: sessionId });
+          setActiveSessionId(agent_session_id);
+          fetchSessions();
+          router.push(`/chat?s=${agent_session_id}`);
+        }
+
+        const response = await fetch(`${bridgeUrl}/run-local`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({
+            session_id: sessionId,
+            prompt: fullPrompt,
+            jwt: getToken(),
+          }),
+        });
+
+        if (!response.ok) throw new Error('Bridge run failed');
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No response body');
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentAssistantId: string | null = null;
+        let currentAssistantContent = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+            try {
+              const eventData = JSON.parse(trimmedLine.slice(6));
+              if (eventData.type === 'tool_call') {
+                toolCallsCount++;
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `tool-${Date.now()}-${Math.random()}`,
+                    role: 'tool_call' as const,
+                    content: eventData.content ?? '',
+                    toolName: eventData.name ?? '',
+                    callId: eventData.call_id ?? '',
+                    toolArguments: eventData.arguments ?? '',
+                  },
+                ]);
+                currentAssistantId = null;
+                currentAssistantContent = '';
+              } else if (eventData.type === 'tool_output') {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `output-${Date.now()}-${Math.random()}`,
+                    role: 'tool_output' as const,
+                    content: eventData.content ?? '',
+                    callId: eventData.call_id ?? '',
+                  },
+                ]);
+              } else if (eventData.type === 'message') {
+                const chunk = eventData.content ?? '';
+                if (!currentAssistantId) {
+                  currentAssistantId = `asst-${Date.now()}-${Math.random()}`;
+                  currentAssistantContent = chunk;
+                  const newId = currentAssistantId;
+                  setMessages((prev) => [
+                    ...prev,
+                    { id: newId, role: 'assistant' as const, content: chunk },
+                  ]);
+                } else {
+                  currentAssistantContent += chunk;
+                  const targetId = currentAssistantId;
+                  const snapshot = currentAssistantContent;
+                  setMessages((prev) =>
+                    prev.map((m) => (m.id === targetId ? { ...m, content: snapshot } : m))
+                  );
+                }
+              } else if (eventData.type === 'item_created' && eventData.role === 'assistant') {
+                const dbId = eventData.id as string;
+                const targetId = currentAssistantId;
+                if (targetId && dbId) {
+                  setMessages((prev) =>
+                    prev.map((m) => (m.id === targetId ? { ...m, id: dbId } : m))
+                  );
+                  currentAssistantId = dbId;
+                }
+              } else if (eventData.type === 'error') {
+                setMessages((prev) => [
+                  ...prev,
+                  {
+                    id: `err-${Date.now()}`,
+                    role: 'assistant' as const,
+                    content: `❌ ${eventData.content}`,
+                  },
+                ]);
+              }
+            } catch (e) {
+              console.error('Error parsing SSE event:', e, trimmedLine);
+            }
+          }
+        }
+
+        ph?.capture(EVENTS.AGENT_RUN_COMPLETED, {
+          session_id: sessionId,
+          tool_calls_count: toolCallsCount,
+          mode: 'local',
+        });
+        return; // done — skip cloud path below
+      }
+      // ── END LOCAL PATH ────────────────────────────────────────────────────
+
       // Upload all attachments to Supabase Storage under a shared session path
       const imageFiles = pendingFiles.filter((f) => f.kind === "image");
       const textFiles = pendingFiles.filter((f) => f.kind === "text" && f.textContent !== null);

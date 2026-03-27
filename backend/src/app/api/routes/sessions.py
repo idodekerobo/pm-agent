@@ -10,13 +10,17 @@ from app.db.conversations import get_conversation_items
 router = APIRouter()
 
 
+class CreateSessionRequest(BaseModel):
+    session_id: str | None = None
+
+
 class UpdateSessionRequest(BaseModel):
     display_name: str | None = None
     is_pinned: bool | None = None
 
 
 @router.post("/sessions")
-def create_session(user_id: str = Depends(auth_protect_route)):
+def create_session(body: CreateSessionRequest, user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
 
     user_row = (
@@ -44,6 +48,7 @@ def create_session(user_id: str = Depends(auth_protect_route)):
         user_id=user_id,
         project_id=project_id,
         workspace_id=workspace_id,
+        session_id=body.session_id,
     )
 
     return {"agent_session_id": agent_session_id, "workspace_id": workspace_id}

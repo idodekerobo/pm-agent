@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { useBridge } from '@/lib/BridgeContext';
 import { createClient } from '@/lib/supabaseClient';
 import {
   BASE_MEMORY_PROMPT,
@@ -16,13 +17,14 @@ import StepPriorities from './steps/StepPriorities';
 import StepRole from './steps/StepRole';
 import StepMemoryImport from './steps/StepMemoryImport';
 import StepSignUp from './steps/StepSignUp';
+import StepBridgeSetup from './steps/StepBridgeSetup';
 import StepConnectTools from './steps/StepConnectTools';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 interface IntegrationStatus {
   [key: string]: boolean;
@@ -39,7 +41,7 @@ const DRAFT_EXPIRY_MS = 18 * 60 * 60 * 1000; // 18 hours
 function StepIndicator({ current }: { current: Step }) {
   return (
     <div className="flex items-center gap-2">
-      {([1, 2, 3, 4, 5, 6] as Step[]).map((s) => (
+      {([1, 2, 3, 4, 5, 6, 7] as Step[]).map((s) => (
         <div key={s} className="flex items-center gap-2">
           <div
             className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium transition-colors ${
@@ -71,6 +73,7 @@ function StepIndicator({ current }: { current: Step }) {
 
 function OnboardingPageInner() {
   const [step, setStep] = useState<Step>(1);
+  const { bridgeStatus } = useBridge();
   const searchParams = useSearchParams();
   const demoToken = searchParams.get('demo_token');
   const demoCompanyUrl = searchParams.get('company_url');
@@ -564,7 +567,8 @@ function OnboardingPageInner() {
     3: 'role',
     4: 'memory_import',
     5: 'sign_up',
-    6: 'integrations',
+    6: 'bridge_setup',
+    7: 'integrations',
   };
 
   const handleNext = () => {
@@ -588,6 +592,9 @@ function OnboardingPageInner() {
       setStep(5);
     } else if (step === 5) {
       handleSignUp();
+    } else if (step === 6) {
+      ph?.capture(EVENTS.ONBOARDING_STEP_COMPLETED, { step: 6, step_name: STEP_NAMES[6] });
+      setStep(7);
     }
   };
 
@@ -649,6 +656,10 @@ function OnboardingPageInner() {
     },
     5: { title: 'Create your account', subtitle: 'Save your progress and activate your workspace.' },
     6: {
+      title: 'Install Draft Bridge',
+      subtitle: 'Connect your local Claude to Draft in 3 steps.',
+    },
+    7: {
       title: 'Connect your tools',
       subtitle: 'Extend where your agent can help you work.',
       note: 'All integrations are optional — you can connect more later in Settings.',
@@ -774,7 +785,9 @@ function OnboardingPageInner() {
           />
         )}
 
-        {step === 6 && (
+        {step === 6 && <StepBridgeSetup />}
+
+        {step === 7 && (
           <StepConnectTools
             integrations={integrations}
             connectingProvider={connectingProvider}
@@ -816,7 +829,16 @@ function OnboardingPageInner() {
                 Continue →
               </button>
             </div>
-          ) : step < 6 ? (
+          ) : step === 6 ? (
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={bridgeStatus !== 'connected'}
+              className="rounded-md bg-zinc-900 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:bg-zinc-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {bridgeStatus === 'connected' ? 'Continue →' : 'Connect bridge to continue'}
+            </button>
+          ) : step < 7 ? (
             <button
               type="button"
               onClick={handleNext}

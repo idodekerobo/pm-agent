@@ -22,7 +22,10 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR" "$DIST_DIR"
 
 # Install runtime dependencies into the build dir
-python3 -m pip install click keyring "keyrings.alt" --target "$BUILD_DIR" --quiet
+python3 -m pip install \
+  click keyring "keyrings.alt" \
+  httpx starlette uvicorn websockets \
+  --target "$BUILD_DIR" --quiet
 
 # Copy the package source
 cp -r "$ROOT/draft_bridge" "$BUILD_DIR/"

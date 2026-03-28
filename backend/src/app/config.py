@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     allowed_origins: list[str] = []
 
     supabase_url: str
+    supabase_publishable_key: str = ""
     supabase_secret_key: str
     workspace_backend: str
 

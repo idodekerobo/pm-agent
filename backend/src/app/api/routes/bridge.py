@@ -1,4 +1,4 @@
-"""Bridge auth, TLS bundle, and WebSocket relay endpoints.
+"""Bridge auth, TLS bundle, integration tokens, and WebSocket relay endpoints.
 
 — POST /bridge/token
     Supabase-authed user requests a long-lived bridge token, stored as SHA-256
@@ -7,8 +7,14 @@
 
 — GET /bridge/tls-bundle
     Bridge-token-authed endpoint that returns the TLS cert + key for
-    local.draftai.us. Required by C2 (bridge HTTP server) so it can serve HTTPS.
+    local.draftai.us, plus the Supabase URL and anon key (public, needed for
+    bridge-side DB writes). Required by C2 (bridge HTTP server).
     Auth: bridge token in Authorization header. NEVER served unauthenticated.
+
+— GET /bridge/integration-tokens
+    Bridge-token-authed endpoint that returns all connected integration tokens
+    for the user as env-var-ready key/value pairs. Called once at bridge startup.
+    Auth: bridge token in Authorization header.
 
 — WS /bridge/ws?token=<bridge_token>
     The local bridge daemon opens a persistent WebSocket here. Incoming Slack
@@ -19,6 +25,7 @@
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -27,6 +34,20 @@ from app.api.deps import auth_protect_route
 from app.bridge import registry
 from app.config import settings
 from app.db.bridge_tokens import create_bridge_token, revoke_bridge_tokens, validate_bridge_token
+from app.db.supabase_client import get_supabase
+from app.integrations.manager import get_valid_token
+
+logger = logging.getLogger(__name__)
+
+# Maps integration provider names → env var names injected into Claude Code process
+_PROVIDER_ENV_VAR = {
+    "linear": "LINEAR_API_KEY",
+    "github": "GITHUB_TOKEN",
+    "google": "GOOGLE_ACCESS_TOKEN",
+    "notion": "NOTION_API_KEY",
+    "slack": "SLACK_BOT_TOKEN",
+    "posthog": "POSTHOG_API_KEY",
+}
 
 router = APIRouter(prefix="/bridge")
 
@@ -69,7 +90,58 @@ async def get_tls_bundle(authorization: str = Header(...)):
     if not settings.bridge_tls_cert or not settings.bridge_tls_key:
         raise HTTPException(status_code=503, detail="TLS bundle not configured on server")
 
-    return {"cert": settings.bridge_tls_cert, "key": settings.bridge_tls_key}
+    return {
+        "cert": settings.bridge_tls_cert,
+        "key": settings.bridge_tls_key,
+        # Supabase publishable key is public — bridge needs it to make RLS-scoped DB writes
+        "supabase_url": settings.supabase_url,
+        "supabase_publishable_key": settings.supabase_publishable_key,
+    }
+
+
+# ── Integration tokens ────────────────────────────────────────────────────────
+
+@router.get("/integration-tokens")
+async def get_integration_tokens(authorization: str = Header(...)):
+    """Return all connected integration tokens for the user as env-var key/value pairs.
+
+    Called once by the bridge at startup. The result is cached in memory and injected
+    as env vars into every Claude Code subprocess.
+
+    Auth: bridge token in Authorization header ("Bearer <bridge_token>").
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bridge token")
+    raw_token = authorization.removeprefix("Bearer ")
+    user_id = validate_bridge_token(raw_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or revoked bridge token")
+
+    supabase = get_supabase()
+
+    # Fetch all connected integrations for this user
+    rows = (
+        supabase.table("integrations")
+        .select("provider")
+        .eq("user_id", user_id)
+        .execute()
+    ).data or []
+
+    connected_providers = [row["provider"] for row in rows]
+    tokens: dict[str, str] = {}
+
+    for provider in connected_providers:
+        env_var = _PROVIDER_ENV_VAR.get(provider)
+        if not env_var:
+            continue
+        try:
+            token = await get_valid_token(supabase, user_id=user_id, provider=provider)
+            tokens[env_var] = token
+        except Exception:
+            # Skip unavailable integrations — don't fail the whole startup
+            logger.warning("Could not fetch token for provider %r, skipping.", provider)
+
+    return tokens
 
 
 # ── WebSocket relay ───────────────────────────────────────────────────────

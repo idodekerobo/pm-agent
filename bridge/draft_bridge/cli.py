@@ -30,5 +30,11 @@ def auth(reauth: bool):
 @main.command()
 def start():
     """Start the bridge server on local.draftai.us:7349."""
+    from draft_bridge import keychain
     from draft_bridge.server import run
+
+    if not keychain.load_token():
+        click.echo("No auth token found. Starting authentication first...")
+        run_auth()
+
     run()

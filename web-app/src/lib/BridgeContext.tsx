@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 
-const BRIDGE_URL = 'https://local.draftai.us:7349';
+const BRIDGE_URL = process.env.NEXT_PUBLIC_BRIDGE_URL || 'https://local.draftai.us:7349';
 const HEALTH_TIMEOUT_MS = 3000;
 const POLL_INTERVAL_DISCONNECTED_MS = 30_000;
 const POLL_INTERVAL_CONNECTED_MS = 60_000;

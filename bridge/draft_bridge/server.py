@@ -276,16 +276,22 @@ def run() -> None:
     slack_handler = _make_slack_handler(app)
 
     async def _serve() -> None:
-        relay_task = asyncio.create_task(
-            run_relay(bridge_token, slack_handler)
-        )
+        slack_token = integration_tokens.get("slack")
+        if slack_token:
+            relay_task = asyncio.create_task(
+                run_relay(bridge_token, slack_handler)
+            )
+        else:
+            click.echo("Slack not connected — relay disabled.")
+            relay_task = None
         try:
             await server.serve()
         finally:
-            relay_task.cancel()
-            try:
-                await relay_task
-            except asyncio.CancelledError:
-                pass
+            if relay_task:
+                relay_task.cancel()
+                try:
+                    await relay_task
+                except asyncio.CancelledError:
+                    pass
 
     asyncio.run(_serve())

@@ -17,3 +17,7 @@ dump.rdb
 .cursor/
 .claude/CLAUDE.md
 .gstack/
+
+# bridge build artifacts
+bridge/dist/
+bridge/_build/

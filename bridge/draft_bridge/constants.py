@@ -8,12 +8,16 @@ KEYCHAIN_USERNAME = "bridge_token"
 AUTH_TIMEOUT_SECONDS = 120
 
 # Cloud API — used by bridge to fetch TLS bundle and integration tokens
-CLOUD_API_BASE_URL = "https://api.draftai.us"
-CLOUD_WS_URL = "wss://api.draftai.us/bridge/ws"   # Slack relay WebSocket
+# TODO: update
+# CLOUD_API_BASE_URL = "https://api.draftai.us"
+CLOUD_API_BASE_URL = "localhost:8000"
+# CLOUD_WS_URL = "wss://api.draftai.us/bridge/ws"   # Slack relay WebSocket
+CLOUD_WS_URL = "wss://localhost:8000/bridge/ws"   # Slack relay WebSocket
 
 # CORS — origins allowed to call the bridge server
 ALLOWED_ORIGINS = [
     WEB_APP_BASE_URL,           # https://draftai.us (prod)
+    "http://localhost:3000",    # local Next.js dev
 ]
 
 # TLS — where bridge writes the cert/key fetched from the cloud

@@ -27,12 +27,12 @@ def _make_handler(token_queue: queue.Queue):
                 params = urllib.parse.parse_qs(parsed.query)
                 token = params.get("token", [None])[0]
                 if token:
-                    token_queue.put(token)
-                    # Redirect browser to the web app success page — all UI is React
+                    # Redirect browser before signalling main thread to stop the server
                     success_url = f"{WEB_APP_BASE_URL}/auth/bridge?status=success"
                     self.send_response(302)
                     self.send_header("Location", success_url)
                     self.end_headers()
+                    token_queue.put(token)
                 else:
                     # Redirect to the web app with an error state
                     error_url = f"{WEB_APP_BASE_URL}/auth/bridge?status=error"

@@ -20,13 +20,13 @@ run-landing:
 
 # Runs at localhost:9181
 install-bridge:
-	cd bridge && uv pip install -e .
+	cd bridge && uv sync
 
 run-bridge:
-	cd bridge && uv run --env-file .env draft-bridge start
+	cd bridge && uv run --env-file .env.local draft-bridge start
 
 run-bridge-auth:
-	cd bridge && uv run --env-file .env draft-bridge auth
+	cd bridge && uv run --env-file .env.local draft-bridge auth
 
 # Runs at localhost:9181
 run-rq-dashboard:

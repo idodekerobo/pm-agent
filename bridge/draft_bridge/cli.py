@@ -2,7 +2,7 @@
 
 Commands:
   draft-bridge auth     Authenticate with your draftai.us account (run once).
-  draft-bridge start    Start the bridge server (C2 — not yet implemented).
+  draft-bridge start    Start the bridge server on local.draftai.us:7349.
 """
 
 import click
@@ -30,4 +30,5 @@ def auth(reauth: bool):
 @main.command()
 def start():
     """Start the bridge server on local.draftai.us:7349."""
-    raise click.ClickException("Bridge server not yet implemented (C2).")
+    from draft_bridge.server import run
+    run()

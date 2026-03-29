@@ -10,8 +10,10 @@ Normalizer maps Claude Code stream-json events → web app SSE event shape:
     tool_output — tool result                  {type, call_id, content}
     error       — execution error              {type, content}
 
+Internal events (intercepted by server.py, never forwarded to SSE):
+    session_init    — carries provider session_id from system init event
+
 Event types filtered out (never forwarded):
-    system          — init metadata
     thinking        — Claude's internal reasoning blocks (inside assistant events)
     rate_limit_event — rate limit info
     result (success) — final roll-up; text was already streamed via message events
@@ -40,7 +42,12 @@ def _normalize(cc_event: dict) -> list[dict]:
     """Convert one Claude Code stream-json event into zero or more SSE events."""
     event_type = cc_event.get("type")
 
-    if event_type in ("system", "rate_limit_event"):
+    if event_type == "system":
+        if cc_event.get("subtype") == "init" and cc_event.get("session_id"):
+            return [{"type": "session_init", "session_id": cc_event["session_id"]}]
+        return []
+
+    if event_type == "rate_limit_event":
         return []
 
     if event_type == "assistant":

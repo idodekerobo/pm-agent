@@ -10,6 +10,30 @@ httpx is already a bridge dependency (used by tls.py), so no extra deps needed.
 import httpx
 
 
+async def patch_session_provider_id(
+    supabase_url: str,
+    anon_key: str,
+    user_jwt: str,
+    *,
+    session_id: str,
+    provider_session_id: str,
+) -> None:
+    """PATCH agent_sessions.provider_session_id for the given session."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.patch(
+            f"{supabase_url}/rest/v1/agent_sessions",
+            params={"id": f"eq.{session_id}"},
+            json={"provider_session_id": provider_session_id},
+            headers={
+                "apikey": anon_key,
+                "Authorization": f"Bearer {user_jwt}",
+                "Content-Type": "application/json",
+            },
+            timeout=10,
+        )
+        resp.raise_for_status()
+
+
 async def write_item(
     supabase_url: str,
     anon_key: str,

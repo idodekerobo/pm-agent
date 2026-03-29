@@ -33,7 +33,7 @@ from draft_bridge import keychain, tls as tls_module
 from draft_bridge.constants import ALLOWED_ORIGINS, BRIDGE_PORT, CLOUD_API_BASE_URL
 from draft_bridge.runner import run_claude
 from draft_bridge.slack_relay import run_relay
-from draft_bridge.supabase_writer import make_assistant_item, make_tool_call_item, make_tool_output_item, make_user_item, write_item
+from draft_bridge.supabase_writer import make_assistant_item, make_tool_call_item, make_tool_output_item, make_user_item, patch_session_provider_id, write_item
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,20 @@ async def run_local(request: Request) -> StreamingResponse:
         try:
             async for event in run_claude(prompt, workspace_path, integration_tokens):
                 event_type = event["type"]
+
+                if event_type == "session_init":
+                    # Internal event — persist provider_session_id, never forward to SSE
+                    provider_session_id = event.get("session_id", "")
+                    logger.info("[server] session_init provider_session_id=%r", provider_session_id)
+                    try:
+                        await patch_session_provider_id(
+                            supabase_url, supabase_anon_key, jwt,
+                            session_id=session_id,
+                            provider_session_id=provider_session_id,
+                        )
+                    except Exception as exc:
+                        logger.error("Failed to patch provider_session_id: %s", exc)
+                    continue
 
                 if event_type == "message":
                     full_text += event.get("content", "")

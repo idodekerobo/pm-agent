@@ -12,9 +12,16 @@ Normalizer maps Claude Code stream-json events → web app SSE event shape:
 
 Event types filtered out (never forwarded):
     system          — init metadata
-    thinking        — Claude's internal reasoning blocks
+    thinking        — Claude's internal reasoning blocks (inside assistant events)
     rate_limit_event — rate limit info
     result (success) — final roll-up; text was already streamed via message events
+
+Stream-json type mapping (per Agent SDK ToolResultBlock schema):
+    assistant + text block      → message
+    assistant + tool_use block  → tool_call
+    assistant + thinking block  → (dropped)
+    user + tool_result block    → tool_output   ← tool results live here, NOT type:"tool"
+    result (is_error)           → error
 """
 
 import asyncio
@@ -58,22 +65,31 @@ def _normalize(cc_event: dict) -> list[dict]:
             # thinking blocks → skip (internal reasoning, not for display)
         return out
 
-    if event_type == "tool":
-        # Tool result — content can be a string or list of content blocks
-        raw_content = cc_event.get("content", "")
-        if isinstance(raw_content, list):
-            parts = []
-            for block in raw_content:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    parts.append(block.get("text", ""))
-            content = "\n".join(parts)
-        else:
-            content = str(raw_content)
-        return [{
-            "type": "tool_output",
-            "call_id": cc_event.get("tool_use_id", ""),
-            "content": content,
-        }]
+    # UserMessage (type: "user") carries ToolResultBlocks — these are tool outputs.
+    # Note: the stream-json format never emits type: "tool"; tool results arrive as type: "user" with message.content[].type == "tool_result"
+    # Per the Agent SDK ToolResultBlock schema: tool_use_id, content, is_error.
+    if event_type == "user":
+        message = cc_event.get("message") or {}
+        content_blocks = message.get("content") or []
+        out = []
+        for block in content_blocks:
+            if block.get("type") != "tool_result":
+                continue
+            raw_content = block.get("content", "")
+            if isinstance(raw_content, list):
+                text = "\n".join(
+                    b.get("text", "") for b in raw_content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                )
+            else:
+                text = str(raw_content)
+            out.append({
+                "type": "tool_output",
+                "call_id": block.get("tool_use_id", ""),
+                "content": text,
+                "is_error": block.get("is_error", False),
+            })
+        return out
 
     if event_type == "result":
         if cc_event.get("is_error") or cc_event.get("subtype") == "error_during_execution":

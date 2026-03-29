@@ -50,6 +50,33 @@ async def health(request: Request) -> JSONResponse:
     })
 
 
+async def fs_list(request: Request) -> JSONResponse:
+    """GET /fs/list?path=<dir> — list subdirectories for the file browser.
+
+    If `path` is omitted, defaults to the bridge startup workspace.
+    Returns only directories (hidden dirs excluded).
+    """
+    raw_path = request.query_params.get("path")
+    if raw_path:
+        target = Path(raw_path).expanduser().resolve()
+    else:
+        target = request.app.state.workspace_path
+
+    if not target.is_dir():
+        return JSONResponse({"error": f"not a directory: {target}"}, status_code=400)
+
+    entries = []
+    try:
+        for entry in sorted(target.iterdir(), key=lambda e: e.name.lower()):
+            if entry.is_dir() and not entry.name.startswith("."):
+                entries.append({"name": entry.name, "path": str(entry)})
+    except PermissionError:
+        return JSONResponse({"error": "permission denied"}, status_code=403)
+
+    parent = str(target.parent) if target != target.parent else None
+    return JSONResponse({"path": str(target), "parent": parent, "entries": entries})
+
+
 async def run_local(request: Request) -> StreamingResponse:
     """POST /run-local — spawn Claude Code and stream SSE back to the web app.
 
@@ -73,12 +100,21 @@ async def run_local(request: Request) -> StreamingResponse:
     session_id: str = body.get("session_id", "")
     prompt: str = body.get("prompt", "")
     jwt: str = body.get("jwt", "")
+    body_workspace: str | None = body.get("workspace_path")
+
 
     if not session_id or not prompt or not jwt:
         return JSONResponse({"error": "session_id, prompt, and jwt are required"}, status_code=400)
 
     state = request.app.state
-    workspace_path: Path = state.workspace_path
+
+    if body_workspace:
+        candidate = Path(body_workspace).expanduser().resolve()
+        if not candidate.is_dir():
+            return JSONResponse({"error": f"workspace_path does not exist: {body_workspace}"}, status_code=400)
+        workspace_path: Path = candidate
+    else:
+        workspace_path: Path = state.workspace_path
     integration_tokens: dict = state.integration_tokens
     supabase_url: str = state.supabase_url
     supabase_anon_key: str = state.supabase_anon_key
@@ -204,6 +240,7 @@ def _create_app(
 ) -> Starlette:
     app = Starlette(routes=[
         Route("/health", health, methods=["GET"]),
+        Route("/fs/list", fs_list, methods=["GET"]),
         Route("/run-local", run_local, methods=["POST"]),
     ])
     app.add_middleware(
@@ -289,7 +326,7 @@ def _fetch_integration_tokens(bridge_token: str) -> dict:
         return {}
 
 
-def run() -> None:
+def run(workspace_path: Path | None = None) -> None:
     """Called by `draft-bridge start`. Blocks until the server is stopped."""
     bridge_token = keychain.load_token()
     if not bridge_token:
@@ -297,7 +334,8 @@ def run() -> None:
             "Not authenticated. Run `draft-bridge auth` first."
         )
 
-    workspace_path = Path.cwd()
+    if workspace_path is None:
+        workspace_path = Path.cwd()
     click.echo(f"Workspace: {workspace_path}")
 
     click.echo("Fetching startup bundle from Draft Cloud...")

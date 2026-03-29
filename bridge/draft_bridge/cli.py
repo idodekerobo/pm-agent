@@ -6,6 +6,7 @@ Commands:
 """
 
 import click
+from pathlib import Path
 
 from draft_bridge.auth import run_auth
 
@@ -28,8 +29,20 @@ def auth(reauth: bool):
 
 
 @main.command()
-def start():
+@click.option(
+    "--workspace",
+    default=None,
+    type=click.Path(exists=True, file_okay=False, resolve_path=True),
+    help="Working directory for Claude Code (absolute or relative). Defaults to current directory.",
+)
+def start(workspace: str | None):
     """Start the bridge server on local.draftai.us:7349."""
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     from draft_bridge import keychain
     from draft_bridge.server import run
 
@@ -37,4 +50,4 @@ def start():
         click.echo("No auth token found. Starting authentication first...")
         run_auth()
 
-    run()
+    run(workspace_path=Path(workspace) if workspace else Path.cwd())

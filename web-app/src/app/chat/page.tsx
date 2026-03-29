@@ -56,6 +56,7 @@ function ChatPage() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [workingDir, setWorkingDir] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -561,6 +562,7 @@ function ChatPage() {
             session_id: sessionId,
             prompt: fullPrompt,
             jwt: getToken(),
+            ...(workingDir ? { workspace_path: workingDir } : {}),
           }),
         });
 
@@ -1016,6 +1018,9 @@ function ChatPage() {
           onDrop={handleDrop}
           onFileSelect={handleFileSelect}
           processFiles={processFiles}
+          workingDir={workingDir}
+          onWorkingDirChange={setWorkingDir}
+          hasMessages={messages.length > 0}
         />
       </div>
 

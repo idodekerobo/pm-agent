@@ -536,7 +536,11 @@ function ChatPage() {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${getToken()}`,
             },
-            body: JSON.stringify({ session_id: newId }),
+            body: JSON.stringify({
+            session_id: newId,
+            execution_environment: 'local_bridge',
+            provider: 'claude_code',
+          }),
           });
           if (!sessionRes.ok) throw new Error('Failed to create session');
           const { agent_session_id } = await sessionRes.json();

@@ -12,6 +12,8 @@ router = APIRouter()
 
 class CreateSessionRequest(BaseModel):
     session_id: str | None = None
+    execution_environment: str = "cloud"
+    provider: str = "openai"
 
 
 class UpdateSessionRequest(BaseModel):
@@ -49,6 +51,8 @@ def create_session(body: CreateSessionRequest, user_id: str = Depends(auth_prote
         project_id=project_id,
         workspace_id=workspace_id,
         session_id=body.session_id,
+        execution_environment=body.execution_environment,
+        provider=body.provider,
     )
 
     return {"agent_session_id": agent_session_id, "workspace_id": workspace_id}

@@ -15,6 +15,9 @@ def create_agent_session(
     initiated_by: str = "user",
     display_name: str | None = None,
     session_id: str | None = None,
+    execution_environment: str = "cloud",
+    provider: str = "openai",
+    provider_session_id: str | None = None,
 ) -> str:
     """
     Creates a new agent session tied to a project.
@@ -30,7 +33,11 @@ def create_agent_session(
         "is_pinned": is_pinned,
         "initiated_by": initiated_by,
         "last_read_at": datetime.now(timezone.utc).isoformat(),
+        "execution_environment": execution_environment,
+        "provider": provider,
     }
+    if provider_session_id is not None:
+        insert_payload["provider_session_id"] = provider_session_id
     if session_id is not None:
         insert_payload["id"] = session_id
     if display_name is not None:

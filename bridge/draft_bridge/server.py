@@ -33,7 +33,7 @@ from draft_bridge import keychain, tls as tls_module
 from draft_bridge.constants import ALLOWED_ORIGINS, BRIDGE_PORT, CLOUD_API_BASE_URL
 from draft_bridge.runner import run_claude
 from draft_bridge.slack_relay import run_relay
-from draft_bridge.supabase_writer import make_assistant_item, make_user_item, write_item
+from draft_bridge.supabase_writer import make_assistant_item, make_tool_call_item, make_tool_output_item, make_user_item, write_item
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +100,52 @@ async def run_local(request: Request) -> StreamingResponse:
             yield sse({"type": "error", "content": "Failed to save message. Check your connection."})
             return
 
-        # 2. Stream Claude Code output
+        # 2. Stream Claude Code output + write tool items to Supabase immediately
         full_text = ""
+        tool_call_item_ids: dict[str, str] = {}  # call_id → db item id
         try:
             async for event in run_claude(prompt, workspace_path, integration_tokens):
-                if event["type"] == "message":
+                event_type = event["type"]
+
+                if event_type == "message":
                     full_text += event.get("content", "")
+                elif event_type == "tool_call":
+                    call_id = event.get("call_id", "")
+                    try:
+                        tc_item_id = await write_item(
+                            supabase_url, supabase_anon_key, jwt,
+                            session_id=session_id,
+                            item=make_tool_call_item(
+                                name=event.get("name", ""),
+                                call_id=call_id,
+                                arguments=event.get("arguments", "{}"),
+                            ),
+                            parent_id=user_item_id,
+                        )
+                        tool_call_item_ids[call_id] = tc_item_id
+                        logger.info("[server] wrote tool_call item call_id=%r db_id=%r", call_id, tc_item_id)
+                    except Exception as exc:
+                        logger.error("Failed to write tool_call item: %s", exc)
+                elif event_type == "tool_output":
+                    call_id = event.get("call_id", "")
+                    parent_id = tool_call_item_ids.get(call_id) or user_item_id
+                    try:
+                        await write_item(
+                            supabase_url, supabase_anon_key, jwt,
+                            session_id=session_id,
+                            item=make_tool_output_item(
+                                call_id=call_id,
+                                output=event.get("content", ""),
+                                is_error=event.get("is_error", False),
+                            ),
+                            parent_id=parent_id,
+                        )
+                        logger.info("[server] wrote tool_output item call_id=%r is_error=%r", call_id, event.get("is_error"))
+                    except Exception as exc:
+                        logger.error("Failed to write tool_output item: %s", exc)
+
+                logger.info("[server] -> yield SSE type=%r call_id=%r",
+                            event.get("type"), event.get("call_id"))
                 yield sse(event)
         except RuntimeError as exc:
             yield sse({"type": "error", "content": str(exc)})

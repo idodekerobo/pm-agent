@@ -58,3 +58,21 @@ def make_assistant_item(text: str) -> dict:
         "role": "assistant",
         "content": [{"type": "output_text", "text": text}],
     }
+
+
+def make_tool_call_item(name: str, call_id: str, arguments: str) -> dict:
+    return {
+        "type": "function_call",
+        "name": name,
+        "call_id": call_id,
+        "arguments": arguments,
+    }
+
+
+def make_tool_output_item(call_id: str, output: str, is_error: bool = False) -> dict:
+    return {
+        "type": "function_call_output",
+        "call_id": call_id,
+        "output": output,
+        "is_error": is_error,
+    }

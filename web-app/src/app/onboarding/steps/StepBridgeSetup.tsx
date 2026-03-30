@@ -4,9 +4,8 @@ import { useState } from 'react';
 import { useBridge } from '@/lib/BridgeContext';
 
 const STEPS = [
-  { num: 1, label: 'Install', cmd: 'curl -fsSL https://install.draft.so | sh' },
-  { num: 2, label: 'Authenticate', cmd: 'draft-bridge auth' },
-  { num: 3, label: 'Start', cmd: 'draft-bridge start' },
+  { num: 1, label: 'Install', cmd: 'curl -fsSL https://install.draftai.us | sh', hint: null },
+  { num: 2, label: 'Start', cmd: 'draft-bridge start', hint: 'A browser window will open on first run — sign in to authenticate.' },
 ];
 
 export default function StepBridgeSetup() {
@@ -25,7 +24,7 @@ export default function StepBridgeSetup() {
 
   return (
     <div className="px-8 py-6 flex flex-col gap-5">
-      {STEPS.map(({ num, label, cmd }) => (
+      {STEPS.map(({ num, label, cmd, hint }) => (
         <div key={num} className="flex items-start gap-4">
           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-medium text-white">
             {num}
@@ -47,6 +46,7 @@ export default function StepBridgeSetup() {
                 {copiedStep === num ? 'Copied!' : 'Copy'}
               </button>
             </div>
+            {hint && <p className="mt-1.5 text-xs text-zinc-400">{hint}</p>}
           </div>
         </div>
       ))}

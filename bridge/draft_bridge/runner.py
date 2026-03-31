@@ -123,7 +123,20 @@ async def run_claude(
     """
     env = {**os.environ, **integration_tokens}
 
-    cmd = ["claude", "--output-format", "stream-json", "--verbose", "-p", prompt]
+    SYSTEM_PROMPT = (
+        "You cannot use the AskUserQuestion tool — it is disabled. "
+        "If you need clarification or have questions for the user, "
+        "instead of using AskUserQuestion tool just ask them directly in your response as a numbered list (e.g. 1. ... 2. ...), "
+        "tell them how to respond (respond with 1, 2, or something else...) then stop and wait for the user to respond before continuing."
+    )
+    cmd = [
+        "claude",
+        "--output-format", "stream-json",
+        "--verbose",
+        "--disallowedTools", "AskUserQuestion",
+        "--system-prompt", SYSTEM_PROMPT,
+        "-p", prompt,
+    ]
     if resume_session_id:
         cmd += ["--resume", resume_session_id]
 

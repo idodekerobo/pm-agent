@@ -112,6 +112,7 @@ async def run_claude(
     prompt: str,
     workspace_path: Path,
     integration_tokens: dict[str, str],
+    resume_session_id: str | None = None,
 ) -> AsyncGenerator[dict, None]:
     """Spawn `claude -p` and yield normalized SSE events.
 
@@ -122,11 +123,13 @@ async def run_claude(
     """
     env = {**os.environ, **integration_tokens}
 
+    cmd = ["claude", "--output-format", "stream-json", "--verbose", "-p", prompt]
+    if resume_session_id:
+        cmd += ["--resume", resume_session_id]
+
     try:
         proc = await asyncio.create_subprocess_exec(
-            "claude", "-p", prompt,
-            "--output-format", "stream-json",
-            "--verbose",
+            *cmd,
             cwd=str(workspace_path),
             env=env,
             stdout=asyncio.subprocess.PIPE,

@@ -101,7 +101,7 @@ async def run_local(request: Request) -> StreamingResponse:
     prompt: str = body.get("prompt", "")
     jwt: str = body.get("jwt", "")
     body_workspace: str | None = body.get("workspace_path")
-
+    resume_session_id: str | None = body.get("provider_session_id") or None
 
     if not session_id or not prompt or not jwt:
         return JSONResponse({"error": "session_id, prompt, and jwt are required"}, status_code=400)
@@ -140,19 +140,18 @@ async def run_local(request: Request) -> StreamingResponse:
         full_text = ""
         tool_call_item_ids: dict[str, str] = {}  # call_id → db item id
         try:
-            async for event in run_claude(prompt, workspace_path, integration_tokens):
+            async for event in run_claude(prompt, workspace_path, integration_tokens, resume_session_id):
                 event_type = event["type"]
 
                 if event_type == "session_init":
-                    # Internal event — persist provider_session_id, never forward to SSE
-                    provider_session_id = event.get("session_id", "")
-                    logger.info("[server] session_init provider_session_id=%r", provider_session_id)
+                    new_provider_session_id = event.get("session_id", "")
                     try:
                         await patch_session_provider_id(
                             supabase_url, supabase_anon_key, jwt,
                             session_id=session_id,
-                            provider_session_id=provider_session_id,
+                            provider_session_id=new_provider_session_id,
                         )
+                        yield sse({"type": "session_provider_id", "provider_session_id": new_provider_session_id})
                     except Exception as exc:
                         logger.error("Failed to patch provider_session_id: %s", exc)
                     continue

@@ -57,6 +57,7 @@ function ChatPage() {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [workingDir, setWorkingDir] = useState<string | null>(null);
+  const [providerSessionId, setProviderSessionId] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -199,6 +200,14 @@ function ChatPage() {
     };
   }, [session?.user?.id]);
 
+  useEffect(() => {
+    if (!activeSessionId || providerSessionId) return;
+    const session = sessions.find((s) => s.id === activeSessionId);
+    if (session?.provider_session_id) {
+      setProviderSessionId(session.provider_session_id);
+    }
+  }, [sessions, activeSessionId]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     if (!openMenuId) return;
@@ -243,10 +252,12 @@ function ChatPage() {
   const startNewSession = () => {
     setActiveSessionId(null);
     setMessages([]);
+    setProviderSessionId(null);
     router.push("/chat");
   };
 
   const loadSession = async (sessionId: string) => {
+    setProviderSessionId(null);
     ph?.capture(EVENTS.SESSION_OPENED, { session_id: sessionId });
     try {
       const res = await fetch(`${apiBaseUrl}/sessions/${sessionId}/messages`, {
@@ -562,6 +573,7 @@ function ChatPage() {
             session_id: sessionId,
             prompt: fullPrompt,
             jwt: getToken(),
+            ...(providerSessionId ? { provider_session_id: providerSessionId } : {}),
             ...(workingDir ? { workspace_path: workingDir } : {}),
           }),
         });
@@ -588,6 +600,10 @@ function ChatPage() {
             if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
             try {
               const eventData = JSON.parse(trimmedLine.slice(6));
+              if (eventData.type === 'session_provider_id') {
+                setProviderSessionId(eventData.provider_session_id);
+                continue;
+              }
               if (eventData.type === 'tool_call') {
                 toolCallsCount++;
                 setMessages((prev) => [

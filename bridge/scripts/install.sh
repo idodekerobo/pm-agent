@@ -30,6 +30,10 @@ curl -fsSL "$RELEASE_URL" -o "$INSTALL_PATH"
 chmod +x "$INSTALL_PATH"
 
 echo ""
+echo "Setting up Draft workspace..."
+"$INSTALL_PATH" install
+
+echo ""
 echo "draft-bridge installed at $INSTALL_PATH"
 echo ""
 echo "Next steps:"

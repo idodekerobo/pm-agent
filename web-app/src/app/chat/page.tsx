@@ -987,7 +987,7 @@ function ChatPage() {
         )}
 
         {/* Upgrade Banner */}
-        {showUpgradeBanner && (
+        {showUpgradeBanner && !isLocal && (
           <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-6 py-4">
             <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
               <div>

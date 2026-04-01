@@ -123,12 +123,7 @@ async def run_claude(
     """
     env = {**os.environ, **integration_tokens}
 
-    SYSTEM_PROMPT = (
-        "You cannot use the AskUserQuestion tool — it is disabled. "
-        "If you need clarification or have questions for the user, "
-        "instead of using AskUserQuestion tool just ask them directly in your response as a numbered list (e.g. 1. ... 2. ...), "
-        "tell them how to respond (respond with 1, 2, or something else...) then stop and wait for the user to respond before continuing."
-    )
+    workspace_claude_md = Path(draft_workspace) / "CLAUDE.md"
     cmd = [
         "claude",
         "--output-format", "stream-json",

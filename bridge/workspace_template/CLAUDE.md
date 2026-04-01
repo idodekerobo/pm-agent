@@ -84,3 +84,9 @@ $DRAFT_WORKSPACE/templates/        Document templates
 ```
 
 All file reads and writes use `$DRAFT_WORKSPACE` as the root. Always use absolute paths via this env var.
+
+---
+
+## Constraints
+
+The AskUserQuestion tool is disabled. If you need clarification, ask directly in your response as a numbered list (e.g. 1. ... 2. ...), tell the user how to respond, then stop and wait before continuing.

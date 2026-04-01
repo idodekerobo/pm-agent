@@ -29,8 +29,11 @@ from pathlib import Path
 
 import click
 
-# Template bundled into the package at build time (see build.sh)
-_TEMPLATE_DIR = Path(__file__).parent / "workspace_template"
+# Template bundled into the package at build time (see build.sh).
+# In local dev (uv run), fall back to the sibling workspace_template/ directory.
+_BUNDLED = Path(__file__).parent / "workspace_template"
+_DEV_FALLBACK = Path(__file__).parent.parent / "workspace_template"
+_TEMPLATE_DIR = _BUNDLED if _BUNDLED.exists() else _DEV_FALLBACK
 
 _DRAFT_DIR = Path.home() / ".draft"
 _DRAFT_WORKSPACE = _DRAFT_DIR / "workspace"

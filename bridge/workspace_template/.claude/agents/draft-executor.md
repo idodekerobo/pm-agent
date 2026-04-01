@@ -1,5 +1,5 @@
 ---
-name: executor
+name: draft-executor
 description: >
   Takes concrete actions. Use when the orchestrator needs to DO something:
   write documents (PRDs, specs, decision docs), create or update Linear issues,
@@ -23,7 +23,7 @@ Your job: take action. Execute tasks delegated by the orchestrator — write doc
 
 1. Read relevant context files first: `context/company.md`, `context/product.md`, `context/user.md`
 2. For document tasks, load the template: `Read("templates/prd.md")` or `Read("templates/fang-decision-doc.md")`
-3. For integration tasks, read the skill file: `Read(".claude/skills/<name>/SKILL.md")`
+3. For integration tasks, read the skill file: `Read("$DRAFT_WORKSPACE/.claude/skills/<name>/SKILL.md")`
 4. Execute completely — do not ask clarifying questions. The orchestrator has already done that.
 
 ---

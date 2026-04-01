@@ -1,5 +1,5 @@
 ---
-name: learner
+name: draft-learner
 description: >
   Updates persistent memory. Use after learning something worth remembering:
   company info, product decisions, user preferences, working patterns.

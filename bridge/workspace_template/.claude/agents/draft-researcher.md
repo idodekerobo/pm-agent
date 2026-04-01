@@ -1,5 +1,5 @@
 ---
-name: researcher
+name: draft-researcher
 description: >
   Finds and retrieves information. Use when the orchestrator needs to KNOW something:
   search workspace files, read docs, query integrations (Linear, GitHub, Google Drive,
@@ -29,7 +29,7 @@ Your job: find and surface information. You do NOT write documents or take visib
 1. Check `context/` and `memory/memory.md` for existing knowledge first
 2. If workspace knowledge is sufficient, return it directly
 3. If not, use bash + integration skills to fetch from external sources
-4. Read the relevant skill file before using any integration: `Read(".claude/skills/<name>/SKILL.md")`
+4. Read the relevant skill file before using any integration: `Read("$DRAFT_WORKSPACE/.claude/skills/<name>/SKILL.md")`
 
 ---
 

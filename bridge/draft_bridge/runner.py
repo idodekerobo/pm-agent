@@ -121,7 +121,12 @@ async def run_claude(
 
     Raises RuntimeError if the `claude` binary is not found.
     """
-    env = {**os.environ, **integration_tokens}
+    draft_workspace = str(Path.home() / ".draft" / "workspace")
+    env = {
+        **os.environ,
+        **integration_tokens,
+        "DRAFT_WORKSPACE": draft_workspace,
+    }
 
     workspace_claude_md = Path(draft_workspace) / "CLAUDE.md"
     cmd = [
@@ -129,9 +134,11 @@ async def run_claude(
         "--output-format", "stream-json",
         "--verbose",
         "--disallowedTools", "AskUserQuestion",
-        "--system-prompt", SYSTEM_PROMPT,
+        "--add-dir", draft_workspace,
         "-p", prompt,
     ]
+    if workspace_claude_md.exists():
+        cmd += ["--append-system-prompt-file", str(workspace_claude_md)]
     if resume_session_id:
         cmd += ["--resume", resume_session_id]
 

@@ -87,9 +87,6 @@ def _create_workspace_dirs() -> None:
 def _copy_claude_md() -> None:
     src = _TEMPLATE_DIR / "CLAUDE.md"
     dst = _DRAFT_WORKSPACE / "CLAUDE.md"
-    if dst.exists():
-        click.echo("  – Skipped ~/.draft/workspace/CLAUDE.md (already exists — preserving edits)")
-        return
     shutil.copy2(src, dst)
     click.echo("  ✓ Installed ~/.draft/workspace/CLAUDE.md")
 

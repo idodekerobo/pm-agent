@@ -24,6 +24,7 @@ export default function StepBridgeSetup() {
 
   return (
     <div className="px-8 py-6 flex flex-col gap-5">
+      <p className="text-xs text-zinc-400">macOS only — Windows and Linux support coming soon.</p>
       {STEPS.map(({ num, label, cmd, hint }) => (
         <div key={num} className="flex items-start gap-4">
           <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-medium text-white">

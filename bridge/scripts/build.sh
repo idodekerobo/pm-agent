@@ -30,6 +30,9 @@ python3 -m pip install \
 # Copy the package source
 cp -r "$ROOT/draft_bridge" "$BUILD_DIR/"
 
+# Bundle workspace_template as package data so bootstrap can access it at runtime
+cp -r "$ROOT/workspace_template" "$BUILD_DIR/draft_bridge/workspace_template"
+
 # Build the zipapp
 # --main creates a __main__.py that calls draft_bridge.cli:main
 # --python sets the shebang line

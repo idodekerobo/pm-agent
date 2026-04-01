@@ -75,7 +75,12 @@ function ChatPage() {
   };
 
   useEffect(() => {
-    scrollToBottom();
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -508,7 +513,7 @@ function ChatPage() {
     attachedFiles.forEach((f) => { if (f.kind === "image" && f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
     setAttachedFiles([]);
     setAttachmentError(null);
-    setIsLoading(true);
+    scrollToBottom();
     let toolCallsCount = 0;
 
     try {

@@ -28,6 +28,13 @@ def auth(reauth: bool):
     run_auth(reauth=reauth)
 
 
+@main.command("install")
+def install_cmd():
+    """Bootstrap ~/.draft workspace and install Draft agents + skills into ~/.claude."""
+    from draft_bridge.bootstrap import install_draft
+    install_draft()
+
+
 @main.command()
 @click.option(
     "--workspace",
@@ -44,10 +51,15 @@ def start(workspace: str | None):
     )
 
     from draft_bridge import keychain
+    from draft_bridge.bootstrap import install_draft, is_installed
     from draft_bridge.server import run
 
     if not keychain.load_token():
         click.echo("No auth token found. Starting authentication first...")
         run_auth()
+
+    if not is_installed():
+        click.echo("First-time setup — installing Draft workspace...")
+        install_draft()
 
     run(workspace_path=Path(workspace) if workspace else Path.cwd())

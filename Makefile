@@ -20,7 +20,7 @@ run-landing:
 
 # Runs at localhost:9181
 install-bridge:
-	cd bridge && uv sync
+	cd bridge && uv sync && uv run --env-file .env.local draft-bridge install
 
 run-bridge:
 	cd bridge && uv run --env-file .env.local draft-bridge start

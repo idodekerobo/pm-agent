@@ -36,6 +36,8 @@ from app.config import settings
 from app.db.bridge_tokens import create_bridge_token, revoke_bridge_tokens, validate_bridge_token
 from app.db.supabase_client import get_supabase
 from app.integrations.manager import get_valid_token
+from app.messaging.slack.client import post_message
+from app.messaging.slack.installation_store import get_installation_by_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +173,24 @@ async def bridge_ws_relay(websocket: WebSocket, token: str):
     try:
         # Drain inbound messages (bridge acks / pongs) — no-op for now
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            try:
+                msg = json.loads(raw)
+            except Exception:
+                continue
+
+            if msg.get("type") == "slack_response":
+                p = msg.get("payload", {})
+                channel = p.get("channel")
+                text = p.get("text")
+                thread_ts = p.get("thread_ts")
+                if channel and text:
+                    installation = get_installation_by_user_id(user_id)
+                    if installation:
+                        asyncio.create_task(
+                            post_message(installation.bot_token, channel, text, thread_ts=thread_ts)
+                        )
+            # pong and unknown types are silently ignored
     except WebSocketDisconnect:
         pass
     finally:

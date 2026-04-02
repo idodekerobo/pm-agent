@@ -31,4 +31,5 @@ export interface Session {
   last_read_at: string | null;
   last_message_at: string;
   provider_session_id?: string | null;
+  workspace_path?: string | null;
 }

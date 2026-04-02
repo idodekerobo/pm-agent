@@ -22,6 +22,7 @@ class AgentSessionBase(BaseModel):
     execution_environment: str  # 'cloud' | 'local_bridge'
     provider: str               # 'openai' | 'claude_code' | 'openai_codex'
     provider_session_id: Optional[str] = None
+    workspace_path: Optional[str] = None
 
 
 class AgentSessionCreate(AgentSessionBase):

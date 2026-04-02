@@ -19,6 +19,7 @@ class CreateSessionRequest(BaseModel):
 class UpdateSessionRequest(BaseModel):
     display_name: str | None = None
     is_pinned: bool | None = None
+    workspace_path: str | None = None
 
 
 @router.post("/sessions")

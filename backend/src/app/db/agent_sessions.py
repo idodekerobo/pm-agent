@@ -86,7 +86,7 @@ def find_session_by_thread_id(
     return result.data[0]["id"] if result.data else None
 
 
-_PATCHABLE_SESSION_FIELDS = {"display_name", "is_pinned"}
+_PATCHABLE_SESSION_FIELDS = {"display_name", "is_pinned", "workspace_path"}
 
 
 def update_session_fields(

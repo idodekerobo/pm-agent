@@ -1,8 +1,10 @@
 """Bootstrap ~/.draft and install Draft agents + skills into ~/.claude.
 
 Entry points:
-    install_draft()  — idempotent install; safe to re-run
-    is_installed()   — returns True if ~/.draft/.installed exists
+    install_draft()         — idempotent install; safe to re-run
+    is_installed()          — returns True if ~/.draft/.installed exists
+    uninstall_draft()       — remove Draft from ~/.claude, keep ~/.draft user data
+    uninstall_draft_purge() — remove everything including ~/.draft
 
 Directory layout after install:
     ~/.draft/
@@ -147,3 +149,69 @@ def _update_global_claude_md() -> None:
 
     claude_md.write_text(updated)
     click.echo("  ✓ Updated ~/.claude/CLAUDE.md with Draft section")
+
+
+# ── Uninstall ──────────────────────────────────────────────────────────────────
+
+def uninstall_draft() -> None:
+    """Remove Draft from ~/.claude. Keeps ~/.draft user data (context, memory, docs)."""
+    click.echo("Uninstalling Draft from ~/.claude...")
+
+    _remove_agents()
+    _remove_skill_symlinks()
+    _remove_global_claude_md_section()
+    _SENTINEL.unlink(missing_ok=True)
+
+    click.echo("Draft uninstalled. Your context and memory in ~/.draft are preserved.")
+    click.echo("Run 'draft-bridge install' to reinstall.")
+
+
+def uninstall_draft_purge() -> None:
+    """Remove Draft from ~/.claude AND delete ~/.draft (all context, memory, docs)."""
+    uninstall_draft()
+
+    click.echo("Removing ~/.draft...")
+    if _DRAFT_DIR.exists():
+        shutil.rmtree(_DRAFT_DIR)
+        click.echo("  ✓ Deleted ~/.draft")
+    else:
+        click.echo("  – ~/.draft not found, nothing to remove")
+
+    click.echo("Draft fully removed.")
+
+
+def _remove_agents() -> None:
+    agents_dir = _CLAUDE_DIR / "agents"
+    removed = 0
+    for agent in agents_dir.glob("draft-*.md"):
+        agent.unlink()
+        removed += 1
+    click.echo(f"  ✓ Removed {removed} agent(s) from ~/.claude/agents/")
+
+
+def _remove_skill_symlinks() -> None:
+    skills_dir = _CLAUDE_DIR / "skills"
+    removed = 0
+    if skills_dir.exists():
+        for link in skills_dir.iterdir():
+            if link.is_symlink() and str(_DRAFT_WORKSPACE) in str(link.resolve()):
+                link.unlink()
+                removed += 1
+    click.echo(f"  ✓ Removed {removed} skill symlink(s) from ~/.claude/skills/")
+
+
+def _remove_global_claude_md_section() -> None:
+    claude_md = _CLAUDE_DIR / "CLAUDE.md"
+    if not claude_md.exists():
+        return
+
+    existing = claude_md.read_text()
+    if _DRAFT_MARKER_START not in existing:
+        click.echo("  – No Draft section found in ~/.claude/CLAUDE.md")
+        return
+
+    start = existing.index(_DRAFT_MARKER_START)
+    end = existing.index(_DRAFT_MARKER_END) + len(_DRAFT_MARKER_END)
+    updated = existing[:start].rstrip() + "\n" + existing[end:].lstrip()
+    claude_md.write_text(updated)
+    click.echo("  ✓ Removed Draft section from ~/.claude/CLAUDE.md")

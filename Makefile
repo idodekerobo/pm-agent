@@ -22,6 +22,12 @@ run-landing:
 install-bridge:
 	cd bridge && uv sync && uv run --env-file .env.local draft-bridge install
 
+uninstall-bridge:
+	cd bridge && uv run --env-file .env.local draft-bridge uninstall
+
+purge-bridge:
+	cd bridge && uv run --env-file .env.local draft-bridge uninstall --purge
+
 run-bridge:
 	cd bridge && uv run --env-file .env.local draft-bridge start --workspace ..
 

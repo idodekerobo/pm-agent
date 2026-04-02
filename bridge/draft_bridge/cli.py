@@ -35,6 +35,30 @@ def install_cmd():
     install_draft()
 
 
+@main.command("uninstall")
+@click.option(
+    "--purge",
+    is_flag=True,
+    default=False,
+    help="Also delete ~/.draft, removing all context, memory, and docs.",
+)
+def uninstall_cmd(purge: bool):
+    """Remove Draft agents + skills from ~/.claude.
+
+    Keeps ~/.draft user data (context, memory, docs) by default.
+    Use --purge to delete everything including ~/.draft.
+    """
+    from draft_bridge.bootstrap import uninstall_draft, uninstall_draft_purge
+    if purge:
+        click.confirm(
+            "This will permanently delete ~/.draft and all your Draft context, memory, and docs. Continue?",
+            abort=True,
+        )
+        uninstall_draft_purge()
+    else:
+        uninstall_draft()
+
+
 @main.command()
 @click.option(
     "--workspace",

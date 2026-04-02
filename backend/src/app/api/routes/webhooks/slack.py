@@ -1,5 +1,6 @@
 """Slack event webhook receiver."""
 
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException, Request
@@ -9,6 +10,7 @@ from slack_sdk.signature import SignatureVerifier
 from app.bridge import registry as bridge_registry
 from app.config import settings
 from app.messaging.slack import get_installation_by_team_id
+from app.messaging.slack.client import post_message
 from app.workers.queue import get_queue
 from app.workers.tasks import handle_slack_message
 
@@ -75,6 +77,28 @@ async def slack_events(request: Request):
         except Exception:
             # WS send failed — bridge may have just disconnected; fall through to RQ
             bridge_registry.deregister(user_id)
+
+    # Bridge not connected (or just disconnected). Agent-triggering events get a "bridge offline" reply so the user knows why nothing happened. Passive events
+    # (membership changes, revocations) fall through to RQ — they only update DB, no agent runs, so degraded cloud handling is acceptable.
+    # TODO: note that once this ships no cloud slack responses will work. will need to layer add logic to pay for cloud/managing
+    event = payload.get("event", {})
+    event_type = event.get("type")
+    channel = event.get("channel")
+    thread_ts = event.get("thread_ts") or event.get("ts")
+    is_agent_event = event_type == "app_mention" or (
+        event_type == "message" and event.get("channel_type") == "im"
+    )
+
+    if is_agent_event and channel:
+        asyncio.create_task(
+            post_message(
+                installation.bot_token,
+                channel,
+                "Draft bridge isn't running. Start it with `draft-bridge start` to use the agent.",
+                thread_ts=thread_ts,
+            )
+        )
+        return JSONResponse({"ok": True})
 
     # TODO: will need to remove the rq addition here
     get_queue("high").enqueue(handle_slack_message, payload, str(installation.id))

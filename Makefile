@@ -23,7 +23,7 @@ install-bridge:
 	cd bridge && uv sync && uv run --env-file .env.local draft-bridge install
 
 run-bridge:
-	cd bridge && uv run --env-file .env.local draft-bridge start
+	cd bridge && uv run --env-file .env.local draft-bridge start --workspace ..
 
 run-bridge-auth:
 	cd bridge && uv run --env-file .env.local draft-bridge auth

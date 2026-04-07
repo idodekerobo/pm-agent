@@ -578,6 +578,7 @@ function ChatPage() {
             session_id: sessionId,
             prompt: fullPrompt,
             jwt: getToken(),
+            refresh_token: session?.refresh_token ?? "",
             ...(providerSessionId ? { provider_session_id: providerSessionId } : {}),
             ...(workingDir ? { workspace_path: workingDir } : {}),
           }),

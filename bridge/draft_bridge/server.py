@@ -37,6 +37,33 @@ from draft_bridge.supabase_writer import make_assistant_item, make_tool_call_ite
 
 logger = logging.getLogger(__name__)
 
+
+async def _do_refresh_jwt(supabase_url: str, anon_key: str, refresh_token: str) -> tuple[str, str]:
+    """Exchange a Supabase refresh token for a new access + refresh token pair."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{supabase_url}/auth/v1/token",
+            params={"grant_type": "refresh_token"},
+            headers={"apikey": anon_key, "Content-Type": "application/json"},
+            json={"refresh_token": refresh_token},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["access_token"], data["refresh_token"]
+
+
+async def _call_with_retry(coro_fn, auth: dict, supabase_url: str, anon_key: str):
+    """Call coro_fn(jwt). On 401, refresh the token and retry once."""
+    try:
+        return await coro_fn(auth["jwt"])
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code != 401 or not auth.get("refresh_token"):
+            raise
+        logger.info("[server] JWT expired mid-run, refreshing...")
+        auth["jwt"], auth["refresh_token"] = await _do_refresh_jwt(supabase_url, anon_key, auth["refresh_token"])
+        return await coro_fn(auth["jwt"])
+
 _VERSION = "0.1.0"
 
 _DRAFT_WORKSPACE = Path.home() / ".draft" / "workspace"
@@ -146,11 +173,14 @@ async def run_local(request: Request) -> StreamingResponse:
     session_id: str = body.get("session_id", "")
     prompt: str = body.get("prompt", "")
     jwt: str = body.get("jwt", "")
+    refresh_token: str = body.get("refresh_token", "")
     body_workspace: str | None = body.get("workspace_path")
     resume_session_id: str | None = body.get("provider_session_id") or None
 
     if not session_id or not prompt or not jwt:
         return JSONResponse({"error": "session_id, prompt, and jwt are required"}, status_code=400)
+
+    auth = {"jwt": jwt, "refresh_token": refresh_token}
 
     state = request.app.state
 
@@ -171,10 +201,9 @@ async def run_local(request: Request) -> StreamingResponse:
 
         # 1. Write user item → emit item_created
         try:
-            user_item_id = await write_item(
-                supabase_url, supabase_anon_key, jwt,
-                session_id=session_id,
-                item=make_user_item(prompt),
+            user_item_id = await _call_with_retry(
+                lambda j: write_item(supabase_url, supabase_anon_key, j, session_id=session_id, item=make_user_item(prompt)),
+                auth, supabase_url, supabase_anon_key,
             )
             yield sse({"type": "item_created", "role": "user", "id": user_item_id})
         except Exception as exc:
@@ -190,12 +219,13 @@ async def run_local(request: Request) -> StreamingResponse:
                 event_type = event["type"]
 
                 if event_type == "session_init":
+                    # Internal event — persist provider_session_id, emit to client so
+                    # web app can store it for --resume on subsequent turns.
                     new_provider_session_id = event.get("session_id", "")
                     try:
-                        await patch_session_provider_id(
-                            supabase_url, supabase_anon_key, jwt,
-                            session_id=session_id,
-                            provider_session_id=new_provider_session_id,
+                        await _call_with_retry(
+                            lambda j: patch_session_provider_id(supabase_url, supabase_anon_key, j, session_id=session_id, provider_session_id=new_provider_session_id),
+                            auth, supabase_url, supabase_anon_key,
                         )
                         yield sse({"type": "session_provider_id", "provider_session_id": new_provider_session_id})
                     except Exception as exc:
@@ -207,15 +237,9 @@ async def run_local(request: Request) -> StreamingResponse:
                 elif event_type == "tool_call":
                     call_id = event.get("call_id", "")
                     try:
-                        tc_item_id = await write_item(
-                            supabase_url, supabase_anon_key, jwt,
-                            session_id=session_id,
-                            item=make_tool_call_item(
-                                name=event.get("name", ""),
-                                call_id=call_id,
-                                arguments=event.get("arguments", "{}"),
-                            ),
-                            parent_id=user_item_id,
+                        tc_item_id = await _call_with_retry(
+                            lambda j: write_item(supabase_url, supabase_anon_key, j, session_id=session_id, item=make_tool_call_item(name=event.get("name", ""), call_id=call_id, arguments=event.get("arguments", "{}")), parent_id=user_item_id),
+                            auth, supabase_url, supabase_anon_key,
                         )
                         tool_call_item_ids[call_id] = tc_item_id
                         logger.info("[server] wrote tool_call item call_id=%r db_id=%r", call_id, tc_item_id)
@@ -225,15 +249,9 @@ async def run_local(request: Request) -> StreamingResponse:
                     call_id = event.get("call_id", "")
                     parent_id = tool_call_item_ids.get(call_id) or user_item_id
                     try:
-                        await write_item(
-                            supabase_url, supabase_anon_key, jwt,
-                            session_id=session_id,
-                            item=make_tool_output_item(
-                                call_id=call_id,
-                                output=event.get("content", ""),
-                                is_error=event.get("is_error", False),
-                            ),
-                            parent_id=parent_id,
+                        await _call_with_retry(
+                            lambda j: write_item(supabase_url, supabase_anon_key, j, session_id=session_id, item=make_tool_output_item(call_id=call_id, output=event.get("content", ""), is_error=event.get("is_error", False)), parent_id=parent_id),
+                            auth, supabase_url, supabase_anon_key,
                         )
                         logger.info("[server] wrote tool_output item call_id=%r is_error=%r", call_id, event.get("is_error"))
                     except Exception as exc:
@@ -253,11 +271,9 @@ async def run_local(request: Request) -> StreamingResponse:
         # 3. Write assistant item → emit item_created
         if full_text:
             try:
-                assistant_item_id = await write_item(
-                    supabase_url, supabase_anon_key, jwt,
-                    session_id=session_id,
-                    item=make_assistant_item(full_text),
-                    parent_id=user_item_id,
+                assistant_item_id = await _call_with_retry(
+                    lambda j: write_item(supabase_url, supabase_anon_key, j, session_id=session_id, item=make_assistant_item(full_text), parent_id=user_item_id),
+                    auth, supabase_url, supabase_anon_key,
                 )
                 yield sse({"type": "item_created", "role": "assistant", "id": assistant_item_id})
             except Exception as exc:

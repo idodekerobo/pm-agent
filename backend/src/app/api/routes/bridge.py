@@ -146,6 +146,36 @@ async def get_integration_tokens(authorization: str = Header(...)):
     return tokens
 
 
+# ── User profile (for bridge startup context seeding) ────────────────────
+
+@router.get("/profile")
+async def get_bridge_profile(authorization: str = Header(...)):
+    """Return the user's onboarding profile for workspace context seeding.
+
+    Called by the bridge at startup to seed ~/.draft/workspace/context/ files
+    if they are empty. Only returns fields needed for context files.
+    Auth: bridge token in Authorization header ("Bearer <bridge_token>").
+    """
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing bridge token")
+    raw_token = authorization.removeprefix("Bearer ")
+    user_id = validate_bridge_token(raw_token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or revoked bridge token")
+
+    supabase = get_supabase()
+    row = (
+        supabase.table("users")
+        .select("full_name, role, company_url, onboarding_scrape_observations, onboarding_scrape_correction, current_focus, daily_activities")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    if not row.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    return row.data
+
+
 # ── WebSocket relay ───────────────────────────────────────────────────────
 
 @router.websocket("/ws")

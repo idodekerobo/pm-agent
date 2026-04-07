@@ -11,8 +11,10 @@ Startup sequence (called by `draft-bridge start`):
   6. Start uvicorn with SSL
 
 Endpoints:
-  GET  /health       — bridge presence check, returns {status, version, workspace}
-  POST /run-local    — spawn Claude Code, SSE stream back, write to Supabase
+  GET  /health        — bridge presence check, returns {status, version, workspace}
+  GET  /fs/list       — list workspace subdirectories for the file browser
+  POST /seed-context  — write onboarding profile to ~/.draft/workspace/context/ (idempotent)
+  POST /run-local     — spawn Claude Code, SSE stream back, write to Supabase
 """
 
 import asyncio
@@ -113,6 +115,92 @@ def _write_claude_md(integration_tokens: dict) -> None:
     dest.write_text(_build_claude_md(integration_tokens), encoding="utf-8")
 
 
+# ── Context seeding ───────────────────────────────────────────────────────────
+
+def _seed_workspace_context(profile: dict) -> None:
+    """Write onboarding profile data to workspace context files.
+
+    Only writes files that are missing or empty — never overwrites existing content.
+    Creates parent dirs if needed (safe if bootstrap hasn't run yet).
+    """
+    def _is_empty(path: Path) -> bool:
+        return not path.exists() or path.read_text(encoding="utf-8").strip() == ""
+
+    company_url = (profile.get("company_url") or "").strip()
+    scrape_observations = (profile.get("onboarding_scrape_observations") or "").strip()
+    scrape_correction = (profile.get("onboarding_scrape_correction") or "").strip()
+    full_name = (profile.get("full_name") or "").strip()
+    role = (profile.get("role") or "").strip()
+    current_focus: list = profile.get("current_focus") or []
+    daily_activities: list = profile.get("daily_activities") or []
+    imported_memories: list = profile.get("imported_memories") or []
+
+    # context/company.md
+    company_file = _DRAFT_WORKSPACE / "context" / "company.md"
+    if _is_empty(company_file) and (company_url or scrape_observations):
+        company_file.parent.mkdir(parents=True, exist_ok=True)
+        lines = ["# Company"]
+        if company_url:
+            lines += ["", f"**URL:** {company_url}"]
+        if scrape_observations:
+            lines += ["", "## What They Build", scrape_observations]
+        if scrape_correction:
+            lines += ["", "## User Correction", scrape_correction]
+        company_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        logger.info("[seed] wrote context/company.md")
+
+    # context/user.md
+    user_file = _DRAFT_WORKSPACE / "context" / "user.md"
+    if _is_empty(user_file) and (full_name or role):
+        user_file.parent.mkdir(parents=True, exist_ok=True)
+        lines = ["# User"]
+        if full_name:
+            lines += ["", f"**Name:** {full_name}"]
+        if role:
+            lines += [f"**Role:** {role}"]
+        if current_focus:
+            lines += ["", "## Current Focus"]
+            lines += [f"- {item}" for item in current_focus]
+        if daily_activities:
+            lines += ["", "## Daily Activities"]
+            lines += [f"- {item}" for item in daily_activities]
+        user_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        logger.info("[seed] wrote context/user.md")
+
+    # memory/memory.md
+    if imported_memories:
+        memory_file = _DRAFT_WORKSPACE / "memory" / "memory.md"
+        if _is_empty(memory_file):
+            memory_file.parent.mkdir(parents=True, exist_ok=True)
+            lines = ["# Memory"]
+            for mem in imported_memories:
+                provider = (mem.get("provider") or "imported").strip()
+                content = (mem.get("content") or "").strip()
+                if content:
+                    lines += ["", f"## From {provider}", content]
+            memory_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            logger.info("[seed] wrote memory/memory.md")
+
+
+def _fetch_and_seed_context_on_startup(bridge_token: str) -> None:
+    """Fetch user profile from cloud and seed context files if they are empty.
+
+    Called once at bridge startup. Safe to call repeatedly — only writes to
+    files that are missing or contain no content.
+    """
+    try:
+        resp = httpx.get(
+            f"{CLOUD_API_BASE_URL}/bridge/profile",
+            headers={"Authorization": f"Bearer {bridge_token}"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        _seed_workspace_context(resp.json())
+        click.echo("  ✓ Workspace context seeded from profile.")
+    except Exception as exc:
+        click.echo(f"Warning: could not seed context from profile ({exc}). Continuing.")
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 async def health(request: Request) -> JSONResponse:
@@ -148,6 +236,30 @@ async def fs_list(request: Request) -> JSONResponse:
 
     parent = str(target.parent) if target != target.parent else None
     return JSONResponse({"path": str(target), "parent": parent, "entries": entries})
+
+
+async def seed_context(request: Request) -> JSONResponse:
+    """POST /seed-context — write onboarding profile data to workspace context files.
+
+    Called from the web app at onboarding finish when the bridge is connected.
+    Idempotent: only writes files that are missing or empty.
+
+    Request body: same shape as ProfilePayload in the cloud API —
+      {full_name, role, company_url, onboarding_scrape_observations,
+       onboarding_scrape_correction, current_focus, daily_activities, imported_memories}
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid_json"}, status_code=400)
+
+    try:
+        _seed_workspace_context(body)
+    except Exception as exc:
+        logger.error("[seed_context] failed: %s", exc, exc_info=True)
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+    return JSONResponse({"status": "ok"})
 
 
 async def run_local(request: Request) -> StreamingResponse:
@@ -302,6 +414,7 @@ def _create_app(
     app = Starlette(routes=[
         Route("/health", health, methods=["GET"]),
         Route("/fs/list", fs_list, methods=["GET"]),
+        Route("/seed-context", seed_context, methods=["POST"]),
         Route("/run-local", run_local, methods=["POST"]),
     ])
     app.add_middleware(
@@ -407,6 +520,7 @@ def run(workspace_path: Path | None = None) -> None:
 
     integration_tokens = _fetch_integration_tokens(bridge_token)
     _write_claude_md(integration_tokens)
+    _fetch_and_seed_context_on_startup(bridge_token)
 
     click.echo(f"Starting bridge on https://local.draftai.us:{BRIDGE_PORT}")
 

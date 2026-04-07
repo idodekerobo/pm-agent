@@ -18,6 +18,7 @@ def create_agent_session(
     execution_environment: str = "cloud",
     provider: str = "openai",
     provider_session_id: str | None = None,
+    workspace_path: str | None = None,
 ) -> str:
     """
     Creates a new agent session tied to a project.
@@ -44,6 +45,8 @@ def create_agent_session(
         insert_payload["display_name"] = display_name
     if external_thread_id is not None:
         insert_payload["external_thread_id"] = external_thread_id
+    if workspace_path is not None:
+        insert_payload["workspace_path"] = workspace_path
 
     new_session = (
         supabase.table("agent_sessions")

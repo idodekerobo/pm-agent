@@ -33,7 +33,7 @@ Ask at most one clarifying question if critical information is missing (e.g. fea
 ### 3. Delegate to the right agent
 - Research tasks (find an issue, read a doc, look up data) → **draft-researcher**
 - Action tasks (write a PRD, create an issue, send a message) → **draft-executor**
-- Memory updates (save what you learned) → **draft-learner**
+- Memory and persistent context updates (save what you learned) → **draft-learner**
 - Complex tasks: draft-researcher first → draft-executor acts → draft-learner saves
 
 ### 4. Present results clearly

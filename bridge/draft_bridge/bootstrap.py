@@ -23,8 +23,10 @@ Directory layout after install:
       agents/draft-*.md                 PM subagents (always overwrite)
       skills/<name> → ~/.draft/workspace/.claude/skills/<name>   symlinks
       CLAUDE.md                         draft section appended between markers
+      settings.json                     Write/Read/Edit ~/.draft/** permissions added
 """
 
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -44,6 +46,14 @@ _SENTINEL = _DRAFT_DIR / ".installed"
 
 _DRAFT_MARKER_START = "<!-- draft-start -->"
 _DRAFT_MARKER_END = "<!-- draft-end -->"
+
+# Permissions added to ~/.claude/settings.json so Claude Code (headless -p mode)
+# can write to the Draft workspace without interactive approval prompts.
+_DRAFT_PERMISSIONS = [
+    "Write(~/.draft/**)",
+    "Read(~/.draft/**)",
+    "Edit(~/.draft/**)",
+]
 
 _DRAFT_CLAUDE_SECTION = """\
 <!-- draft-start -->
@@ -66,6 +76,7 @@ def install_draft() -> None:
     _install_skills()
     _install_agents()
     _update_global_claude_md()
+    _grant_draft_permissions()
 
     _SENTINEL.touch()
     click.echo("Draft setup complete.")
@@ -151,6 +162,61 @@ def _update_global_claude_md() -> None:
     click.echo("  ✓ Updated ~/.claude/CLAUDE.md with Draft section")
 
 
+def _grant_draft_permissions() -> None:
+    """Add ~/.draft/** write/read/edit permissions to ~/.claude/settings.json.
+
+    Idempotent — only adds entries that aren't already present.
+    Creates the file with an empty permissions block if it doesn't exist.
+    """
+    settings_path = _CLAUDE_DIR / "settings.json"
+
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            settings = {}
+    else:
+        settings = {}
+
+    permissions = settings.setdefault("permissions", {})
+    allow: list = permissions.setdefault("allow", [])
+
+    added = 0
+    for perm in _DRAFT_PERMISSIONS:
+        if perm not in allow:
+            allow.append(perm)
+            added += 1
+
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+    if added:
+        click.echo(f"  ✓ Granted ~/.draft/** permissions in ~/.claude/settings.json")
+    else:
+        click.echo(f"  – ~/.draft/** permissions already present in ~/.claude/settings.json")
+
+
+def _revoke_draft_permissions() -> None:
+    """Remove ~/.draft/** permissions from ~/.claude/settings.json on uninstall."""
+    settings_path = _CLAUDE_DIR / "settings.json"
+    if not settings_path.exists():
+        return
+
+    try:
+        settings = json.loads(settings_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+
+    allow: list = settings.get("permissions", {}).get("allow", [])
+    before = len(allow)
+    settings["permissions"]["allow"] = [p for p in allow if p not in _DRAFT_PERMISSIONS]
+
+    removed = before - len(settings["permissions"]["allow"])
+    if removed:
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+        click.echo(f"  ✓ Removed ~/.draft/** permissions from ~/.claude/settings.json")
+    else:
+        click.echo(f"  – No Draft permissions found in ~/.claude/settings.json")
+
+
 # ── Uninstall ──────────────────────────────────────────────────────────────────
 
 def uninstall_draft() -> None:
@@ -160,6 +226,7 @@ def uninstall_draft() -> None:
     _remove_agents()
     _remove_skill_symlinks()
     _remove_global_claude_md_section()
+    _revoke_draft_permissions()
     _SENTINEL.unlink(missing_ok=True)
 
     click.echo("Draft uninstalled. Your context and memory in ~/.draft are preserved.")

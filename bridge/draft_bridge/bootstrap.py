@@ -59,7 +59,6 @@ _DRAFT_CLAUDE_SECTION = """\
 <!-- draft-start -->
 ## Draft PM Agent
 - Subagents: `@draft-researcher`, `@draft-executor`, `@draft-learner`
-- Integration skills: `/linear`, `/posthog`, `/github`, `/notion`, `/slack`, `/google-drive`, `/google-docs`
 <!-- draft-end -->"""
 
 

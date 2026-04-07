@@ -39,6 +39,52 @@ logger = logging.getLogger(__name__)
 
 _VERSION = "0.1.0"
 
+_DRAFT_WORKSPACE = Path.home() / ".draft" / "workspace"
+
+# Maps integration token env var keys → skill names in the workspace template.
+# Must stay in sync with _PROVIDER_ENV_VAR in backend/src/app/api/routes/bridge.py.
+_TOKEN_SKILL_MAP: dict[str, list[str]] = {
+    "LINEAR_API_KEY":       ["linear"],
+    "GITHUB_TOKEN":         ["github"],
+    "GOOGLE_ACCESS_TOKEN":  ["google-drive", "google-docs"],
+    "NOTION_API_KEY":       ["notion"],
+    "SLACK_BOT_TOKEN":      ["slack"],
+    "POSTHOG_API_KEY":      ["posthog"],
+}
+
+# The exact line in workspace_template/CLAUDE.md that lists all skills.
+# _build_claude_md replaces this with only the connected ones.
+_SKILLS_PLACEHOLDER = (
+    "Connected skills available: "
+    "`linear`, `github`, `google-drive`, `google-docs`, `notion`, `posthog`, `slack`"
+)
+
+
+def _build_claude_md(integration_tokens: dict) -> str:
+    """Return CLAUDE.md content with the skills line filtered to connected integrations only."""
+    template_path = Path(__file__).parent.parent / "workspace_template" / "CLAUDE.md"
+    template = template_path.read_text(encoding="utf-8")
+
+    connected: list[str] = []
+    for env_var, skills in _TOKEN_SKILL_MAP.items():
+        if integration_tokens.get(env_var):
+            connected.extend(skills)
+
+    skills_line = (
+        "Connected skills available: " + ", ".join(f"`{s}`" for s in connected)
+        if connected
+        else "No integrations connected. Connect integrations at draftai.us/settings."
+    )
+
+    return template.replace(_SKILLS_PLACEHOLDER, skills_line)
+
+
+def _write_claude_md(integration_tokens: dict) -> None:
+    """Write a dynamically generated CLAUDE.md to the draft workspace."""
+    dest = _DRAFT_WORKSPACE / "CLAUDE.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(_build_claude_md(integration_tokens), encoding="utf-8")
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -344,6 +390,7 @@ def run(workspace_path: Path | None = None) -> None:
         raise click.ClickException(f"Failed to fetch startup bundle: {exc}")
 
     integration_tokens = _fetch_integration_tokens(bridge_token)
+    _write_claude_md(integration_tokens)
 
     click.echo(f"Starting bridge on https://local.draftai.us:{BRIDGE_PORT}")
 

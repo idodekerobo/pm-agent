@@ -493,7 +493,7 @@ def _fetch_integration_tokens(bridge_token: str) -> dict:
         if tokens:
             click.echo(f"Integration tokens loaded: {', '.join(tokens.keys())}")
         else:
-            click.echo("No integration tokens found (connect integrations at draftai.us/settings).")
+            click.echo("No integration tokens found (connect integrations at app.draftai.us/settings).")
         return tokens
     except Exception as exc:
         click.echo(f"Warning: could not fetch integration tokens ({exc}). Continuing without integrations.")

@@ -1,151 +1,193 @@
 ---
 name: linear
 description: >
-  Manage Linear issues, teams, projects, and cycles from the command line.
+  Manage Linear issues, teams, projects, and cycles via the Linear GraphQL API.
   Use when creating issues, updating status, finding assigned work, querying
   team backlogs, or any Linear workspace operation.
-allowed-tools: Bash(linear:*), Bash(curl:*)
+allowed-tools: Bash(curl:*)
 ---
 
-# Linear CLI
+# Linear API
 
-A CLI to manage Linear issues from the command line.
+Use the Linear GraphQL API via `curl`. The `LINEAR_API_KEY` is pre-injected into the environment.
 
 ## Authentication
 
-`LINEAR_API_KEY` is pre-injected into the environment. Pass it inline for each command:
+All requests use `Authorization: $LINEAR_API_KEY` header:
 
 ```bash
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue list --team ENG --sort priority
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ viewer { id name email } }"}'
 ```
-
-Never run `linear config` in an interactive way — always use inline env vars and flags.
 
 ---
 
 ## Known Gotchas
 
-Read these before issuing any command. Violating these rules will cause errors.
-
-**Sort is always required.**
-```bash
-# Correct
-linear issue list --team ENG --sort priority
-
-# Wrong — will error: "Sort must be provided via command line flag..."
-linear issue list --team ENG
-```
-
-**`--all-states` and `--state` are mutually exclusive.**
-```bash
-# Correct
-linear issue list --team ENG --sort priority --all-states
-linear issue list --team ENG --sort priority --state started
-
-# Wrong
-linear issue list --team ENG --all-states --state started
-```
-
-**Valid `--state` values are lowercase:** `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`
-
-**`--team` is always required.** Run `linear team list` first if you don't know the team key.
-
-**`--no-pager` is not supported on all commands.** Don't use it on `linear team list`.
+- Always use `-s` (silent) with `curl` to suppress progress output.
+- Pipe to `| python3 -m json.tool` or `| jq .` for readable output if available.
+- Use heredocs for multi-line queries to avoid escaping issues.
+- GraphQL variables must be passed as a JSON object in the `variables` key alongside `query`.
+- IDs in Linear are UUIDs — always capture and reuse them rather than relying on names.
 
 ---
 
-## Common Commands
+## Common Queries
 
-### List issues
-
-```bash
-# Basic listing — always pass --sort and --team
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue list --team ENG --sort priority
-
-# Filter by state
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue list --team ENG --sort priority --state started
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue list --team ENG --sort priority --all-states
-
-# Filter by assignee
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue list --team ENG --sort priority --assignee self
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue list --team ENG --sort priority --all-assignees
-```
-
-### View an issue
-
-Always specify the issue ID explicitly:
+### Get current user
 
 ```bash
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue view TEAM-123
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue view TEAM-123 --no-comments
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ viewer { id name email } }"}'
 ```
+
+### List teams
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ teams { nodes { id name key } } }"}'
+```
+
+### List issues for a team
+
+Replace `TEAM_ID` with the UUID from `teams`:
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query($teamId: String!) { team(id: $teamId) { issues(orderBy: priority) { nodes { id identifier title priority state { name } assignee { name } } } } }",
+    "variables": { "teamId": "TEAM_ID" }
+  }'
+```
+
+### Filter issues by state
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query($teamId: String!) { team(id: $teamId) { issues(filter: { state: { type: { eq: \"started\" } } }, orderBy: priority) { nodes { id identifier title assignee { name } } } } }",
+    "variables": { "teamId": "TEAM_ID" }
+  }'
+```
+
+Valid state types: `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`
+
+### View a single issue
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query($id: String!) { issue(id: $id) { id identifier title description priority state { name } assignee { name } comments { nodes { body createdAt user { name } } } } }",
+    "variables": { "id": "ISSUE_UUID" }
+  }'
+```
+
+### Search issues by text
+
+```bash
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query($term: String!) { searchIssues(term: $term, first: 20) { nodes { identifier title state { name } assignee { name } } } }",
+    "variables": { "term": "onboarding" }
+  }'
+```
+
+---
+
+## Mutations
 
 ### Create an issue
 
-Use `--description-file` for multi-line descriptions to avoid shell escaping issues:
+First get the team ID and desired workflow state ID, then:
 
 ```bash
-# Write description to temp file first
-cat > /tmp/issue-desc.md <<'EOF'
-## Summary
+# Get workflow states for a team
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "query($teamId: String!) { team(id: $teamId) { states { nodes { id name type } } } }",
+    "variables": { "teamId": "TEAM_ID" }
+  }'
 
-What needs to be done.
-
-## Details
-
-More context here.
-EOF
-
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue create \
-  --team ENG \
-  --title "Feature title" \
-  --description-file /tmp/issue-desc.md \
-  --priority 2 \
-  --assignee self
+# Create the issue
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title } } }",
+    "variables": {
+      "input": {
+        "teamId": "TEAM_ID",
+        "title": "Feature title",
+        "description": "What needs to be done.",
+        "priority": 2,
+        "stateId": "STATE_UUID"
+      }
+    }
+  }'
 ```
 
-Only use inline `--description` for simple single-line content.
+Priority values: `0` = No priority, `1` = Urgent, `2` = High, `3` = Medium, `4` = Low
 
 ### Update an issue
 
 ```bash
-LINEAR_API_KEY=$LINEAR_API_KEY linear issue update TEAM-123 --milestone "Q2"
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { id identifier title state { name } } } }",
+    "variables": {
+      "id": "ISSUE_UUID",
+      "input": {
+        "stateId": "STATE_UUID",
+        "priority": 1
+      }
+    }
+  }'
 ```
 
-### Teams and projects
+### List projects
 
 ```bash
-# List teams
-LINEAR_API_KEY=$LINEAR_API_KEY linear team list
-
-# List projects
-LINEAR_API_KEY=$LINEAR_API_KEY linear project list
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ projects { nodes { id name description state } } }"}'
 ```
 
 ---
 
-## Using the GraphQL API Directly
+## Multi-line Query Pattern (heredoc)
 
-Prefer the CLI. Use `linear api` only for queries not covered by the CLI.
-
-```bash
-# Simple query
-LINEAR_API_KEY=$LINEAR_API_KEY linear api '{ viewer { id name email } }'
-
-# Query with variables — use heredoc to avoid escaping issues
-LINEAR_API_KEY=$LINEAR_API_KEY linear api --variable teamId=abc123 <<'GRAPHQL'
-query($teamId: String!) { team(id: $teamId) { name } }
-GRAPHQL
-
-# Search issues by text
-LINEAR_API_KEY=$LINEAR_API_KEY linear api --variable term=onboarding <<'GRAPHQL'
-query($term: String!) { searchIssues(term: $term, first: 20) { nodes { identifier title state { name } } } }
-GRAPHQL
-```
-
-### Write schema to tempfile, then search it
+For complex queries, use a heredoc to build the JSON payload cleanly:
 
 ```bash
-LINEAR_API_KEY=$LINEAR_API_KEY linear schema -o /tmp/linear-schema.graphql
-grep -i "cycle" /tmp/linear-schema.graphql
+PAYLOAD=$(cat <<'EOF'
+{
+  "query": "query($teamId: String!) { team(id: $teamId) { issues(orderBy: priority, first: 50) { nodes { identifier title priority state { name } assignee { name } } } } }",
+  "variables": { "teamId": "TEAM_ID" }
+}
+EOF
+)
+
+curl -s -X POST https://api.linear.app/graphql \
+  -H "Authorization: $LINEAR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$PAYLOAD"
 ```

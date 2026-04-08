@@ -229,6 +229,7 @@ function OnboardingPageInner() {
         ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: event.data.provider, source: 'onboarding' });
         setIntegrations((prev) => ({ ...prev, [event.data.provider]: true }));
         setConnectingProvider(null);
+        fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       }
     };
     window.addEventListener('message', handleMessage);

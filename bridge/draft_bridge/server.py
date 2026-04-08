@@ -238,6 +238,22 @@ async def fs_list(request: Request) -> JSONResponse:
     return JSONResponse({"path": str(target), "parent": parent, "entries": entries})
 
 
+async def refresh_tokens(request: Request) -> JSONResponse:
+    """POST /refresh-tokens — re-fetch integration tokens from cloud and update app state.
+
+    Called by the web app immediately after a user connects a new integration.
+    Updates app.state.integration_tokens in-place and rewrites CLAUDE.md so
+    the new skill is available on the very next run without restarting the bridge.
+    """
+    state = request.app.state
+    new_tokens = _fetch_integration_tokens(state.bridge_token)
+    state.integration_tokens.clear()
+    state.integration_tokens.update(new_tokens)
+    _write_claude_md(new_tokens)
+    logger.info("[server] /refresh-tokens updated connected integrations: %s", list(new_tokens.keys()))
+    return JSONResponse({"status": "ok", "connected": list(new_tokens.keys())})
+
+
 async def seed_context(request: Request) -> JSONResponse:
     """POST /seed-context — write onboarding profile data to workspace context files.
 
@@ -414,6 +430,7 @@ def _create_app(
     app = Starlette(routes=[
         Route("/health", health, methods=["GET"]),
         Route("/fs/list", fs_list, methods=["GET"]),
+        Route("/refresh-tokens", refresh_tokens, methods=["POST"]),
         Route("/seed-context", seed_context, methods=["POST"]),
         Route("/run-local", run_local, methods=["POST"]),
     ])

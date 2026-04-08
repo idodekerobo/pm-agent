@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/AuthContext';
+import { useBridge } from '@/lib/BridgeContext';
 import { INTEGRATIONS } from '@/lib/integrations';
 import { usePostHog } from 'posthog-js/react';
 import { EVENTS } from '@/lib/analytics';
@@ -115,6 +116,7 @@ function resourceSectionHeading(provider: string): string {
 
 export default function IntegrationsTab() {
   const { user, session } = useAuth();
+  const { bridgeUrl } = useBridge();
   const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
   const ph = usePostHog();
 
@@ -189,6 +191,7 @@ export default function IntegrationsTab() {
         ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: event.data.provider, source: 'settings' });
         fetchIntegrations();
         fetchMonitoringData();
+        fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       }
     };
     window.addEventListener('message', handleMessage);
@@ -253,6 +256,7 @@ export default function IntegrationsTab() {
         { provider: 'claude-code', account_label: 'Claude Code Enabled', scopes: [], created_at: new Date().toISOString() },
       ]);
       ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: 'claude-code', source: 'settings' });
+      fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       setByokExpanded(false);
       setByokToken('');
     } catch {
@@ -293,6 +297,7 @@ export default function IntegrationsTab() {
         { provider: 'posthog', account_label: data.account_label, scopes: ['query:read', 'feature_flag:read'], created_at: new Date().toISOString() },
       ]);
       ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: 'posthog', source: 'settings' });
+      fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       setPosthogExpanded(false);
       setPosthogForm({ api_key: '', project_id: '', region: 'us' });
     } catch {

@@ -32,7 +32,7 @@ def validate_bridge_token(raw_token: str) -> str | None:
         .maybe_single()
         .execute()
     )
-    if not result.data or result.data["revoked"]:
+    if not result or not result.data or result.data["revoked"]:
         return None
     supabase.table("bridge_tokens").update({
         "last_used_at": datetime.now(timezone.utc).isoformat()

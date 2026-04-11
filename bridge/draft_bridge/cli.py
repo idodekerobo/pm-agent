@@ -76,7 +76,7 @@ def start(workspace: str | None):
 
     from draft_bridge import keychain
     from draft_bridge.bootstrap import install_draft, is_installed
-    from draft_bridge.server import run
+    from draft_bridge.server import run, BridgeAuthExpiredError
 
     if not keychain.load_token():
         click.echo("No auth token found. Starting authentication first...")
@@ -86,4 +86,10 @@ def start(workspace: str | None):
         click.echo("First-time setup — installing Draft workspace...")
         install_draft()
 
-    run(workspace_path=Path(workspace) if workspace else Path.cwd())
+    workspace_path = Path(workspace) if workspace else Path.cwd()
+    try:
+        run(workspace_path=workspace_path)
+    except BridgeAuthExpiredError:
+        click.echo("Auth token expired. Re-authenticating...")
+        run_auth(reauth=True)
+        run(workspace_path=workspace_path)

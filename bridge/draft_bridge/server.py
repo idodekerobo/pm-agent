@@ -40,6 +40,10 @@ from draft_bridge.supabase_writer import make_assistant_item, make_tool_call_ite
 logger = logging.getLogger(__name__)
 
 
+class BridgeAuthExpiredError(Exception):
+    """Raised when the bridge token is rejected by the cloud API (HTTP 401)."""
+
+
 async def _do_refresh_jwt(supabase_url: str, anon_key: str, refresh_token: str) -> tuple[str, str]:
     """Exchange a Supabase refresh token for a new access + refresh token pair."""
     async with httpx.AsyncClient() as client:
@@ -566,6 +570,10 @@ def run(workspace_path: Path | None = None) -> None:
     click.echo("Fetching startup bundle from Draft Cloud...")
     try:
         bundle = tls_module.fetch_and_cache(bridge_token)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise BridgeAuthExpiredError()
+        raise click.ClickException(f"Failed to fetch startup bundle: {exc}")
     except Exception as exc:
         raise click.ClickException(f"Failed to fetch startup bundle: {exc}")
 

@@ -161,43 +161,40 @@ def _format_demo_transcript(items: list[dict]) -> str:
 # ---------------------------------------------------------------------------
 
 def _format_local_welcome(p: ProfileData) -> str:
-    """Build a personalized welcome message for local mode (bridge) users.
+    """Open the setup interview for local (bridge) users.
 
-    No LLM call — uses onboarding profile data directly. Written synchronously
-    so the message is in Supabase before the user is redirected to /chat.
+    Asks Q1 of the /setup interview directly. When the user responds,
+    the bridge routes their answer to Claude Code which continues the
+    interview following the /setup skill instructions, then writes
+    structured context to ~/.draft/workspace/.
+
+    No LLM call — written synchronously so the message is in Supabase
+    before the user is redirected to /chat.
     """
-    name = p.full_name.split()[0] if p.full_name else ""
-    role_bit = f", {p.role}" if p.role else ""
-    company_bit = f" at {p.company_url}" if p.company_url else ""
-
-    # First line of scrape observations as a concise product reference
-    scrape_bit = ""
+    # Reference scrape data so the user knows Draft already has some context
+    # and doesn't feel they need to over-explain from scratch.
+    context_note = ""
     if p.onboarding_scrape_observations:
         first_line = p.onboarding_scrape_observations.strip().splitlines()[0].strip()
-        if first_line:
-            # Cap length so the line stays readable
-            scrape_bit = " " + (first_line[:120] + "…" if len(first_line) > 120 else first_line)
-
-    focus_bit = ""
-    if p.current_focus:
-        focus_bit = f" Focused on: {', '.join(p.current_focus)}."
-
-    if name:
-        profile_line = f"**What I have on you:** {name}{role_bit}{company_bit}.{scrape_bit}{focus_bit}"
-    else:
-        profile_line = f"**Context loaded:**{company_bit}.{scrape_bit}{focus_bit}"
+        if first_line and len(first_line) > 10:
+            truncated = first_line[:100] + ("…" if len(first_line) > 100 else "")
+            context_note = (
+                f"\n\nI picked up some context from your onboarding "
+                f"({truncated}) — but I want to hear it in your words."
+            )
+    elif p.company_url:
+        context_note = (
+            f"\n\nI saw you're working on something at {p.company_url} "
+            f"— tell me about it."
+        )
 
     return (
-        "Bridge connected — you're running on your own Claude subscription.\n\n"
-        "Three subagents handle your work: **@draft-researcher** finds and retrieves information "
-        "(workspace files, integrations, web), **@draft-executor** takes action (writes docs, "
-        "creates Linear issues, sends Slack messages), and **@draft-learner** saves what I learn "
-        "about you, your product, and your working patterns. Context persists at "
-        "`~/.draft/workspace/` across sessions.\n\n"
-        f"{profile_line}\n\n"
-        "Skills and commands configured in your Claude Code setup work here — "
-        "they run in the same headless process.\n\n"
-        "What project or codebase are you starting with, and what do you want to tackle first?"
+        "I'm Draft, your PM agent. I keep context across sessions so I get sharper the more "
+        "we work together — but first I need to load my PM brain. "
+        "A few quick questions (2–3 min) and we're set."
+        f"{context_note}\n\n"
+        "**What are you building, and who's it for?**\n\n"
+        "_Type **skip** to jump straight in — you can always run `/setup` later._"
     )
 
 

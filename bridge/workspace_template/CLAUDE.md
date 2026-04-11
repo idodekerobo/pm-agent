@@ -44,6 +44,19 @@ else:
 
 ---
 
+## Automatic setup
+
+If ALL context dimension index files show "No information recorded yet" and the user's message is not a slash command:
+
+1. You are in the onboarding setup interview — Q1 has already been asked: "What are you building, and who's it for?"
+2. Treat the user's current message as their answer to Q1
+3. Continue the interview from Q2 by following the `/setup` skill instructions — do not re-ask Q1, do not re-introduce yourself
+4. If the user says "skip", stop and say: "No problem — run `/setup` anytime you're ready. What can I help you with?"
+
+If context is partially populated (some files have real content), skip this section — operate normally.
+
+---
+
 ## Staleness
 
 Context files include a `last_updated` field. Before relying on a file for an important task, check whether it is stale:

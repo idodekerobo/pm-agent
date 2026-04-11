@@ -34,6 +34,9 @@ run-bridge:
 run-bridge-auth:
 	cd bridge && uv run --env-file .env.local draft-bridge auth
 
+run-bridge-reauth:
+	cd bridge && uv run --env-file .env.local draft-bridge auth --reauth
+
 # Runs at localhost:9181
 run-rq-dashboard:
 	cd backend && uv run --env-file .env.local sh -c 'rq-dashboard --redis-url "$$REDIS_URL" --port 9181'

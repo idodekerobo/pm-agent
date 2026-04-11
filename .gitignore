@@ -1,5 +1,6 @@
 plans/
-research/
+research/interview-notes-transcripts/
+research/customer-development.md
 .env.*
 .DS_Store
 __pycache__

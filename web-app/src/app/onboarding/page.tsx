@@ -559,6 +559,7 @@ function OnboardingPageInner() {
       });
       if (!res.ok) throw new Error();
       setIntegrations((prev) => ({ ...prev, 'claude-code': true }));
+      fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       setByokExpanded(false);
       setByokToken('');
     } catch {

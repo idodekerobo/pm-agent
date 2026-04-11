@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 
 from agents import Agent, Runner, ItemHelpers
 
@@ -93,6 +93,7 @@ class ProfileData(BaseModel):
 
 class WelcomeSessionRequest(BaseModel):
     profile: ProfileData
+    mode: Optional[Literal["local"]] = None
 
 
 class WelcomeSessionResponse(BaseModel):
@@ -153,6 +154,51 @@ def _format_demo_transcript(items: list[dict]) -> str:
             if text:
                 lines.append(f"Agent: {text}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Local mode welcome template
+# ---------------------------------------------------------------------------
+
+def _format_local_welcome(p: ProfileData) -> str:
+    """Build a personalized welcome message for local mode (bridge) users.
+
+    No LLM call — uses onboarding profile data directly. Written synchronously
+    so the message is in Supabase before the user is redirected to /chat.
+    """
+    name = p.full_name.split()[0] if p.full_name else ""
+    role_bit = f", {p.role}" if p.role else ""
+    company_bit = f" at {p.company_url}" if p.company_url else ""
+
+    # First line of scrape observations as a concise product reference
+    scrape_bit = ""
+    if p.onboarding_scrape_observations:
+        first_line = p.onboarding_scrape_observations.strip().splitlines()[0].strip()
+        if first_line:
+            # Cap length so the line stays readable
+            scrape_bit = " " + (first_line[:120] + "…" if len(first_line) > 120 else first_line)
+
+    focus_bit = ""
+    if p.current_focus:
+        focus_bit = f" Focused on: {', '.join(p.current_focus)}."
+
+    if name:
+        profile_line = f"**What I have on you:** {name}{role_bit}{company_bit}.{scrape_bit}{focus_bit}"
+    else:
+        profile_line = f"**Context loaded:**{company_bit}.{scrape_bit}{focus_bit}"
+
+    return (
+        "Bridge connected — you're running on your own Claude subscription.\n\n"
+        "Three subagents handle your work: **@draft-researcher** finds and retrieves information "
+        "(workspace files, integrations, web), **@draft-executor** takes action (writes docs, "
+        "creates Linear issues, sends Slack messages), and **@draft-learner** saves what I learn "
+        "about you, your product, and your working patterns. Context persists at "
+        "`~/.draft/workspace/` across sessions.\n\n"
+        f"{profile_line}\n\n"
+        "Skills and commands configured in your Claude Code setup work here — "
+        "they run in the same headless process.\n\n"
+        "What project or codebase are you starting with, and what do you want to tackle first?"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -323,15 +369,24 @@ async def create_welcome_session(
             source_platform="demo",
         )
 
-    # Generate the welcome message in the background (after response is sent)
-    background_tasks.add_task(
-        generate_welcome_message,
-        user_id=user_id,
-        welcome_session_id=welcome_session_id,
-        profile=req.profile,
-        demo_items=demo_items,
-        company_url=company_url,
-    )
+    # Generate the welcome message — local mode uses a template written synchronously;
+    # cloud mode fires an LLM call in the background after the response is sent.
+    if req.mode == "local":
+        append_conversation_item(
+            supabase,
+            agent_session_id=welcome_session_id,
+            item=make_assistant_item(_format_local_welcome(req.profile)),
+            source_platform="background",
+        )
+    else:
+        background_tasks.add_task(
+            generate_welcome_message,
+            user_id=user_id,
+            welcome_session_id=welcome_session_id,
+            profile=req.profile,
+            demo_items=demo_items,
+            company_url=company_url,
+        )
 
     # Auto-name the demo session from its first user message
     if demo_session_id and demo_items:

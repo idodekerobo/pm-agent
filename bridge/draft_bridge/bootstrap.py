@@ -10,11 +10,18 @@ Directory layout after install:
     ~/.draft/
       .installed                        sentinel file
       workspace/
-        CLAUDE.md                       PM agent orchestration (skip if exists)
-        context/                        learned company/product/user context
-        memory/                         memory.md cross-session preferences
+        CLAUDE.md                       PM agent orchestration (always overwrite)
+        context/
+          company/index.md + log/       company name, mission, business model, stage
+          product/index.md + log/       what's built, for whom, key bets, roadmap
+          user/index.md                 PM role, working style, preferences (no log)
+          team/index.md + log/          team structure, capacity
+          priorities/index.md + log/    current focus, sprint, blockers
+          decisions/{slug}.md           key decisions with status
+          tensions.md                   active contradictions noticed across dimensions
+        memory/memory.md                vocabulary, preferences, goals, patterns
         docs/prds/                      PRD documents
-        docs/decisions/                 decision documents
+        docs/decisions/                 full decision documents (FANG format)
         templates/                      prd.md, fang-decision-doc.md
         .claude/
           skills/<name>/SKILL.md        integration skill files (always overwrite)
@@ -71,6 +78,7 @@ def install_draft() -> None:
     click.echo("Setting up Draft workspace...")
 
     _create_workspace_dirs()
+    _seed_context_files()
     _copy_claude_md()
     _install_skills()
     _install_agents()
@@ -85,7 +93,12 @@ def install_draft() -> None:
 
 def _create_workspace_dirs() -> None:
     for subdir in [
-        "context",
+        "context/company/log",
+        "context/product/log",
+        "context/user",           # no log — stable dimension
+        "context/team/log",
+        "context/priorities/log",
+        "context/decisions",
         "memory",
         "docs/prds",
         "docs/decisions",
@@ -101,6 +114,23 @@ def _copy_claude_md() -> None:
     dst = _DRAFT_WORKSPACE / "CLAUDE.md"
     shutil.copy2(src, dst)
     click.echo("  ✓ Installed ~/.draft/workspace/CLAUDE.md")
+
+
+def _seed_context_files() -> None:
+    """Copy blank context stubs into workspace. Skips files that already exist."""
+    src_context = _TEMPLATE_DIR / "context"
+    if not src_context.exists():
+        return
+    dst_context = _DRAFT_WORKSPACE / "context"
+    copied = 0
+    for src_file in src_context.rglob("*.md"):
+        rel = src_file.relative_to(src_context)
+        dst_file = dst_context / rel
+        if not dst_file.exists():
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            copied += 1
+    click.echo(f"  ✓ Seeded {copied} context file(s) into ~/.draft/workspace/context/")
 
 
 def _install_skills() -> None:

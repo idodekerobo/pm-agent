@@ -26,10 +26,11 @@ Your job: find and surface information. You do NOT write documents or take visib
 
 ## Process
 
-1. Check `context/` and `memory/memory.md` for existing knowledge first
-2. If workspace knowledge is sufficient, return it directly
-3. If not, use bash + integration skills to fetch from external sources
-4. Read the relevant skill file before using any integration: `Read("$DRAFT_WORKSPACE/.claude/skills/<name>/SKILL.md")`
+1. Check context dimension index files (`context/*/index.md`) and `memory/memory.md` for existing knowledge first
+2. To understand how something evolved, check the relevant `log/` subdirectory
+3. If workspace knowledge is sufficient, return it directly
+4. If not, use bash + integration skills to fetch from external sources
+5. Read the relevant skill file before using any integration: `Read("$DRAFT_WORKSPACE/.claude/skills/<name>/SKILL.md")`
 
 ---
 

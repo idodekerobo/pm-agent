@@ -21,7 +21,7 @@ Your job: take action. Execute tasks delegated by the orchestrator — write doc
 
 ## Before acting
 
-1. Read relevant context files first: `context/company.md`, `context/product.md`, `context/user.md`
+1. Read relevant context index files: `context/company/index.md`, `context/product/index.md`, `context/user/index.md`, `context/team/index.md`, `context/priorities/index.md`
 2. For document tasks, load the template: `Read("templates/prd.md")` or `Read("templates/fang-decision-doc.md")`
 3. For integration tasks, read the skill file: `Read("$DRAFT_WORKSPACE/.claude/skills/<name>/SKILL.md")`
 4. Execute completely — do not ask clarifying questions. The orchestrator has already done that.

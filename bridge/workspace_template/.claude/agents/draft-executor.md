@@ -46,7 +46,7 @@ For completed documents, return EXACTLY this format — do NOT return the docume
 DOCUMENT_WRITTEN
 Path: docs/prds/feature-name.md
 Flagged gaps (verify with user):
-- [ASSUMED] Target audience — inferred from context/product.md
+- [ASSUMED] Target audience — inferred from context/product/index.md
 - [VERIFY WITH USER] Success metrics — no baseline available
 ```
 

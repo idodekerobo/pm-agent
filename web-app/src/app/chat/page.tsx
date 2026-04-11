@@ -32,6 +32,14 @@ const KNOWN_UNSUPPORTED_EXTENSIONS = new Set([
 ]);
 
 
+type PerSessionState = {
+  messages: Message[];
+  isLoading: boolean;
+  providerSessionId: string | null;
+};
+
+const EMPTY_SESSION: PerSessionState = { messages: [], isLoading: false, providerSessionId: null };
+
 function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,9 +47,7 @@ function ChatPage() {
   const { creditsRemaining, planName, refetch: refetchBilling } = useBilling();
   const { isLocal, bridgeUrl } = useBridge();
   const profileComplete = useProfileComplete();
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoaded, setSessionsLoaded] = useState(false);
@@ -56,8 +62,17 @@ function ChatPage() {
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [workingDir, setWorkingDir] = useState<string | null>(null);
-  const [providerSessionId, setProviderSessionId] = useState<string | null>(null);
+  const [sessionState, setSessionState] = useState<Map<string, PerSessionState>>(new Map());
+  const [pendingWorkingDir, setPendingWorkingDir] = useState<string | null>(null);
+  const activeState = activeSessionId ? (sessionState.get(activeSessionId) ?? EMPTY_SESSION) : EMPTY_SESSION;
+  const messages = activeState.messages;
+  const isLoading = activeState.isLoading;
+  const providerSessionId = activeState.providerSessionId;
+  // Derive workingDir from sessions (source of truth) for existing sessions,
+  // or from pendingWorkingDir for new sessions not yet created.
+  const workingDir = activeSessionId
+    ? (sessions.find(s => s.id === activeSessionId)?.workspace_path ?? null)
+    : pendingWorkingDir;
   const dragCounterRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -69,6 +84,17 @@ function ChatPage() {
   const ph = usePostHog();
   const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
   const getToken = () => session?.access_token ?? "";
+  const isSubmittingRef = useRef(false);
+
+  const updateSession = (
+    sessionId: string,
+    patch: Partial<PerSessionState> | ((s: PerSessionState) => Partial<PerSessionState>),
+  ) =>
+    setSessionState((prev) => {
+      const current = prev.get(sessionId) ?? { ...EMPTY_SESSION };
+      const updates = typeof patch === "function" ? patch(current) : patch;
+      return new Map(prev).set(sessionId, { ...current, ...updates });
+    });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -123,14 +149,9 @@ function ChatPage() {
             const content = item.content as Array<{ text?: string }> | undefined;
             const text = content?.[0]?.text;
             if (!text) return;
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `${row.id ?? Date.now()}`,
-                role: "assistant" as const,
-                content: text,
-              },
-            ]);
+            updateSession(activeSessionId, (s) => ({
+              messages: [...s.messages, { id: `${row.id ?? Date.now()}`, role: "assistant" as const, content: text }],
+            }));
             return;
           }
 
@@ -143,12 +164,12 @@ function ChatPage() {
             const content = item.content as Array<{ text?: string }> | undefined;
             const text = content?.[0]?.text;
             if (!text) return;
-            setMessages((prev) => {
+            updateSession(activeSessionId, (s) => {
               // Avoid duplicates — SSE path re-keys its message to the DB row ID
               // via the item_created event, so this check catches both paths.
               const id = `${row.id ?? Date.now()}`;
-              if (prev.some((m) => m.id === id)) return prev;
-              return [...prev, { id, role: "assistant" as const, content: text }];
+              if (s.messages.some((m) => m.id === id)) return {};
+              return { messages: [...s.messages, { id, role: "assistant" as const, content: text }] };
             });
             // Message is visible to the user — mark read locally and on the server
             // so navigating away doesn't leave a stale unread dot.
@@ -205,13 +226,35 @@ function ChatPage() {
     };
   }, [session?.user?.id]);
 
+  // Restore provider_session_id from sessions list after refresh or session switch.
   useEffect(() => {
-    if (!activeSessionId || providerSessionId) return;
-    const session = sessions.find((s) => s.id === activeSessionId);
-    if (session?.provider_session_id) {
-      setProviderSessionId(session.provider_session_id);
+    if (!activeSessionId) return;
+    const found = sessions.find((s) => s.id === activeSessionId);
+    if (!found) return;
+    if (!providerSessionId && found.provider_session_id) {
+      updateSession(activeSessionId, { providerSessionId: found.provider_session_id });
     }
   }, [sessions, activeSessionId]);
+
+  const handleWorkingDirChange = (path: string | null) => {
+    if (!activeSessionId) {
+      setPendingWorkingDir(path);
+      return;
+    }
+    const prevPath = sessions.find(s => s.id === activeSessionId)?.workspace_path ?? null;
+    setSessions(prev =>
+      prev.map(s => s.id === activeSessionId ? { ...s, workspace_path: path } : s)
+    );
+    fetch(`${apiBaseUrl}/sessions/${activeSessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify({ workspace_path: path }),
+    }).catch(() => {
+      setSessions(prev =>
+        prev.map(s => s.id === activeSessionId ? { ...s, workspace_path: prevPath } : s)
+      );
+    });
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -256,13 +299,11 @@ function ChatPage() {
 
   const startNewSession = () => {
     setActiveSessionId(null);
-    setMessages([]);
-    setProviderSessionId(null);
+    setPendingWorkingDir(null);
     router.push("/chat");
   };
 
   const loadSession = async (sessionId: string) => {
-    setProviderSessionId(null);
     ph?.capture(EVENTS.SESSION_OPENED, { session_id: sessionId });
     try {
       const res = await fetch(`${apiBaseUrl}/sessions/${sessionId}/messages`, {
@@ -309,7 +350,7 @@ function ChatPage() {
           }
         }
         setActiveSessionId(sessionId);
-        setMessages(mapped);
+        updateSession(sessionId, { messages: mapped, providerSessionId: null });
         router.push(`/chat?s=${sessionId}`);
         // Mark as read and update local session state so the unread dot clears
         fetch(`${apiBaseUrl}/sessions/${sessionId}/read`, {
@@ -386,9 +427,9 @@ function ChatPage() {
       if (res.ok) {
         ph?.capture(EVENTS.SESSION_DELETED, { session_id: sessionId });
         setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        setSessionState((prev) => { const next = new Map(prev); next.delete(sessionId); return next; });
         if (activeSessionId === sessionId) {
           setActiveSessionId(null);
-          setMessages([]);
         }
       }
     } catch (e) {
@@ -503,7 +544,7 @@ function ChatPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && attachedFiles.length === 0) || isLoading) return;
+    if ((!input.trim() && attachedFiles.length === 0) || isSubmittingRef.current || isLoading) return;
 
     const pendingFiles = [...attachedFiles];
     const promptText = input;
@@ -514,6 +555,8 @@ function ChatPage() {
     setAttachedFiles([]);
     setAttachmentError(null);
     scrollToBottom();
+    isSubmittingRef.current = true;
+    let resolvedSessionId: string | null = activeSessionId;
     let toolCallsCount = 0;
 
     try {
@@ -526,7 +569,7 @@ function ChatPage() {
         }
         const fullPrompt = textParts.join('');
 
-        const userMessage: Message = {
+        const localUserMessage: Message = {
           id: Date.now().toString(),
           role: 'user',
           content: promptText,
@@ -534,7 +577,6 @@ function ChatPage() {
             ? { textFileNames: pendingFiles.filter((f) => f.kind === 'text').map((f) => f.file.name) }
             : {}),
         };
-        setMessages((prev) => [...prev, userMessage]);
 
         ph?.capture(EVENTS.AGENT_RUN_STARTED, {
           session_id: activeSessionId,
@@ -557,6 +599,7 @@ function ChatPage() {
             session_id: newId,
             execution_environment: 'local_bridge',
             provider: 'claude_code',
+            ...(pendingWorkingDir ? { workspace_path: pendingWorkingDir } : {}),
           }),
           });
           if (!sessionRes.ok) throw new Error('Failed to create session');
@@ -564,9 +607,14 @@ function ChatPage() {
           sessionId = agent_session_id;
           ph?.capture(EVENTS.SESSION_CREATED, { session_id: sessionId });
           setActiveSessionId(agent_session_id);
+          setPendingWorkingDir(null);
           fetchSessions();
           router.push(`/chat?s=${agent_session_id}`);
         }
+        resolvedSessionId = sessionId;
+        // sessionId is guaranteed non-null at this point (either pre-existing or just created above)
+        const localSessionId = sessionId as string;
+        updateSession(localSessionId, (s) => ({ isLoading: true, messages: [...s.messages, localUserMessage] }));
 
         const response = await fetch(`${bridgeUrl}/run-local`, {
           method: 'POST',
@@ -606,71 +654,64 @@ function ChatPage() {
             if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
             try {
               const eventData = JSON.parse(trimmedLine.slice(6));
+              console.log('[bridge SSE]', eventData.type, eventData);
               if (eventData.type === 'session_provider_id') {
-                setProviderSessionId(eventData.provider_session_id);
+                updateSession(localSessionId, { providerSessionId: eventData.provider_session_id });
                 continue;
               }
               if (eventData.type === 'tool_call') {
                 toolCallsCount++;
-                setMessages((prev) => [
-                  ...prev,
-                  {
+                updateSession(localSessionId, (s) => ({
+                  messages: [...s.messages, {
                     id: `tool-${Date.now()}-${Math.random()}`,
                     role: 'tool_call' as const,
                     content: eventData.content ?? '',
                     toolName: eventData.name ?? '',
                     callId: eventData.call_id ?? '',
                     toolArguments: eventData.arguments ?? '',
-                  },
-                ]);
+                  }],
+                }));
                 currentAssistantId = null;
                 currentAssistantContent = '';
               } else if (eventData.type === 'tool_output') {
-                setMessages((prev) => [
-                  ...prev,
-                  {
+                updateSession(localSessionId, (s) => ({
+                  messages: [...s.messages, {
                     id: `output-${Date.now()}-${Math.random()}`,
                     role: 'tool_output' as const,
                     content: eventData.content ?? '',
                     callId: eventData.call_id ?? '',
-                  },
-                ]);
+                  }],
+                }));
               } else if (eventData.type === 'message') {
                 const chunk = eventData.content ?? '';
                 if (!currentAssistantId) {
                   currentAssistantId = `asst-${Date.now()}-${Math.random()}`;
                   currentAssistantContent = chunk;
                   const newId = currentAssistantId;
-                  setMessages((prev) => [
-                    ...prev,
-                    { id: newId, role: 'assistant' as const, content: chunk },
-                  ]);
+                  updateSession(localSessionId, (s) => ({
+                    messages: [...s.messages, { id: newId, role: 'assistant' as const, content: chunk }],
+                  }));
                 } else {
                   currentAssistantContent += chunk;
                   const targetId = currentAssistantId;
                   const snapshot = currentAssistantContent;
-                  setMessages((prev) =>
-                    prev.map((m) => (m.id === targetId ? { ...m, content: snapshot } : m))
-                  );
+                  updateSession(localSessionId, (s) => ({
+                    messages: s.messages.map((m) => (m.id === targetId ? { ...m, content: snapshot } : m)),
+                  }));
                 }
               } else if (eventData.type === 'item_created' && eventData.role === 'assistant') {
                 const dbId = eventData.id as string;
                 const targetId = currentAssistantId;
                 if (targetId && dbId) {
-                  setMessages((prev) =>
-                    prev.map((m) => (m.id === targetId ? { ...m, id: dbId } : m))
-                  );
+                  updateSession(localSessionId, (s) => ({
+                    messages: s.messages.map((m) => (m.id === targetId ? { ...m, id: dbId } : m)),
+                  }));
                   currentAssistantId = dbId;
                 }
               } else if (eventData.type === 'error') {
-                setMessages((prev) => [
-                  ...prev,
-                  {
-                    id: `err-${Date.now()}`,
-                    role: 'assistant' as const,
-                    content: `❌ ${eventData.content}`,
-                  },
-                ]);
+                updateSession(localSessionId, (s) => ({
+                  messages: [...s.messages, { id: `err-${Date.now()}`, role: 'assistant' as const, content: `❌ ${eventData.content}` }],
+                }));
               }
             } catch (e) {
               console.error('Error parsing SSE event:', e, trimmedLine);
@@ -741,7 +782,22 @@ function ChatPage() {
         message_length: promptText.length,
       });
 
-      setMessages((prev) => [...prev, userMessage]);
+      if (activeSessionId) {
+        // Existing session — set up state immediately, real ID already known.
+        resolvedSessionId = activeSessionId;
+        updateSession(activeSessionId, (s) => ({
+          isLoading: true,
+          messages: [...s.messages, userMessage],
+        }));
+      } else if (newSessionId) {
+        // New session — optimistically show message now using client UUID.
+        // activeSessionId is set internally so the state map works, but we
+        // deliberately skip router.push here. A single URL update happens in
+        // the session_created handler once we have the real DB ID.
+        resolvedSessionId = newSessionId;
+        setActiveSessionId(newSessionId);
+        updateSession(newSessionId, { isLoading: true, messages: [userMessage] });
+      }
 
       const body: Record<string, unknown> = { prompt: promptText };
       if (activeSessionId) body.agent_session_id = activeSessionId;
@@ -790,74 +846,80 @@ function ChatPage() {
             const eventData = JSON.parse(trimmedLine.slice(6));
 
             if (eventData.type === "session_created") {
-              ph?.capture(EVENTS.SESSION_CREATED, { session_id: eventData.agent_session_id });
-              setActiveSessionId(eventData.agent_session_id);
+              const cloudSessionId = eventData.agent_session_id as string;
+              ph?.capture(EVENTS.SESSION_CREATED, { session_id: cloudSessionId });
+              // Migrate optimistic state from temp client UUID → real DB ID
+              setSessionState((prev) => {
+                const next = new Map(prev);
+                const tempState = newSessionId ? (next.get(newSessionId) ?? { ...EMPTY_SESSION }) : { ...EMPTY_SESSION };
+                if (newSessionId) next.delete(newSessionId);
+                next.set(cloudSessionId, tempState);
+                return next;
+              });
+              resolvedSessionId = cloudSessionId;
+              setActiveSessionId(cloudSessionId);
+              router.push(`/chat?s=${cloudSessionId}`);
               fetchSessions();
             } else if (eventData.type === "tool_call") {
+              if (!resolvedSessionId) continue;
               toolCallsCount++;
-              setMessages((prev) => [
-                ...prev,
-                {
+              updateSession(resolvedSessionId, (s) => ({
+                messages: [...s.messages, {
                   id: `tool-${Date.now()}-${Math.random()}`,
                   role: "tool_call" as const,
                   content: eventData.content ?? "",
                   toolName: eventData.name ?? "",
                   callId: eventData.call_id ?? "",
                   toolArguments: eventData.arguments ?? "",
-                },
-              ]);
+                }],
+              }));
               currentAssistantId = null;
               currentAssistantContent = "";
             } else if (eventData.type === "tool_output") {
-              setMessages((prev) => [
-                ...prev,
-                {
+              if (!resolvedSessionId) continue;
+              updateSession(resolvedSessionId, (s) => ({
+                messages: [...s.messages, {
                   id: `output-${Date.now()}-${Math.random()}`,
                   role: "tool_output" as const,
                   content: eventData.content ?? "",
                   callId: eventData.call_id ?? "",
-                },
-              ]);
+                }],
+              }));
             } else if (eventData.type === "message") {
+              if (!resolvedSessionId) continue;
               const chunk = eventData.content ?? "";
               if (!currentAssistantId) {
                 currentAssistantId = `asst-${Date.now()}-${Math.random()}`;
                 currentAssistantContent = chunk;
                 const newId = currentAssistantId;
-                setMessages((prev) => [
-                  ...prev,
-                  { id: newId, role: "assistant" as const, content: chunk },
-                ]);
+                updateSession(resolvedSessionId, (s) => ({
+                  messages: [...s.messages, { id: newId, role: "assistant" as const, content: chunk }],
+                }));
               } else {
                 currentAssistantContent += chunk;
                 const targetId = currentAssistantId;
                 const snapshot = currentAssistantContent;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === targetId ? { ...m, content: snapshot } : m
-                  )
-                );
+                updateSession(resolvedSessionId, (s) => ({
+                  messages: s.messages.map((m) => (m.id === targetId ? { ...m, content: snapshot } : m)),
+                }));
               }
             } else if (eventData.type === "item_created" && eventData.role === "assistant") {
+              if (!resolvedSessionId) continue;
               // Re-key the in-flight message to its DB row ID so the Realtime
               // dedup check can find it and skip the duplicate.
               const dbId = eventData.id as string;
               const targetId = currentAssistantId;
               if (targetId && dbId) {
-                setMessages((prev) =>
-                  prev.map((m) => (m.id === targetId ? { ...m, id: dbId } : m))
-                );
+                updateSession(resolvedSessionId, (s) => ({
+                  messages: s.messages.map((m) => (m.id === targetId ? { ...m, id: dbId } : m)),
+                }));
                 currentAssistantId = dbId;
               }
             } else if (eventData.type === "error") {
-              setMessages((prev) => [
-                ...prev,
-                {
-                  id: `err-${Date.now()}`,
-                  role: "assistant" as const,
-                  content: `❌ ${eventData.content}`,
-                },
-              ]);
+              if (!resolvedSessionId) continue;
+              updateSession(resolvedSessionId, (s) => ({
+                messages: [...s.messages, { id: `err-${Date.now()}`, role: "assistant" as const, content: `❌ ${eventData.content}` }],
+              }));
             }
           } catch (e) {
             console.error("Error parsing SSE event:", e, trimmedLine);
@@ -865,30 +927,32 @@ function ChatPage() {
         }
       }
       ph?.capture(EVENTS.AGENT_RUN_COMPLETED, {
-        session_id: activeSessionId,
+        session_id: resolvedSessionId,
         tool_calls_count: toolCallsCount,
       });
       refetchBilling();
     } catch (error) {
       console.error("Error sending message:", error);
       ph?.capture(EVENTS.AGENT_RUN_FAILED, {
-        session_id: activeSessionId,
+        session_id: resolvedSessionId,
         error_type: error instanceof Error ? error.message : 'unknown',
       });
       logError(getToken, error instanceof Error ? error.message : "Error sending message", {
         action: "sendMessage",
-        session_id: activeSessionId,
+        session_id: resolvedSessionId,
       });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content: "Sorry, I encountered an error processing your request.",
-        },
-      ]);
+      if (resolvedSessionId) {
+        updateSession(resolvedSessionId, (s) => ({
+          messages: [...s.messages, {
+            id: (Date.now() + 2).toString(),
+            role: "assistant" as const,
+            content: "Sorry, I encountered an error processing your request.",
+          }],
+        }));
+      }
     } finally {
-      setIsLoading(false);
+      if (resolvedSessionId) updateSession(resolvedSessionId, { isLoading: false });
+      isSubmittingRef.current = false;
     }
   };
 
@@ -1041,7 +1105,7 @@ function ChatPage() {
           onFileSelect={handleFileSelect}
           processFiles={processFiles}
           workingDir={workingDir}
-          onWorkingDirChange={setWorkingDir}
+          onWorkingDirChange={handleWorkingDirChange}
           hasMessages={messages.length > 0}
         />
       </div>

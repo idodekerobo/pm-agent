@@ -118,13 +118,22 @@ def _write_claude_md(integration_tokens: dict) -> None:
 # ── Context seeding ───────────────────────────────────────────────────────────
 
 def _seed_workspace_context(profile: dict) -> None:
-    """Write onboarding profile data to workspace context files.
+    """Pre-populate workspace context index files with onboarding profile data.
 
-    Only writes files that are missing or empty — never overwrites existing content.
+    Only writes to files whose description is still "No information recorded yet"
+    — never overwrites content that was set by the user or the setup interview.
     Creates parent dirs if needed (safe if bootstrap hasn't run yet).
     """
-    def _is_empty(path: Path) -> bool:
-        return not path.exists() or path.read_text(encoding="utf-8").strip() == ""
+    import datetime
+
+    def _is_stub(path: Path) -> bool:
+        """Return True if the file doesn't exist or still has the blank stub description."""
+        if not path.exists():
+            return True
+        text = path.read_text(encoding="utf-8")
+        return "No information recorded yet" in text
+
+    today = datetime.date.today().isoformat()
 
     company_url = (profile.get("company_url") or "").strip()
     scrape_observations = (profile.get("onboarding_scrape_observations") or "").strip()
@@ -135,49 +144,74 @@ def _seed_workspace_context(profile: dict) -> None:
     daily_activities: list = profile.get("daily_activities") or []
     imported_memories: list = profile.get("imported_memories") or []
 
-    # context/company.md
-    company_file = _DRAFT_WORKSPACE / "context" / "company.md"
-    if _is_empty(company_file) and (company_url or scrape_observations):
+    # context/company/index.md
+    company_file = _DRAFT_WORKSPACE / "context" / "company" / "index.md"
+    if _is_stub(company_file) and (company_url or scrape_observations):
         company_file.parent.mkdir(parents=True, exist_ok=True)
-        lines = ["# Company"]
+        desc_parts = []
         if company_url:
-            lines += ["", f"**URL:** {company_url}"]
+            desc_parts.append(f"Company URL: {company_url}.")
         if scrape_observations:
-            lines += ["", "## What They Build", scrape_observations]
+            first_line = scrape_observations.strip().splitlines()[0].strip()
+            if first_line:
+                desc_parts.append(first_line[:200])
         if scrape_correction:
-            lines += ["", "## User Correction", scrape_correction]
-        company_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        logger.info("[seed] wrote context/company.md")
+            desc_parts.append(f"User correction: {scrape_correction[:100]}")
+        description = " ".join(desc_parts) or "No information recorded yet."
+        body_parts = []
+        if company_url:
+            body_parts += [f"**URL:** {company_url}"]
+        if scrape_observations:
+            body_parts += ["", "## What They Build", scrape_observations]
+        if scrape_correction:
+            body_parts += ["", "## User Correction", scrape_correction]
+        body = "\n".join(body_parts)
+        company_file.write_text(
+            f"---\nname: company\ndescription: >\n  {description}\nlast_updated: {today}\nsource: onboarding\n---\n\n{body}\n",
+            encoding="utf-8",
+        )
+        logger.info("[seed] wrote context/company/index.md")
 
-    # context/user.md
-    user_file = _DRAFT_WORKSPACE / "context" / "user.md"
-    if _is_empty(user_file) and (full_name or role):
+    # context/user/index.md
+    user_file = _DRAFT_WORKSPACE / "context" / "user" / "index.md"
+    if _is_stub(user_file) and (full_name or role):
         user_file.parent.mkdir(parents=True, exist_ok=True)
-        lines = ["# User"]
+        desc_parts = []
         if full_name:
-            lines += ["", f"**Name:** {full_name}"]
+            desc_parts.append(f"{full_name}.")
         if role:
-            lines += [f"**Role:** {role}"]
+            desc_parts.append(f"Role: {role}.")
         if current_focus:
-            lines += ["", "## Current Focus"]
-            lines += [f"- {item}" for item in current_focus]
+            desc_parts.append(f"Current focus: {', '.join(current_focus[:3])}.")
+        description = " ".join(desc_parts) or "No information recorded yet."
+        body_parts = []
+        if full_name:
+            body_parts += [f"**Name:** {full_name}"]
+        if role:
+            body_parts += [f"**Role:** {role}"]
+        if current_focus:
+            body_parts += ["", "## Current Focus"] + [f"- {item}" for item in current_focus]
         if daily_activities:
-            lines += ["", "## Daily Activities"]
-            lines += [f"- {item}" for item in daily_activities]
-        user_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        logger.info("[seed] wrote context/user.md")
+            body_parts += ["", "## Daily Activities"] + [f"- {item}" for item in daily_activities]
+        body = "\n".join(body_parts)
+        user_file.write_text(
+            f"---\nname: user\ndescription: >\n  {description}\nlast_updated: {today}\nsource: onboarding\n---\n\n{body}\n",
+            encoding="utf-8",
+        )
+        logger.info("[seed] wrote context/user/index.md")
 
-    # memory/memory.md
+    # memory/memory.md — imported memories from prior tools (e.g. Claude memory export)
     if imported_memories:
         memory_file = _DRAFT_WORKSPACE / "memory" / "memory.md"
-        if _is_empty(memory_file):
+        if not memory_file.exists() or memory_file.read_text(encoding="utf-8").strip() == "":
             memory_file.parent.mkdir(parents=True, exist_ok=True)
-            lines = ["# Memory"]
+            lines = ["## Vocabulary", "", "## Preferences", ""]
             for mem in imported_memories:
                 provider = (mem.get("provider") or "imported").strip()
                 content = (mem.get("content") or "").strip()
                 if content:
-                    lines += ["", f"## From {provider}", content]
+                    lines += [f"_Imported from {provider}:_ {content}", ""]
+            lines += ["## Goals", "", "## Patterns"]
             memory_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
             logger.info("[seed] wrote memory/memory.md")
 

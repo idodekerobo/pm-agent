@@ -11,6 +11,9 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `session-init.sh` now adds `Write`, `Read`, and `Edit` permissions for `~/.draft/**` to `~/.claude/settings.json` — previously Claude would prompt for permission when writing workspace files on first use
+- Workspace CLAUDE.md is now injected via a dedicated `cat` command in `hooks.json` on every `SessionStart` — fixes a race condition where the CLAUDE.md never loaded on a user's first session (`settings.json` is read before the hook fires, so `additionalDirectories` alone cannot work on first run)
+- `additionalDirectories` is now used exclusively for file access to `~/.draft/workspace`; `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` removed
+- All `session-init.sh` status messages redirected to stderr
 
 ---
 

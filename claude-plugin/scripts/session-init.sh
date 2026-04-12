@@ -1,12 +1,14 @@
 #!/bin/bash
-# SessionStart hook — runs on every session start but does real work only once.
+# SessionStart hook — runs on every session start.
 #
-# First run:  copies workspace-template → ~/.draft/workspace
-#             writes DRAFT_WORKSPACE + CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD
-#             + additionalDirectories to ~/.claude/settings.json so the workspace
-#             CLAUDE.md loads from any directory in future sessions
+# First run only:
+#   - Bootstraps ~/.draft/workspace/ from template
+#   - Writes DRAFT_WORKSPACE + additionalDirectories + permissions to settings.json
 #
-# Subsequent runs: all guards pass, exits in <10ms
+# CLAUDE.md injection is handled separately by the cat hook in hooks.json.
+#
+# stdout: empty (cat hook in hooks.json handles context injection)
+# stderr: status messages (not shown to Claude)
 
 set -euo pipefail
 
@@ -17,18 +19,20 @@ SETTINGS="$HOME/.claude/settings.json"
 # ── 1. Bootstrap workspace ────────────────────────────────────────────────────
 
 if [ ! -d "$WORKSPACE" ]; then
-    echo "[Draft] Initializing workspace at $WORKSPACE..."
+    echo "[Draft] Initializing workspace at $WORKSPACE..." >&2
     mkdir -p "$WORKSPACE"
     cp -r "$TEMPLATE/." "$WORKSPACE/"
-    echo "[Draft] Workspace ready. Run /draft:setup to load your PM brain."
+    echo "[Draft] Workspace ready. Run /draft:setup to load your PM brain." >&2
 fi
 
 # ── 2. Configure ~/.claude/settings.json (one-time) ──────────────────────────
-# Adds CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD and additionalDirectories
-# so the workspace CLAUDE.md loads from any directory.
+# Adds DRAFT_WORKSPACE env var, additionalDirectories (file access only),
+# and ~/.draft/** read/write/edit permissions.
+# Note: CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD is intentionally omitted —
+# CLAUDE.md is injected via additionalContext below instead.
 
 python3 - <<PYEOF
-import json
+import json, sys
 from pathlib import Path
 
 settings_path = Path("$SETTINGS")
@@ -44,16 +48,17 @@ else:
 
 changed = False
 
-# Set env vars
+# Set DRAFT_WORKSPACE env var
 env = settings.setdefault("env", {})
 if env.get("DRAFT_WORKSPACE") != workspace:
     env["DRAFT_WORKSPACE"] = workspace
     changed = True
-if env.get("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD") != "1":
-    env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = "1"
+
+if "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD" in env:
+    del env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"]
     changed = True
 
-# Set additionalDirectories
+# Set additionalDirectories (file access only — not for CLAUDE.md loading)
 perms = settings.setdefault("permissions", {})
 dirs = perms.setdefault("additionalDirectories", [])
 if workspace not in dirs:
@@ -72,5 +77,5 @@ for perm in [f"Write({draft_glob})", f"Read({draft_glob})", f"Edit({draft_glob})
 if changed:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")
-    print("[Draft] Settings updated — workspace context will load in every future session.")
+    print("[Draft] Settings updated.", file=sys.stderr)
 PYEOF

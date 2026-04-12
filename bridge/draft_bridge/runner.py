@@ -2,15 +2,15 @@
 
 Entry point:
     async for event in run_claude(prompt, workspace_path, integration_tokens):
-        # event is a normalized SSE dict ready to yield to the web app
+        # event is a normalized dict ready to yield to the web app
 
-Normalizer maps Claude Code stream-json events → web app SSE event shape:
+Normalizer maps Claude Code stream-json events → web app event shape:
     message     — streaming text chunk         {type, content}
     tool_call   — tool invocation              {type, name, call_id, arguments, content}
-    tool_output — tool result                  {type, call_id, content}
+    tool_output — tool result                  {type, call_id, content, is_error}
     error       — execution error              {type, content}
 
-Internal events (intercepted by server.py, never forwarded to SSE):
+Internal events (intercepted by server.py, never forwarded to client):
     session_init    — carries provider session_id from system init event
 
 Event types filtered out (never forwarded):
@@ -24,6 +24,11 @@ Stream-json type mapping (per Agent SDK ToolResultBlock schema):
     assistant + thinking block  → (dropped)
     user + tool_result block    → tool_output   ← tool results live here, NOT type:"tool"
     result (is_error)           → error
+
+Multi-turn notes:
+    - Runs with -p (headless mode) for clean JSON output.
+    - Pass resume_session_id to continue an existing Claude session across turns.
+    - Claude maintains full conversation history on its side; bridge only stores the ID.
 """
 
 import asyncio
@@ -39,10 +44,12 @@ logger = logging.getLogger(__name__)
 # ── Normalizer ────────────────────────────────────────────────────────────────
 
 def _normalize(cc_event: dict) -> list[dict]:
-    """Convert one Claude Code stream-json event into zero or more SSE events."""
+    """Convert one Claude Code stream-json event into zero or more normalized events."""
     event_type = cc_event.get("type")
 
     if event_type == "system":
+        # Capture session_id from the init event and surface it as an internal event.
+        # server.py intercepts this to persist provider_session_id; it is never forwarded.
         if cc_event.get("subtype") == "init" and cc_event.get("session_id"):
             return [{"type": "session_init", "session_id": cc_event["session_id"]}]
         return []
@@ -73,8 +80,9 @@ def _normalize(cc_event: dict) -> list[dict]:
         return out
 
     # UserMessage (type: "user") carries ToolResultBlocks — these are tool outputs.
-    # Note: the stream-json format never emits type: "tool"; tool results arrive as type: "user" with message.content[].type == "tool_result"
-    # Per the Agent SDK ToolResultBlock schema: tool_use_id, content, is_error.
+    # Note: the stream-json format never emits type: "tool"; tool results arrive as type: "user"
+    # with message.content[].type == "tool_result" (per Agent SDK ToolResultBlock schema:
+    # tool_use_id, content, is_error).
     if event_type == "user":
         message = cc_event.get("message") or {}
         content_blocks = message.get("content") or []
@@ -101,9 +109,10 @@ def _normalize(cc_event: dict) -> list[dict]:
     if event_type == "result":
         if cc_event.get("is_error") or cc_event.get("subtype") == "error_during_execution":
             return [{"type": "error", "content": cc_event.get("result", "Claude Code encountered an error.")}]
-        return []  # success — text already streamed via message events
+        # Success result — emit a turn_end so server knows the turn is complete
+        return [{"type": "turn_end"}]
 
-    return []  # unknown type
+    return []  # unknown type — logged by caller
 
 
 # ── Subprocess runner ─────────────────────────────────────────────────────────
@@ -114,10 +123,14 @@ async def run_claude(
     integration_tokens: dict[str, str],
     resume_session_id: str | None = None,
 ) -> AsyncGenerator[dict, None]:
-    """Spawn `claude -p` and yield normalized SSE events.
+    """Spawn `claude -p` in headless stream-json mode and yield normalized events.
+
+    Pass resume_session_id to continue an existing Claude session (--resume flag).
+    On the first turn, omit it; server.py will capture provider_session_id from
+    the session_init event and persist it for use on subsequent turns.
 
     Yields dicts with `type` field. Caller is responsible for serializing
-    to SSE format and writing conversation_items to Supabase.
+    to SSE/WS format and writing conversation_items to Supabase.
 
     Raises RuntimeError if the `claude` binary is not found.
     """
@@ -157,6 +170,8 @@ async def run_claude(
 
     assert proc.stdout is not None
 
+    logger.info("[runner] spawned claude pid=%s prompt_len=%d resume=%r", proc.pid, len(prompt), resume_session_id)
+
     async for raw_line in proc.stdout:
         line = raw_line.decode(errors="replace").strip()
         if not line:
@@ -164,13 +179,15 @@ async def run_claude(
         try:
             cc_event = json.loads(line)
         except json.JSONDecodeError:
-            logger.debug("Non-JSON line from claude: %r", line[:200])
+            logger.debug("[runner] non-JSON stdout: %r", line[:200])
             continue
 
-        for sse_event in _normalize(cc_event):
-            yield sse_event
+        normalized = _normalize(cc_event)
+        for event in normalized:
+            yield event
 
     await proc.wait()
+    logger.info("[runner] claude exited returncode=%s", proc.returncode)
 
     if proc.returncode not in (0, None):
         stderr_bytes = await proc.stderr.read() if proc.stderr else b""
@@ -178,4 +195,5 @@ async def run_claude(
         error_msg = f"Claude Code exited with code {proc.returncode}"
         if stderr_text:
             error_msg += f": {stderr_text[:400]}"
+        logger.error("[runner] %s", error_msg)
         yield {"type": "error", "content": error_msg}

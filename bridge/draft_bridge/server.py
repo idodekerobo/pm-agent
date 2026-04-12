@@ -343,6 +343,9 @@ async def run_local(request: Request) -> StreamingResponse:
     body_workspace: str | None = body.get("workspace_path")
     resume_session_id: str | None = body.get("provider_session_id") or None
 
+    logger.info("[server] /run-local session_id=%r prompt_len=%d jwt_present=%s workspace_path=%r resume=%r",
+                session_id, len(prompt), bool(jwt), body_workspace, resume_session_id)
+
     if not session_id or not prompt or not jwt:
         return JSONResponse({"error": "session_id, prompt, and jwt are required"}, status_code=400)
 
@@ -388,6 +391,7 @@ async def run_local(request: Request) -> StreamingResponse:
                     # Internal event — persist provider_session_id, emit to client so
                     # web app can store it for --resume on subsequent turns.
                     new_provider_session_id = event.get("session_id", "")
+                    logger.info("[server] session_init provider_session_id=%r", new_provider_session_id)
                     try:
                         await _call_with_retry(
                             lambda j: patch_session_provider_id(supabase_url, supabase_anon_key, j, session_id=session_id, provider_session_id=new_provider_session_id),
@@ -422,6 +426,11 @@ async def run_local(request: Request) -> StreamingResponse:
                         logger.info("[server] wrote tool_output item call_id=%r is_error=%r", call_id, event.get("is_error"))
                     except Exception as exc:
                         logger.error("Failed to write tool_output item: %s", exc)
+
+                if event_type == "turn_end":
+                    # Internal signal that Claude finished this turn — don't forward to client
+                    logger.info("[server] turn_end received, run complete")
+                    continue
 
                 logger.info("[server] -> yield SSE type=%r call_id=%r",
                             event.get("type"), event.get("call_id"))

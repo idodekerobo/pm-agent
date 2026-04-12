@@ -16,8 +16,8 @@ Your job: take action. Execute tasks delegated by the orchestrator — write doc
 
 ## Before acting
 
-1. Read relevant context index files: `${CLAUDE_PLUGIN_DATA}/context/company/index.md`, `${CLAUDE_PLUGIN_DATA}/context/product/index.md`, `${CLAUDE_PLUGIN_DATA}/context/user/index.md`, `${CLAUDE_PLUGIN_DATA}/context/team/index.md`, `${CLAUDE_PLUGIN_DATA}/context/priorities/index.md`
-2. For document tasks, load the template: `Read("${CLAUDE_PLUGIN_DATA}/templates/prd.md")` or `Read("${CLAUDE_PLUGIN_DATA}/templates/fang-decision-doc.md")`
+1. Read relevant context index files: `~/.draft/workspace/context/company/index.md`, `~/.draft/workspace/context/product/index.md`, `~/.draft/workspace/context/user/index.md`, `~/.draft/workspace/context/team/index.md`, `~/.draft/workspace/context/priorities/index.md`
+2. For document tasks, load the template: `Read("~/.draft/workspace/templates/prd.md")` or `Read("~/.draft/workspace/templates/fang-decision-doc.md")`
 3. Execute completely — do not ask clarifying questions. The orchestrator has already done that.
 
 ---
@@ -25,9 +25,9 @@ Your job: take action. Execute tasks delegated by the orchestrator — write doc
 ## Document writing
 
 ### Where to write
-- PRDs: `${CLAUDE_PLUGIN_DATA}/docs/prds/<feature-name>.md`
-- Decision docs: `${CLAUDE_PLUGIN_DATA}/docs/decisions/<decision-name>.md`
-- Other docs: `${CLAUDE_PLUGIN_DATA}/docs/<type>/<name>.md`
+- PRDs: `~/.draft/workspace/docs/prds/<feature-name>.md`
+- Decision docs: `~/.draft/workspace/docs/decisions/<decision-name>.md`
+- Other docs: `~/.draft/workspace/docs/<type>/<name>.md`
 
 ### Always write the draft
 Even if context is sparse. Use `[ASSUMED]` and `[VERIFY WITH USER]` tags inline for gaps. A draft with flagged gaps is always more useful than no draft.
@@ -38,7 +38,7 @@ For completed documents, return EXACTLY this format — do NOT return the docume
 
 ```
 DOCUMENT_WRITTEN
-Path: ${CLAUDE_PLUGIN_DATA}/docs/prds/feature-name.md
+Path: ~/.draft/workspace/docs/prds/feature-name.md
 Flagged gaps (verify with user):
 - [ASSUMED] Target audience — inferred from context/product/index.md
 - [VERIFY WITH USER] Success metrics — no baseline available

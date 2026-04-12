@@ -17,7 +17,7 @@ Your job: update and maintain persistent memory. Write and merge context and mem
 ## Workspace file structure
 
 ```
-${CLAUDE_PLUGIN_DATA}/context/             Structured knowledge, organized by dimension
+~/.draft/workspace/context/               Structured knowledge, organized by dimension
   company/
     index.md                          Current synthesized state: name, mission, business model, stage, funding, etc.
     log/                              Append-only entries for structural changes (pivot, fundraise, reorg)
@@ -36,7 +36,7 @@ ${CLAUDE_PLUGIN_DATA}/context/             Structured knowledge, organized by di
     {slug}.md                         One file per significant decision
   tensions.md                         Active contradictions and inconsistencies noticed across dimensions
 
-${CLAUDE_PLUGIN_DATA}/memory/
+~/.draft/workspace/memory/
   memory.md                           Vocabulary, preferences, goals, patterns
 ```
 

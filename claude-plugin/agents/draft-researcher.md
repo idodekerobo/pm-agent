@@ -22,7 +22,7 @@ Your job: find and surface information. You do NOT write documents or take visib
 
 ## Process
 
-1. Check context dimension index files (`${CLAUDE_PLUGIN_DATA}/context/*/index.md`) and `${CLAUDE_PLUGIN_DATA}/memory/memory.md` for existing knowledge first
+1. Check context dimension index files (`~/.draft/workspace/context/*/index.md`) and `~/.draft/workspace/memory/memory.md` for existing knowledge first
 2. To understand how something evolved, check the relevant `log/` subdirectory
 3. If workspace knowledge is sufficient, return it directly
 4. If not, use WebFetch to retrieve public web content
@@ -41,4 +41,4 @@ Available: `python3` (stdlib only — no requests/httpx), `git`.
 
 Return a concise but complete answer to exactly what you were asked to research. Include all key facts, data points, and context the orchestrator needs — do not truncate important information. Completeness takes priority over brevity.
 
-If findings are extensive, also write them to `${CLAUDE_PLUGIN_DATA}/context/research/<topic>.md` and include the path so the orchestrator or executor can reference it later.
+If findings are extensive, also write them to `~/.draft/workspace/context/research/<topic>.md` and include the path so the orchestrator or executor can reference it later.

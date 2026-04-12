@@ -1,15 +1,16 @@
 #!/bin/bash
 # SessionStart hook — runs on every session start but does real work only once.
 #
-# First run:  copies workspace-template → $CLAUDE_PLUGIN_DATA
-#             writes CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD + additionalDirectories
-#             to ~/.claude/settings.json so the workspace CLAUDE.md loads from any directory
+# First run:  copies workspace-template → ~/.draft/workspace
+#             writes DRAFT_WORKSPACE + CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD
+#             + additionalDirectories to ~/.claude/settings.json so the workspace
+#             CLAUDE.md loads from any directory in future sessions
 #
 # Subsequent runs: all guards pass, exits in <10ms
 
 set -euo pipefail
 
-WORKSPACE="$CLAUDE_PLUGIN_DATA"
+WORKSPACE="$HOME/.draft/workspace"
 TEMPLATE="${CLAUDE_PLUGIN_ROOT}/workspace-template"
 SETTINGS="$HOME/.claude/settings.json"
 

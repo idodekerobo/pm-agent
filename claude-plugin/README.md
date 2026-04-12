@@ -2,6 +2,8 @@
 
 AI-powered PM co-pilot. Gives Claude persistent memory about your product, priorities, and context so every session starts grounded — from any directory.
 
+> **Platform support: macOS and Linux only.** The plugin's session hook is a bash script and requires a POSIX shell environment. Windows (including WSL) is untested and not currently supported.
+
 ---
 
 ## Plugin structure
@@ -12,7 +14,7 @@ claude-plugin/
 │   └── plugin.json               Plugin manifest (name: "draft", v0.1.0)
 ├── agents/
 │   ├── draft-researcher.md       Finds and retrieves information
-│   ├── draft-executor.md         Takes concrete actions (writes docs, calls integrations)
+│   ├── draft-executor.md         Takes concrete actions (writes docs)
 │   └── draft-learner.md          Updates persistent memory files
 ├── skills/
 │   └── setup/SKILL.md            /draft:setup — onboarding interview skill
@@ -20,7 +22,7 @@ claude-plugin/
 │   └── hooks.json                SessionStart → session-init.sh
 ├── scripts/
 │   └── session-init.sh           Guarded bootstrap + settings.json configuration
-├── workspace-template/           Blank workspace copied to plugin data dir on first run
+├── workspace-template/           Blank workspace copied to ~/.draft/workspace on first run
 │   ├── CLAUDE.md                 PM agent instructions (loaded as system context)
 │   ├── context/
 │   │   ├── company/index.md
@@ -43,32 +45,32 @@ claude-plugin/
 1. **`SessionStart` hook fires** → runs `scripts/session-init.sh`
 
 2. **Workspace bootstrap** (guarded — runs once):
-   - Copies `workspace-template/` → `$CLAUDE_PLUGIN_DATA` (e.g. `~/.claude/plugins/data/draft/`)
-   - This is the persistent workspace that survives plugin updates
+   - Copies `workspace-template/` → `~/.draft/workspace/`
+   - This is the persistent workspace, intentionally outside `~/.claude/` so it works across tools
 
 3. **`~/.claude/settings.json` configuration** (guarded — runs once):
    ```json
    {
      "env": {
-       "DRAFT_WORKSPACE": "~/.claude/plugins/data/draft/",
+       "DRAFT_WORKSPACE": "~/.draft/workspace",
        "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD": "1"
      },
      "permissions": {
-       "additionalDirectories": ["~/.claude/plugins/data/draft/"]
+       "additionalDirectories": ["~/.draft/workspace"]
      }
    }
    ```
-   - `DRAFT_WORKSPACE` — env var pointing to the persistent workspace; used by `!` bash commands in `CLAUDE.md`
+   - `DRAFT_WORKSPACE` — env var pointing to the workspace; used by `!` bash commands in `CLAUDE.md`
    - `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` — tells Claude Code to load `CLAUDE.md` from additional directories
-   - `additionalDirectories` — makes the workspace directory accessible from any working directory
+   - `additionalDirectories` — makes the workspace accessible from any working directory
 
-4. **First session ends without full PM context** — settings are now written but take effect on the next session start
+4. **Settings take effect on the next session start**
 
 ### Every subsequent session
 
-1. **`SessionStart` hook fires** → `session-init.sh` runs all guards, finds nothing to do, exits in <10ms
+1. **`SessionStart` hook fires** → all guards pass, exits in <10ms
 
-2. **Claude Code loads `CLAUDE.md` from the workspace** via `additionalDirectories` + `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD`
+2. **Claude Code loads `CLAUDE.md` from `~/.draft/workspace/`** via `additionalDirectories` + `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD`
 
 3. **`!` bash commands in `CLAUDE.md` execute**, injecting live workspace state into the system prompt:
    - `tree` of `$DRAFT_WORKSPACE/context/` — shows what dimensions exist
@@ -92,11 +94,11 @@ On every session (after first run), the following is loaded automatically:
 
 ### Dynamic (from `!` bash commands, runs at session start)
 - **Workspace tree** — directory listing of `context/` so Claude knows what exists
-- **Context dimension summaries** — frontmatter `description` fields from each `context/*/index.md` (company, product, priorities, team, user)
-- **Full priorities file** — complete `context/priorities/index.md` including sprint tasks, open questions, deferred work
+- **Context dimension summaries** — frontmatter `description` fields from each `context/*/index.md`
+- **Full priorities file** — complete `context/priorities/index.md`
 - **Memory** — `memory/memory.md` with vocabulary, preferences, goals, patterns
 
-If the workspace has no context yet (fresh install), all dynamic sections fall back to "No context loaded yet — run /draft:setup."
+If the workspace has no context yet, all dynamic sections fall back to "No context loaded yet — run /draft:setup."
 
 ---
 
@@ -104,11 +106,9 @@ If the workspace has no context yet (fresh install), all dynamic sections fall b
 
 | Variable | Resolves to | Used in |
 |---|---|---|
-| `$CLAUDE_PLUGIN_DATA` | `~/.claude/plugins/data/draft/` | `session-init.sh`, agent files |
-| `$DRAFT_WORKSPACE` | same path (set by `session-init.sh`) | `CLAUDE.md` `!` bash commands |
-| `${CLAUDE_PLUGIN_DATA}` | same path (auto-substituted by plugin runtime) | agent `.md` files |
+| `$DRAFT_WORKSPACE` | `~/.draft/workspace` (set by `session-init.sh`) | `CLAUDE.md` `!` bash commands, agent instructions |
 
-`CLAUDE.md` uses `$DRAFT_WORKSPACE` (env var route) because `${CLAUDE_PLUGIN_DATA}` substitution is only guaranteed in agent/skill content, not in files loaded via `additionalDirectories`.
+All agent files reference `~/.draft/workspace` directly as a hardcoded path. This keeps the workspace location tool-agnostic — the same files can be read by Codex or any other tool without requiring Claude Code-specific path resolution.
 
 ---
 
@@ -125,7 +125,7 @@ cat ~/.claude/settings.json | python3 -m json.tool
 /draft:setup
 
 # Verify workspace was created
-ls ~/.claude/plugins/data/draft/
+ls ~/.draft/workspace/
 ```
 
 ---
@@ -134,8 +134,8 @@ ls ~/.claude/plugins/data/draft/
 
 | Agent | When to use |
 |---|---|
-| `@draft-researcher` | Need to KNOW something — read files, query integrations, fetch web content |
-| `@draft-executor` | Need to DO something — write a PRD, create a Linear issue, send a Slack message |
+| `@draft-researcher` | Need to KNOW something — read workspace files, fetch web content |
+| `@draft-executor` | Need to DO something — write a PRD, create a decision doc |
 | `@draft-learner` | Need to REMEMBER something — update context files, log decisions, merge new info |
 
 Most requests follow: `@draft-researcher` gathers context → `@draft-executor` acts → `@draft-learner` saves.

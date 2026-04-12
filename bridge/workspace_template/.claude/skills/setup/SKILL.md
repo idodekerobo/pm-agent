@@ -33,8 +33,55 @@ print('has_content' if has_content else 'empty')
 " 2>/dev/null || echo "empty"
 ```
 
-- **If `empty`**: run the full interview below from Q1
+- **If `empty`**: deliver the Welcome orientation below, then run the full interview from Q1
 - **If `has_content`**: run the re-run flow instead (see end of this file)
+
+---
+
+## Welcome (first-time only)
+
+Before asking Q1, deliver this orientation. Keep it warm but brief — don't pad it.
+
+> "Welcome to Draft — your AI-powered PM co-pilot.
+>
+> A few things to know before we start:
+>
+> **Your workspace** lives at `~/.draft/workspace` (or wherever `$DRAFT_WORKSPACE` points). Everything Draft learns about your product, team, and priorities is stored there as plain markdown files — you can read, edit, or version-control them like any other file.
+>
+> **How updates happen:** Draft writes to your workspace after this setup interview, and keeps it fresh as you work. Whenever you share a decision, a shift in priorities, or a team change, Draft will update the relevant files automatically. You can also say `update [company / product / team / priorities]` at any point to trigger an explicit refresh.
+>
+> **Change history:** Each context dimension has a `log/` subdirectory. Draft writes a timestamped entry whenever something meaningful changes — so you always have a record of how your thinking evolved.
+>
+> Here's the layout:
+>
+> ```
+> ~/.draft/workspace/
+> ├── context/
+> │   ├── company/        ← what you're building, business model, stage
+> │   │   └── log/        ← structural changes only (pivot, fundraise, reorg)
+> │   ├── product/        ← product state, target user, key bets, roadmap
+> │   │   └── log/        ← every update logged here
+> │   ├── priorities/     ← active sprint, top priorities, blockers
+> │   │   └── log/        ← every update logged here
+> │   ├── team/           ← structure, who does what, capacity
+> │   │   └── log/        ← hires, departures, reorgs
+> │   └── user/           ← your role and working style (no log)
+> ├── memory/             ← vocabulary, preferences, recurring patterns
+> ├── docs/               ← PRDs, decision docs Draft writes for you
+> └── templates/          ← document templates
+> ```
+>
+> **How Draft works under the hood:** Draft uses three specialized agents — you won't call them directly, but knowing what they do helps you understand what's happening:
+>
+> - **@draft-researcher** — finds and retrieves information. Runs when Draft needs to *know* something: reading your workspace files, querying integrations (Linear, Notion, GitHub, PostHog), or gathering context before acting.
+> - **@draft-executor** — takes concrete actions. Runs when Draft needs to *do* something: writing a PRD, creating a Linear issue, sending a Slack message, or producing any artifact.
+> - **@draft-learner** — updates persistent memory. Runs after Draft learns something worth keeping: a new decision, a shift in priorities, a team change. This is what keeps your workspace files accurate over time.
+>
+> Most requests follow the same pattern: researcher gathers context → executor acts → learner saves what changed.
+>
+> Let's load your PM brain. This takes about 3–5 minutes."
+
+Then proceed directly to Q1 — no gap, no extra preamble.
 
 ---
 

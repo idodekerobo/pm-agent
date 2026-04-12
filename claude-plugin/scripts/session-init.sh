@@ -60,6 +60,15 @@ if workspace not in dirs:
     dirs.append(workspace)
     changed = True
 
+# Grant ~/.draft/** permissions so Claude can read/write workspace files
+draft_dir = str(Path(workspace).parent)
+draft_glob = draft_dir + "/**"
+allow = perms.setdefault("allow", [])
+for perm in [f"Write({draft_glob})", f"Read({draft_glob})", f"Edit({draft_glob})"]:
+    if perm not in allow:
+        allow.append(perm)
+        changed = True
+
 if changed:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n")

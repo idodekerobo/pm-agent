@@ -9,13 +9,11 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Fixed
-- `session-init.sh` now adds `Write`, `Read`, and `Edit` permissions for `~/.draft/**` to `~/.claude/settings.json` — previously Claude would prompt for permission when writing workspace files on first use
-- All `session-init.sh` status messages redirected to stderr
-
-### Changed
-- CLAUDE.md loading now uses `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` (set to `~/.draft/workspace`) so Claude Code natively parses the file and executes its `!` bash commands — the previous unconditional `cat` hook injected raw text only, meaning `!` commands (context summaries, priorities, memory) were never actually executed
-- `cat ~/.draft/workspace/CLAUDE.md` hook is now conditional: only fires when `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` is not yet set in the environment (i.e., session 1 only, before `session-init.sh` has written the env var to `settings.json`). From session 2 onwards, native loading takes over and the `cat` hook is skipped to avoid duplication
+- `settings.json` activates `draft:pm-agent` as the main Claude Code thread. Agent names must use the plugin-prefixed form (`draft:<name>`) — Claude Code registers all plugin agents under `<plugin-id>:<agent-name>`.
+- `agents/pm-agent.md` — orchestrator agent that owns all PM behavior: orchestration rules, delegation patterns, document writing flow, staleness policy, proactive memory, onboarding detection, and skills reference. No model or maxTurns set — inherits user defaults.
+- `scripts/inject-context.sh` — unconditionally runs at `SessionStart` and injects workspace context (workspace tree, context index, priorities, memory) by executing commands directly. Replaces the previous conditional `cat` hook and `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD` approach (Claude Code does not recognize that env var for CLAUDE.md directory scanning).
+- `workspace-template/CLAUDE.md` stripped to dynamic context injection only — all behavioral prose moved to `pm-agent.md`. No duplication with the agent system prompt.
+- `session-init.sh` adds `Write`, `Read`, and `Edit` permissions for `~/.draft/**` to `~/.claude/settings.json` so Claude can read/write workspace files without prompting. Status messages redirected to stderr.
 
 ---
 

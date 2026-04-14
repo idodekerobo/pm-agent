@@ -9,7 +9,7 @@
           },
           {
             "type": "command",
-            "command": "cat \"$HOME/.draft/workspace/CLAUDE.md\""
+            "command": "[ -n \"$CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD\" ] || cat \"$HOME/.draft/workspace/CLAUDE.md\""
           }
         ]
       }

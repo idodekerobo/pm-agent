@@ -26,10 +26,10 @@ if [ ! -d "$WORKSPACE" ]; then
 fi
 
 # ── 2. Configure ~/.claude/settings.json (one-time) ──────────────────────────
-# Adds DRAFT_WORKSPACE env var, additionalDirectories (file access only),
-# and ~/.draft/** read/write/edit permissions.
-# Note: CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD is intentionally omitted —
-# CLAUDE.md is injected via additionalContext below instead.
+# Adds DRAFT_WORKSPACE env var, CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD
+# (so Claude Code natively loads ~/.draft/workspace/CLAUDE.md and executes its
+# ! bash commands), additionalDirectories (file access), and ~/.draft/**
+# read/write/edit permissions.
 
 python3 - <<PYEOF
 import json, sys
@@ -54,8 +54,8 @@ if env.get("DRAFT_WORKSPACE") != workspace:
     env["DRAFT_WORKSPACE"] = workspace
     changed = True
 
-if "CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD" in env:
-    del env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"]
+if env.get("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD") != workspace:
+    env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = workspace
     changed = True
 
 # Set additionalDirectories (file access only — not for CLAUDE.md loading)

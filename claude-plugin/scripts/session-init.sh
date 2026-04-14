@@ -5,9 +5,9 @@
 #   - Bootstraps ~/.draft/workspace/ from template
 #   - Writes DRAFT_WORKSPACE + additionalDirectories + permissions to settings.json
 #
-# CLAUDE.md injection is handled separately by the cat hook in hooks.json.
+# Context injection is handled separately by inject-context.sh.
 #
-# stdout: empty (cat hook in hooks.json handles context injection)
+# stdout: empty (inject-context.sh handles context injection)
 # stderr: status messages (not shown to Claude)
 
 set -euo pipefail
@@ -26,10 +26,8 @@ if [ ! -d "$WORKSPACE" ]; then
 fi
 
 # ── 2. Configure ~/.claude/settings.json (one-time) ──────────────────────────
-# Adds DRAFT_WORKSPACE env var, CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD
-# (so Claude Code natively loads ~/.draft/workspace/CLAUDE.md and executes its
-# ! bash commands), additionalDirectories (file access), and ~/.draft/**
-# read/write/edit permissions.
+# Adds DRAFT_WORKSPACE env var, additionalDirectories (file access), and
+# ~/.draft/** read/write/edit permissions.
 
 python3 - <<PYEOF
 import json, sys
@@ -54,11 +52,7 @@ if env.get("DRAFT_WORKSPACE") != workspace:
     env["DRAFT_WORKSPACE"] = workspace
     changed = True
 
-if env.get("CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD") != workspace:
-    env["CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD"] = workspace
-    changed = True
-
-# Set additionalDirectories (file access only — not for CLAUDE.md loading)
+# Set additionalDirectories (file access)
 perms = settings.setdefault("permissions", {})
 dirs = perms.setdefault("additionalDirectories", [])
 if workspace not in dirs:

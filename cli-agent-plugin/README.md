@@ -9,7 +9,7 @@ AI-powered PM co-pilot. Gives Claude persistent memory about your product, prior
 ## Plugin structure
 
 ```
-claude-plugin/
+cli-agent-plugin/
 ├── .claude-plugin/
 │   └── plugin.json               Plugin manifest (name: "draft", v1.0.0-beta)
 ├── settings.json                 Activates pm-agent as the main Claude Code thread
@@ -132,7 +132,7 @@ All agent files reference `$DRAFT_WORKSPACE` for file paths. The workspace lives
 
 ```bash
 # Load the plugin for a single session (dev/test)
-claude --plugin-dir ./claude-plugin
+claude --plugin-dir ./cli-agent-plugin
 
 # After first session, verify settings were written
 cat ~/.claude/settings.json | python3 -m json.tool

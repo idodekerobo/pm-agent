@@ -5,14 +5,14 @@ import { useEffect, useRef } from "react";
 const features = [
   {
     number: "01",
-    title: "Spec & document",
-    headline: "Turn rough ideas into airtight feature plans.",
-    body: "Describe what you want to build — Draft iterates with you until the spec is solid. It asks the right questions, surfaces edge cases, and produces structured docs your team can actually execute on.",
-    detail: "PRDs · Technical specs · User stories · Acceptance criteria",
+    title: "Context, always loaded",
+    headline: "Stop re-explaining what you're building.",
+    body: "Run /setup once. Draft interviews you and builds your structured PM brain — company context, roadmap, priorities, decisions. Every Claude Code session opens with it loaded automatically.",
+    detail: "/setup · Product memory · Session context · Auto-loaded",
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <rect x="4" y="4" width="20" height="20" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M9 10h10M9 14h7M9 18h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <rect x="4" y="6" width="20" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+        <path d="M9 11h10M9 15h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
         <circle cx="21" cy="21" r="4" fill="var(--color-bg)" stroke="var(--color-accent)" strokeWidth="1.5"/>
         <path d="M19.5 21l1 1 2-2" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
@@ -20,61 +20,31 @@ const features = [
   },
   {
     number: "02",
-    title: "Strategic thinking",
-    headline: "A thought partner that understands your whole context.",
-    body: "Draft has full context on your roadmap, codebase, and product history. Use it to think through tradeoffs, stress-test prioritization, and make decisions faster — without scheduling a meeting.",
-    detail: "Roadmap reviews · Prioritization · Tradeoff analysis · OKR alignment",
+    title: "PM commands, built in",
+    headline: "A full PM toolkit, one command away.",
+    body: "Ask Draft to write a PRD, review your strategy, stress-test priorities, or surface what's stale. It already knows your product — grounded answers land in seconds, not meetings.",
+    detail: "/draft:prd · /draft:strategy · /draft:review · /draft:priorities",
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <path d="M14 4C8.477 4 4 8.477 4 14s4.477 10 10 10 10-4.477 10-10S19.523 4 14 4z" stroke="currentColor" strokeWidth="1.5"/>
         <path d="M14 9v5l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <path d="M8 5.5l-2-2M20 5.5l2-2M8 22.5l-2 2M20 22.5l2 2" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round"/>
+        <path d="M8 5.5l-2-2M20 5.5l2-2" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },
   {
     number: "03",
-    title: "Agent orchestration",
-    headline: "From spec to shipped — without leaving Draft.",
-    body: "Draft orchestrates coding agents directly from your feature specs. Define the work, Draft breaks it into tasks, hands them to agents, and tracks progress. Planning and execution in one loop.",
-    detail: "Task delegation · Agent coordination · Progress tracking · Code review",
+    title: "Context that stays current",
+    headline: "Your PM brain evolves as your product does.",
+    body: "As your strategy shifts, update your context in one command. Draft tracks what changes and why — so the next session reflects where you actually are, not where you were three weeks ago.",
+    detail: "Version-controlled · /draft:update · Decision log · Always fresh",
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <rect x="11" y="4" width="6" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-        <rect x="4" y="18" width="6" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-        <rect x="18" y="18" width="6" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M14 9v4M14 13l-7 5M14 13l7 5" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    number: "04",
-    title: "Team alignment",
-    headline: "Stop being your team's Slack bot.",
-    body: "Draft tracks decisions, surfaces blockers, and keeps everyone in the loop — without you being the relay. No more re-explaining context. No more loose threads. Your team stays aligned without constantly pulling you in.",
-    detail: "Status updates · Decision logs · Blocker tracking · Async alignment",
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <path d="M4 8a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H9l-5 3V8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-        <path d="M9 13h6M9 17h4" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round"/>
-        <path d="M20 6l2-2M20 6h-2" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
-  },
-  {
-    number: "05",
-    title: "Deep integrations",
-    headline: "All your context, in one place.",
-    body: "Draft connects to Slack, Linear, GitHub, Notion, and Google Docs — pulling in the context it needs to give you relevant, grounded answers. No more copy-pasting between tools.",
-    detail: "Slack · Linear · GitHub · Notion · Google Docs · Mixpanel (soon) · PostHog (soon)",
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <circle cx="14" cy="14" r="3" stroke="currentColor" strokeWidth="1.5"/>
-        <circle cx="5" cy="8" r="2.5" stroke="var(--color-accent)" strokeWidth="1.2"/>
-        <circle cx="23" cy="8" r="2.5" stroke="var(--color-accent)" strokeWidth="1.2"/>
-        <circle cx="5" cy="20" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
-        <circle cx="23" cy="20" r="2.5" stroke="currentColor" strokeWidth="1.2"/>
-        <path d="M7 9.5l5 3M21 9.5l-5 3M7.5 19l5-3M20.5 19l-5-3" stroke="var(--color-muted)" strokeWidth="1" strokeLinecap="round"/>
+        <path d="M6 14a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M22 14a8 8 0 0 1-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M14 6l-3-3 3-3" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M14 22l3 3-3 3" stroke="var(--color-accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="14" cy="14" r="2.5" fill="var(--color-accent)" opacity="0.3" stroke="var(--color-accent)" strokeWidth="1.2"/>
       </svg>
     ),
   },
@@ -181,7 +151,7 @@ export default function Features() {
               maxWidth: "400px",
             }}
           >
-            From idea to shipped. Faster.
+            One install. Permanent context.
           </h2>
 
           <p
@@ -194,8 +164,7 @@ export default function Features() {
               maxWidth: "340px",
             }}
           >
-            Five core capabilities that cover the full product lifecycle — from
-            the first rough thought to code running in production.
+            Three things Draft does — and does well. No bloat, no integrations required.
           </p>
         </div>
 

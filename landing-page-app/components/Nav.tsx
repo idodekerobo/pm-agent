@@ -6,36 +6,20 @@ import { usePostHog } from "posthog-js/react";
 import { EVENTS } from "@/lib/analytics";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
+const GITHUB_URL = "https://github.com/idodekerobo/draft-cli-plugin";
 const STORAGE_KEY = "draft_demo";
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [onboardingUrl, setOnboardingUrl] = useState(`${APP_URL}/onboarding`);
   const ph = usePostHog();
-  const getStartedCta = "Get started"
+  const installCta = "Install Plugin"
   const signInCta = "Sign in"
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Append demo_token to CTA if a demo session exists
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved?.demo_token) {
-        const params = new URLSearchParams({ demo_token: saved.demo_token });
-        if (saved.url) params.set("company_url", saved.url);
-        setOnboardingUrl(`${APP_URL}/onboarding?${params.toString()}`);
-      }
-    } catch {
-      // ignore
-    }
   }, []);
 
   return (
@@ -92,9 +76,7 @@ export default function Nav() {
         >
           {[
             { label: "Features", href: "#features" },
-            { label: "Integrations", href: "#integrations" },
-            // TODO: add Pricing link once pricing page is built
-            // { label: "Pricing", href: "#pricing" },
+            { label: "How it works", href: "#how-it-works" },
           ].map((link) => (
             <a
               key={link.label}
@@ -121,27 +103,16 @@ export default function Nav() {
           <a
             href={`${APP_URL}/auth/sign-in`}
             onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav', cta_text: signInCta })}
-            style={{
-              fontFamily: "var(--font-body)",
-              fontSize: "0.875rem",
-              color: "var(--color-muted)",
-              textDecoration: "none",
-              transition: "color 0.2s",
-              letterSpacing: "0.01em",
-            }}
-            onMouseEnter={(e) =>
-              ((e.target as HTMLElement).style.color = "var(--color-primary)")
-            }
-            onMouseLeave={(e) =>
-              ((e.target as HTMLElement).style.color = "var(--color-muted)")
-            }
+            style={{ display: "none" }}
           >
             {signInCta}
           </a>
 
           <a
-            href={onboardingUrl}
-            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav', cta_text: getStartedCta })}
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav', cta_text: installCta })}
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -166,7 +137,7 @@ export default function Nav() {
               (e.target as HTMLElement).style.transform = "translateY(0)";
             }}
           >
-            {getStartedCta}
+            {installCta}
           </a>
         </div>
 
@@ -228,11 +199,10 @@ export default function Nav() {
             gap: "1.25rem",
           }}
         >
-          {/* TODO: add "Pricing" once pricing page is built */}
-          {["Features", "Integrations"].map((label) => (
+          {[{ label: "Features", href: "#features" }, { label: "How it works", href: "#how-it-works" }].map(({ label, href }) => (
             <a
               key={label}
-              href={`#${label.toLowerCase()}`}
+              href={href}
               onClick={() => setMenuOpen(false)}
               style={{
                 color: "var(--color-muted)",
@@ -244,8 +214,10 @@ export default function Nav() {
             </a>
           ))}
           <a
-            href={onboardingUrl}
-            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav_mobile', cta_text: getStartedCta })}
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'nav_mobile', cta_text: installCta })}
             style={{
               display: "inline-block",
               padding: "0.75rem 1.5rem",
@@ -257,7 +229,7 @@ export default function Nav() {
               textAlign: "center",
             }}
           >
-            {getStartedCta}
+            {installCta}
           </a>
         </div>
       )}

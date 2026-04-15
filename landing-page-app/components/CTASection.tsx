@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
+const GITHUB_URL = "https://github.com/idodekerobo/draft-cli-plugin";
 
 export default function CTASection() {
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -117,8 +117,7 @@ export default function CTASection() {
             margin: "0 auto 3rem",
           }}
         >
-          Start writing better specs, shipping faster, and thinking more
-          clearly about your product. It takes less than five minutes to set up.
+          Stop re-explaining your product to Claude every session. Install Draft once — your full PM context loads automatically, every time.
         </p>
 
         <div
@@ -132,7 +131,9 @@ export default function CTASection() {
           }}
         >
           <a
-            href={`${APP_URL}/onboarding`}
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -161,7 +162,7 @@ export default function CTASection() {
               el.style.boxShadow = "none";
             }}
           >
-            Get started for free
+            Install the plugin
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -179,7 +180,7 @@ export default function CTASection() {
             letterSpacing: "0.04em",
           }}
         >
-          No credit card required · Set up in 5 minutes
+          Free · Open source · MIT License · No sign-up required
         </p>
       </div>
     </section>

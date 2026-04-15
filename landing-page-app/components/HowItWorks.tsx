@@ -5,23 +5,21 @@ import { useEffect, useRef } from "react";
 const steps = [
   {
     step: "01",
-    title: "Connect your stack",
-    body: "Link Draft to Slack, Linear, GitHub, Notion, and Google Docs in minutes. Draft pulls in context from where your team already works.",
+    title: "Install the plugin",
+    body: "One command from your terminal: claude plugin install draft. Or clone directly from GitHub. Free, open source, no sign-up required.",
+    code: "claude plugin install draft",
   },
   {
     step: "02",
-    title: "Describe what you're building",
-    body: "Tell Draft what you want to ship — in plain language. It asks clarifying questions and helps you think through the full scope before a single line of code is written.",
+    title: "Run /setup",
+    body: "Draft walks you through a short interview — what you're building, your priorities, your role. Takes 5 minutes. Writes structured context files to your workspace.",
+    code: "/setup",
   },
   {
     step: "03",
-    title: "Iterate on the plan",
-    body: "Draft produces a structured spec and strategy. Review it, push back, refine. It's a collaborative process — not a one-shot generation.",
-  },
-  {
-    step: "04",
-    title: "Orchestrate and ship",
-    body: "When you're ready, Draft hands off tasks to coding agents, tracks execution, and keeps the plan aligned with what's actually being built.",
+    title: "Build with context",
+    body: "Every Claude Code session now opens with your full PM brain loaded. Ask Draft anything — it already knows your product, your roadmap, and what you decided last week.",
+    code: null,
   },
 ];
 
@@ -47,6 +45,7 @@ export default function HowItWorks() {
 
   return (
     <section
+      id="how-it-works"
       ref={sectionRef}
       style={{
         padding: "7rem 2rem",
@@ -91,9 +90,9 @@ export default function HowItWorks() {
           maxWidth: "480px",
         }}
       >
-        Set up in minutes.
+        Install once.
         <span style={{ color: "var(--color-accent)", fontStyle: "italic" }}>
-          {" "}Ship in hours.
+          {" "}Always loaded.
         </span>
       </h2>
 
@@ -177,10 +176,37 @@ export default function HowItWorks() {
                 fontSize: "0.875rem",
                 color: "var(--color-muted)",
                 lineHeight: 1.7,
+                marginBottom: s.code ? "0.875rem" : 0,
               }}
             >
               {s.body}
             </p>
+
+            {s.code && (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.3rem 0.7rem",
+                  background: "rgba(200,148,59,0.07)",
+                  border: "1px solid rgba(200,148,59,0.2)",
+                  borderRadius: "6px",
+                }}
+              >
+                <span style={{ color: "var(--color-accent)", opacity: 0.6, fontSize: "0.6rem" }}>$</span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "0.7rem",
+                    color: "var(--color-accent)",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  {s.code}
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -4,34 +4,51 @@ import { useState, useEffect } from "react";
 import { usePostHog } from "posthog-js/react";
 import { EVENTS } from "@/lib/analytics";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.draftai.us";
-const STORAGE_KEY = "draft_demo";
+const GITHUB_URL = "https://github.com/idodekerobo/draft-cli-plugin";
 
-const CONNECTED_ITEMS = [
-  "CLAUDE.md loaded",
-  "GitHub connected",
-  "Linear connected",
-  "Slack connected",
+const CONTEXT_FILES = [
+  "product/index.md",
+  "priorities/index.md",
+  "company/index.md",
+  "memory/memory.md",
 ];
 
 export default function LiveDemo() {
-  const [signupUrl, setSignupUrl] = useState(`${APP_URL}/onboarding`);
   const ph = usePostHog();
+  const [visibleFiles, setVisibleFiles] = useState(0);
+  const [showMessage, setShowMessage] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+  const [typedText, setTypedText] = useState("");
 
+  const MESSAGE =
+    "Your homepage still leads with the team collaboration angle you deprioritized last quarter. Solo founders are landing and bouncing because the copy doesn't match what you're actually selling.";
+
+  // Staggered entrance: context files load, then message types in
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved?.demo_token) {
-        const params = new URLSearchParams({ demo_token: saved.demo_token });
-        if (saved.url) params.set("company_url", saved.url);
-        setSignupUrl(`${APP_URL}/onboarding?${params.toString()}`);
-      }
-    } catch {
-      // ignore
-    }
+    const fileTimers = CONTEXT_FILES.map((_, i) =>
+      setTimeout(() => setVisibleFiles(i + 1), 400 + i * 280)
+    );
+    const msgTimer = setTimeout(() => setShowMessage(true), 1800);
+    return () => {
+      fileTimers.forEach(clearTimeout);
+      clearTimeout(msgTimer);
+    };
   }, []);
+
+  // Typewriter for the message
+  useEffect(() => {
+    if (!showMessage) return;
+    let i = 0;
+    const tick = setInterval(() => {
+      i++;
+      setTypedText(MESSAGE.slice(0, i));
+      if (i >= MESSAGE.length) {
+        clearInterval(tick);
+        setTimeout(() => setShowActions(true), 300);
+      }
+    }, 18);
+    return () => clearInterval(tick);
+  }, [showMessage]);
 
   return (
     <div
@@ -90,73 +107,52 @@ export default function LiveDemo() {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "2rem 1.5rem",
-          gap: "1.75rem",
-          textAlign: "center",
+          padding: "1.25rem 1.25rem 1rem",
+          gap: "0.875rem",
+          overflowY: "hidden",
         }}
       >
-        {/* Agent badge */}
+        {/* Session init line */}
         <div
           style={{
-            display: "inline-flex",
-            alignItems: "baseline",
-            gap: "0.3rem",
-            padding: "0.3rem 0.875rem",
-            border: "1px solid var(--color-border-md)",
-            borderRadius: "100px",
-            background: "var(--color-surface-2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
           }}
         >
-          <span
-            style={{
-              fontFamily: "var(--font-display)",
-              fontSize: "0.85rem",
-              fontWeight: 500,
-              fontStyle: "italic",
-              color: "var(--color-accent)",
-            }}
-          >
-            Draft
-          </span>
           <span
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "0.62rem",
-              color: "var(--color-muted)",
+              color: "var(--color-faint)",
               letterSpacing: "0.06em",
-              textTransform: "uppercase",
             }}
           >
-            , PM Agent
+            &gt; session started · loading context
           </span>
         </div>
 
-        {/* Connected items */}
+        {/* Context files loading */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "0.5rem",
-            width: "100%",
-            maxWidth: "260px",
+            gap: "0.3rem",
           }}
         >
-          {CONNECTED_ITEMS.map((label) => (
+          {CONTEXT_FILES.map((file, i) => (
             <div
-              key={label}
+              key={file}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "0.625rem",
-                padding: "0.5rem 0.875rem",
-                background: "var(--color-surface-2)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "8px",
+                gap: "0.5rem",
+                opacity: i < visibleFiles ? 1 : 0,
+                transform: i < visibleFiles ? "translateX(0)" : "translateX(-6px)",
+                transition: "opacity 0.3s ease, transform 0.3s ease",
               }}
             >
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+              <svg width="8" height="8" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
                 <circle cx="8" cy="8" r="7" stroke="var(--color-accent-2)" strokeWidth="1.5" />
                 <path
                   d="M5 8l2 2 4-4"
@@ -169,16 +165,124 @@ export default function LiveDemo() {
               <span
                 style={{
                   fontFamily: "var(--font-mono)",
-                  fontSize: "0.68rem",
+                  fontSize: "0.62rem",
                   color: "var(--color-muted)",
                   letterSpacing: "0.04em",
                 }}
               >
-                {label}
+                {file}
               </span>
             </div>
           ))}
         </div>
+
+        {/* Draft message bubble */}
+        {showMessage && (
+          <div
+            style={{
+              marginTop: "0.5rem",
+              background: "var(--color-surface-2)",
+              border: "1px solid var(--color-border-md)",
+              borderRadius: "10px",
+              padding: "0.875rem 1rem",
+              animation: "fadeSlideUp 0.35s ease forwards",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                marginBottom: "0.625rem",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: "0.78rem",
+                  fontWeight: 500,
+                  fontStyle: "italic",
+                  color: "var(--color-accent)",
+                }}
+              >
+                Draft
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.58rem",
+                  color: "var(--color-faint)",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                }}
+              >
+                · PM Brain
+              </span>
+            </div>
+            <p
+              style={{
+                fontFamily: "var(--font-body)",
+                fontSize: "0.8rem",
+                color: "var(--color-primary)",
+                lineHeight: 1.6,
+                margin: 0,
+              }}
+            >
+              {typedText}
+              {typedText.length < MESSAGE.length && (
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: "2px",
+                    height: "0.85em",
+                    background: "var(--color-accent)",
+                    marginLeft: "1px",
+                    verticalAlign: "text-bottom",
+                    animation: "cursorBlink 0.8s step-end infinite",
+                  }}
+                />
+              )}
+            </p>
+          </div>
+        )}
+
+        {/* Quick-action chips */}
+        {showActions && (
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+              animation: "fadeSlideUp 0.3s ease forwards",
+            }}
+          >
+            {["Update landing page →", "Show me what's stale"].map((label) => (
+              <button
+                key={label}
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.62rem",
+                  color: "var(--color-accent)",
+                  background: "rgba(200,148,59,0.08)",
+                  border: "1px solid rgba(200,148,59,0.25)",
+                  borderRadius: "6px",
+                  padding: "0.3rem 0.7rem",
+                  cursor: "default",
+                  letterSpacing: "0.03em",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "rgba(200,148,59,0.15)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = "rgba(200,148,59,0.08)";
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* CTA footer */}
@@ -193,11 +297,13 @@ export default function LiveDemo() {
         }}
       >
         <a
-          href={signupUrl}
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={() =>
             ph?.capture(EVENTS.CTA_CLICKED, {
               cta_location: "hero_panel",
-              cta_text: "Start building free",
+              cta_text: "Install the plugin",
             })
           }
           style={{
@@ -224,7 +330,7 @@ export default function LiveDemo() {
             e.currentTarget.style.transform = "translateY(0)";
           }}
         >
-          Start building free
+          Install the plugin
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <path
               d="M3 8h10M9 4l4 4-4 4"
@@ -244,12 +350,14 @@ export default function LiveDemo() {
             textAlign: "center",
           }}
         >
-          Free to start · No credit card required
+          Free · Open source · No sign-up required
         </span>
       </div>
 
       <style>{`
         @keyframes livePulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.75)} }
+        @keyframes fadeSlideUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }
       `}</style>
     </div>
   );

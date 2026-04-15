@@ -7,44 +7,30 @@ import { EVENTS } from "@/lib/analytics";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "#";
 const STORAGE_KEY = "draft_demo";
 
+const GITHUB_URL = "https://github.com/idodekerobo/draft-cli-plugin";
+
 const BULLETS = [
   {
-    label: "Context.",
-    text: "Import your CLAUDE.md, GitHub repos, and AI memory in one click.",
+    label: "Install.",
+    text: "One command: claude plugin install draft. Free, open source, no sign-up.",
   },
   {
-    label: "Execute.",
-    text: "Ship specs as PRs. No copy-paste. No context switching.",
+    label: "Setup.",
+    text: "Run /setup once. Draft interviews you and builds your structured PM brain.",
   },
   {
-    label: "Slack.",
-    text: "Add Draft to any Slack channel — it reads and responds like a new IC.",
+    label: "Load.",
+    text: "Every session opens with your full product context — automatically.",
   },
   {
-    label: "Loop.",
-    text: "Draft tracks what ships. Planning and building stay connected.",
+    label: "Think.",
+    text: "PRDs, strategy reviews, tradeoffs. Draft already knows your product.",
   },
 ];
 
 export default function DemoHeroLeft() {
-  const [onboardingUrl, setOnboardingUrl] = useState(`${APP_URL}/onboarding`);
   const ph = usePostHog();
-  const ctaText = "Start building free"
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (saved?.demo_token) {
-        const params = new URLSearchParams({ demo_token: saved.demo_token });
-        if (saved.url) params.set("company_url", saved.url);
-        setOnboardingUrl(`${APP_URL}/onboarding?${params.toString()}`);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
+  const ctaText = "Install the plugin"
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
@@ -81,7 +67,7 @@ export default function DemoHeroLeft() {
             textTransform: "uppercase",
           }}
         >
-          For PM-Builders
+          For PM-Builders · Open Source
         </span>
       </div>
 
@@ -123,8 +109,9 @@ export default function DemoHeroLeft() {
           maxWidth: "380px",
         }}
       >
-        Draft sits between your product decisions and what actually ships —
-        connected to GitHub, Linear, PostHog, Notion, and more.
+        Draft gives Claude Code a persistent PM brain. Run{" "}
+        <span style={{ fontFamily: "var(--font-mono)", color: "var(--color-accent)", fontSize: "0.9em" }}>/setup</span>{" "}
+        once — every session starts with your full product context, loaded automatically.
       </p>
 
       {/* Bullets */}
@@ -176,7 +163,9 @@ export default function DemoHeroLeft() {
         style={{ display: "flex", flexDirection: "column", gap: "0.625rem", alignItems: "flex-start" }}
       >
         <a
-          href={onboardingUrl}
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           onClick={() => ph?.capture(EVENTS.CTA_CLICKED, { cta_location: 'hero', cta_text: ctaText })}
           style={{
             display: "inline-flex",
@@ -225,7 +214,7 @@ export default function DemoHeroLeft() {
             letterSpacing: "0.05em",
           }}
         >
-          Free to start · No credit card required
+          Free · Open source · No sign-up required
         </span>
       </div>
 

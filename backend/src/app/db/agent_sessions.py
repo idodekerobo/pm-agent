@@ -15,6 +15,10 @@ def create_agent_session(
     initiated_by: str = "user",
     display_name: str | None = None,
     session_id: str | None = None,
+    execution_environment: str = "cloud",
+    provider: str = "openai",
+    provider_session_id: str | None = None,
+    workspace_path: str | None = None,
 ) -> str:
     """
     Creates a new agent session tied to a project.
@@ -30,13 +34,19 @@ def create_agent_session(
         "is_pinned": is_pinned,
         "initiated_by": initiated_by,
         "last_read_at": datetime.now(timezone.utc).isoformat(),
+        "execution_environment": execution_environment,
+        "provider": provider,
     }
+    if provider_session_id is not None:
+        insert_payload["provider_session_id"] = provider_session_id
     if session_id is not None:
         insert_payload["id"] = session_id
     if display_name is not None:
         insert_payload["display_name"] = display_name
     if external_thread_id is not None:
         insert_payload["external_thread_id"] = external_thread_id
+    if workspace_path is not None:
+        insert_payload["workspace_path"] = workspace_path
 
     new_session = (
         supabase.table("agent_sessions")
@@ -79,7 +89,7 @@ def find_session_by_thread_id(
     return result.data[0]["id"] if result.data else None
 
 
-_PATCHABLE_SESSION_FIELDS = {"display_name", "is_pinned"}
+_PATCHABLE_SESSION_FIELDS = {"display_name", "is_pinned", "workspace_path"}
 
 
 def update_session_fields(

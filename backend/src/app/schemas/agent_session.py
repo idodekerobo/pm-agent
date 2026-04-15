@@ -19,6 +19,10 @@ class AgentSessionBase(BaseModel):
     is_pinned: bool = False
     initiated_by: str = "user"
     last_read_at: Optional[datetime] = None
+    execution_environment: str  # 'cloud' | 'local_bridge'
+    provider: str               # 'openai' | 'claude_code' | 'openai_codex'
+    provider_session_id: Optional[str] = None
+    workspace_path: Optional[str] = None
 
 
 class AgentSessionCreate(AgentSessionBase):

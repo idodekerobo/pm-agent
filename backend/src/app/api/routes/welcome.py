@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 
 from agents import Agent, Runner, ItemHelpers
 
@@ -93,6 +93,7 @@ class ProfileData(BaseModel):
 
 class WelcomeSessionRequest(BaseModel):
     profile: ProfileData
+    mode: Optional[Literal["local"]] = None
 
 
 class WelcomeSessionResponse(BaseModel):
@@ -153,6 +154,48 @@ def _format_demo_transcript(items: list[dict]) -> str:
             if text:
                 lines.append(f"Agent: {text}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Local mode welcome template
+# ---------------------------------------------------------------------------
+
+def _format_local_welcome(p: ProfileData) -> str:
+    """Open the setup interview for local (bridge) users.
+
+    Asks Q1 of the /setup interview directly. When the user responds,
+    the bridge routes their answer to Claude Code which continues the
+    interview following the /setup skill instructions, then writes
+    structured context to ~/.draft/workspace/.
+
+    No LLM call — written synchronously so the message is in Supabase
+    before the user is redirected to /chat.
+    """
+    # Reference scrape data so the user knows Draft already has some context
+    # and doesn't feel they need to over-explain from scratch.
+    context_note = ""
+    if p.onboarding_scrape_observations:
+        first_line = p.onboarding_scrape_observations.strip().splitlines()[0].strip()
+        if first_line and len(first_line) > 10:
+            truncated = first_line[:100] + ("…" if len(first_line) > 100 else "")
+            context_note = (
+                f"\n\nI picked up some context from your onboarding "
+                f"({truncated}) — but I want to hear it in your words."
+            )
+    elif p.company_url:
+        context_note = (
+            f"\n\nI saw you're working on something at {p.company_url} "
+            f"— tell me about it."
+        )
+
+    return (
+        "I'm Draft, your PM agent. I keep context across sessions so I get sharper the more "
+        "we work together — but first I need to load my PM brain. "
+        "A few quick questions (2–3 min) and we're set."
+        f"{context_note}\n\n"
+        "**What are you building, and who's it for?**\n\n"
+        "_Type **skip** to jump straight in — you can always run `/setup` later._"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -323,15 +366,24 @@ async def create_welcome_session(
             source_platform="demo",
         )
 
-    # Generate the welcome message in the background (after response is sent)
-    background_tasks.add_task(
-        generate_welcome_message,
-        user_id=user_id,
-        welcome_session_id=welcome_session_id,
-        profile=req.profile,
-        demo_items=demo_items,
-        company_url=company_url,
-    )
+    # Generate the welcome message — local mode uses a template written synchronously;
+    # cloud mode fires an LLM call in the background after the response is sent.
+    if req.mode == "local":
+        append_conversation_item(
+            supabase,
+            agent_session_id=welcome_session_id,
+            item=make_assistant_item(_format_local_welcome(req.profile)),
+            source_platform="background",
+        )
+    else:
+        background_tasks.add_task(
+            generate_welcome_message,
+            user_id=user_id,
+            welcome_session_id=welcome_session_id,
+            profile=req.profile,
+            demo_items=demo_items,
+            company_url=company_url,
+        )
 
     # Auto-name the demo session from its first user message
     if demo_session_id and demo_items:

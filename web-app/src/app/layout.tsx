@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/lib/AuthContext";
 import { BillingProvider } from "@/lib/BillingContext";
+import { BridgeProvider } from "@/lib/BridgeContext";
 import { IntegrationsProvider } from "@/lib/IntegrationsContext";
 import { PostHogProvider, PostHogUserSync } from "@/lib/PostHogProvider";
 import "./globals.css";
@@ -50,7 +51,9 @@ export default function RootLayout({
             <PostHogUserSync />
             <BillingProvider>
               <IntegrationsProvider>
-                {children}
+                <BridgeProvider>
+                  {children}
+                </BridgeProvider>
               </IntegrationsProvider>
             </BillingProvider>
           </AuthProvider>

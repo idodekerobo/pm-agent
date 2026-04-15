@@ -1,4 +1,6 @@
 plans/
+research/interview-notes-transcripts/
+research/customer-development.md
 .env.*
 .DS_Store
 __pycache__
@@ -17,3 +19,7 @@ dump.rdb
 .cursor/
 .claude/CLAUDE.md
 .gstack/
+
+# bridge build artifacts
+bridge/dist/
+bridge/_build/

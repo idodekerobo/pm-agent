@@ -19,6 +19,25 @@ run-landing:
 	cd landing-page-app && npm run dev -- --port 3001
 
 # Runs at localhost:9181
+install-bridge:
+	cd bridge && uv sync && uv run --env-file .env.local draft-bridge install
+
+uninstall-bridge:
+	cd bridge && uv run --env-file .env.local draft-bridge uninstall
+
+purge-bridge:
+	cd bridge && uv run --env-file .env.local draft-bridge uninstall --purge
+
+run-bridge:
+	cd bridge && uv run --env-file .env.local draft-bridge start --workspace ..
+
+run-bridge-auth:
+	cd bridge && uv run --env-file .env.local draft-bridge auth
+
+run-bridge-reauth:
+	cd bridge && uv run --env-file .env.local draft-bridge auth --reauth
+
+# Runs at localhost:9181
 run-rq-dashboard:
 	cd backend && uv run --env-file .env.local sh -c 'rq-dashboard --redis-url "$$REDIS_URL" --port 9181'
 
@@ -44,6 +63,7 @@ stop:
 	-lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 	-lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 	-lsof -ti:3001 | xargs kill -9 2>/dev/null || true
+	-lsof -ti:7349 | xargs kill -9 2>/dev/null || true
 	@echo "All services stopped."
 
 restart: stop

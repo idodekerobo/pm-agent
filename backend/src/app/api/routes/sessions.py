@@ -10,13 +10,21 @@ from app.db.conversations import get_conversation_items
 router = APIRouter()
 
 
+class CreateSessionRequest(BaseModel):
+    session_id: str | None = None
+    execution_environment: str = "cloud"
+    provider: str = "openai"
+    workspace_path: str | None = None
+
+
 class UpdateSessionRequest(BaseModel):
     display_name: str | None = None
     is_pinned: bool | None = None
+    workspace_path: str | None = None
 
 
 @router.post("/sessions")
-def create_session(user_id: str = Depends(auth_protect_route)):
+def create_session(body: CreateSessionRequest, user_id: str = Depends(auth_protect_route)):
     supabase = get_supabase()
 
     user_row = (
@@ -44,6 +52,10 @@ def create_session(user_id: str = Depends(auth_protect_route)):
         user_id=user_id,
         project_id=project_id,
         workspace_id=workspace_id,
+        session_id=body.session_id,
+        execution_environment=body.execution_environment,
+        provider=body.provider,
+        workspace_path=body.workspace_path,
     )
 
     return {"agent_session_id": agent_session_id, "workspace_id": workspace_id}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
+import { useBridge } from '@/lib/BridgeContext';
 import { createClient } from '@/lib/supabaseClient';
 import {
   BASE_MEMORY_PROMPT,
@@ -71,6 +72,7 @@ function StepIndicator({ current }: { current: Step }) {
 
 function OnboardingPageInner() {
   const [step, setStep] = useState<Step>(1);
+  const { bridgeStatus, bridgeUrl } = useBridge();
   const searchParams = useSearchParams();
   const demoToken = searchParams.get('demo_token');
   const demoCompanyUrl = searchParams.get('company_url');
@@ -226,6 +228,7 @@ function OnboardingPageInner() {
         ph?.capture(EVENTS.INTEGRATION_CONNECTED, { provider: event.data.provider, source: 'onboarding' });
         setIntegrations((prev) => ({ ...prev, [event.data.provider]: true }));
         setConnectingProvider(null);
+        fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       }
     };
     window.addEventListener('message', handleMessage);
@@ -480,20 +483,35 @@ function OnboardingPageInner() {
         body: JSON.stringify(profileSnapshot),
       });
 
-      // Create welcome session
+      const isLocalMode = bridgeStatus === 'connected';
+
+      // Seed workspace context files if bridge is connected — fire-and-forget.
+      // If this fails, bridge startup will retry seeding from the saved profile.
+      if (isLocalMode) {
+        fetch(`${bridgeUrl}/seed-context`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(profileSnapshot),
+        }).catch(() => {});
+      }
+
+      const profileFields = {
+        full_name: fullName,
+        role: resolvedRole,
+        company_url: companyUrl.replace(/^https?:\/\//, ''),
+        onboarding_scrape_observations: scrapeObservationsRef.current,
+        onboarding_scrape_correction: correctionSubmitted ? correction : '',
+        current_focus: currentFocus,
+        daily_activities: dailyActivities,
+      };
+
+      // Create welcome session — local mode uses a template message (no cloud LLM call)
       const res = await fetch(`${apiBase}/welcome-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({
-          profile: {
-            full_name: fullName,
-            role: resolvedRole,
-            company_url: companyUrl.replace(/^https?:\/\//, ''),
-            onboarding_scrape_observations: scrapeObservationsRef.current,
-            onboarding_scrape_correction: correctionSubmitted ? correction : '',
-            current_focus: currentFocus,
-            daily_activities: dailyActivities,
-          },
+          profile: profileFields,
+          ...(isLocalMode ? { mode: 'local' } : {}),
         }),
       });
 
@@ -540,6 +558,7 @@ function OnboardingPageInner() {
       });
       if (!res.ok) throw new Error();
       setIntegrations((prev) => ({ ...prev, 'claude-code': true }));
+      fetch(`${bridgeUrl}/refresh-tokens`, { method: 'POST' }).catch(() => {});
       setByokExpanded(false);
       setByokToken('');
     } catch {

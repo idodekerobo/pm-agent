@@ -129,6 +129,8 @@ async def get_integration_tokens(authorization: str = Header(...)):
         .execute()
     ).data or []
 
+    logger.info("integration-tokens: user_id=%r found_providers=%r", user_id, [r["provider"] for r in rows])
+
     connected_providers = [row["provider"] for row in rows]
     tokens: dict[str, str] = {}
 
@@ -139,9 +141,9 @@ async def get_integration_tokens(authorization: str = Header(...)):
         try:
             token = await get_valid_token(supabase, user_id=user_id, provider=provider)
             tokens[env_var] = token
-        except Exception:
+        except Exception as exc:
             # Skip unavailable integrations — don't fail the whole startup
-            logger.warning("Could not fetch token for provider %r, skipping.", provider)
+            logger.warning("Could not fetch token for provider %r (env_var=%r): %s", provider, env_var, exc)
 
     return tokens
 
@@ -201,7 +203,6 @@ async def bridge_ws_relay(websocket: WebSocket, token: str):
 
     ping_task = asyncio.create_task(_ping_loop(websocket))
     try:
-        # Drain inbound messages (bridge acks / pongs) — no-op for now
         while True:
             raw = await websocket.receive_text()
             try:

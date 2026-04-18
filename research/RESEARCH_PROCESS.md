@@ -73,11 +73,27 @@ From the materials, extract:
 - Pick 2–3 to prioritize. You can't test all of them in 30 minutes.
 
 ### 3. Generate tailored questions
-- Start from the Interview Template in `customer-development.md`
-- Reframe generic questions using the person's specific context (their company, their role, their prior comments)
-- For warm calls (prior Slack/DM conversation): skip baseline questions, go straight to threads they've already shown energy on
-- **Always include the referral question as the last question:** _"Is there anyone else you think I should talk to — someone with a strong take on this, positive or negative?"_ Referrals compound. Never skip this.
-- Evaluate every question against the criteria below before adding it
+
+Start from the Interview Template in `research/customer-development.md`. Reframe each question using the person's specific context before the call — never read them verbatim.
+
+**Question routing by profile — which questions to prioritize:**
+
+| Profile | Lead with | Deprioritize | Notes |
+|---|---|---|---|
+| Product-primary Claude Code user (primary ICP) | Q2 (session start ritual), Q3 (re-entry), Q5 (drift/pivot), Q7 (sharing) | Q1 follow-up (they're already on Claude Code — skip the discovery layer) | This is the core ICP. Prioritize open questions: H10, H11, UC1 proof (Q8) |
+| Technical solo founder | Q1 (full workflow), Q3 (re-entry), Q5 (drift), Q9 (time sinks) | Q7 (sharing — they're solo, adapt to hiring hypothetical) | High pain across all JTBDs. Drift is likely the sharpest surface. |
+| Product-primary, not yet on Claude Code | Q1 (workflow), Q4 (where decisions live), Q6 (normalized pain) | Q2, Q3, Q5, Q7 (don't assume Claude Code usage — establish baseline first) | Don't pitch Claude Code. Understand their current system and what breaks. |
+| Warm call (prior conversation exists) | Go directly to threads they've already shown energy on — use "Threads to pull" section | Q1, Q2 (skip baseline — they've already established context) | Prior language is gold. Mirror it back and probe deeper. |
+| AI consultant / fractional PM | Q4 (where decisions live across clients), Q7 (sharing across engagements) | H3 probes (they're already AI-forward) | Treat as a window into their clients' pain, not their own |
+| Wrong segment / edge case | Don't restructure — run a shorter version and close with the referral question | Everything that depends on them being in-segment | Still capture vocabulary, referrals, and open questions |
+
+**Call length prioritization:**
+- **30-minute call:** Q2, Q3, Q6, Q10 minimum. Q5 if the conversation is flowing. Stop before Q8 unless they've fully described their workflow.
+- **60-minute call:** Full set. Leave room for screen shares or demos if they offer. Q8 is most valuable in a longer session.
+
+Always include Q10 (referral question). Ask it early if time is running short — don't let it get cut off.
+
+Evaluate every question against the criteria in the Question Evaluation Criteria section before adding it to your pre-call list.
 
 ### 4. Generate "listen for" notes per question
 For each question, write one or two lines on:

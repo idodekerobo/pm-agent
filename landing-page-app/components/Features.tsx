@@ -23,7 +23,7 @@ const features = [
     title: "PM commands, built in",
     headline: "A full PM toolkit, one command away.",
     body: "Ask Draft to write a PRD, review your strategy, stress-test priorities, or surface what's stale. It already knows your product — grounded answers land in seconds, not meetings.",
-    detail: "/draft:prd · /draft:strategy · /draft:review · /draft:priorities",
+    detail: "PRDs · Strategy reviews · Priority calls · Tradeoff analysis",
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <path d="M14 4C8.477 4 4 8.477 4 14s4.477 10 10 10 10-4.477 10-10S19.523 4 14 4z" stroke="currentColor" strokeWidth="1.5"/>
@@ -34,10 +34,10 @@ const features = [
   },
   {
     number: "03",
-    title: "Context that stays current",
-    headline: "Your PM brain evolves as your product does.",
-    body: "As your strategy shifts, update your context in one command. Draft tracks what changes and why — so the next session reflects where you actually are, not where you were three weeks ago.",
-    detail: "Version-controlled · /draft:update · Decision log · Always fresh",
+    title: "No more context rot",
+    headline: "Claude always knows what just happened.",
+    body: "Context files go stale. You ship something, change direction, drop a bet — and Claude is still reasoning from a version of your product that no longer exists. Draft logs every meaningful change in an append-only ledger. The latest decisions load in every session automatically, even when your full context files haven't been touched in weeks.",
+    detail: "Append-only log · Decision ledger · Temporal drift solved · Always current",
     icon: (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <path d="M6 14a8 8 0 0 1 8-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>

@@ -4,22 +4,22 @@ import { useEffect, useRef } from "react";
 
 const personas = [
   {
-    label: "01 — Solo PMs",
-    headline: "The leverage of a full product team.",
-    body: "You're one person doing the work of five. Draft handles the docs, strategy reviews, and all the comms overhead that pulls you away from actual product work — so you stay focused on the decisions that only you can make.",
-    tag: "Your PM brain, amplified",
+    label: "01 — Co-founders",
+    headline: "Own product. Keep pace with your engineer.",
+    body: "You're the product brain — strategy, specs, prioritization — while your co-founder ships. The problem is Claude Code starts blank every session. Draft gives it persistent memory so every session starts with your full context loaded. No re-briefing. Just product work.",
+    tag: "Co-founder, product mode",
   },
   {
-    label: "02 — Teams without a PM",
-    headline: "Move with product clarity. Minus the overhead.",
-    body: "Engineering teams shouldn't be blocked by missing specs, unclear priorities, or waiting on someone to relay decisions. Draft gives your team structured plans, keeps everyone aligned as things evolve, and kills the status update overhead — no dedicated PM required.",
-    tag: "No PM? No problem.",
+    label: "02 — Heads of Product",
+    headline: "Set the source of truth. Once.",
+    body: "You're the curator — the one person who owns the product context everyone else operates from. Draft is built for that role. Run /setup once, and your strategy, decisions, and priorities are structured, versioned, and loaded automatically. Your team pulls from what you set. You stop re-explaining it.",
+    tag: "Curator mode",
   },
   {
-    label: "03 — Product teams",
-    headline: "Strategy to execution, without the gap.",
-    body: "Bring your roadmap, codebase context, and team tools into one place. Draft bridges the gap between high-level strategy and day-to-day execution, keeping the whole team aligned.",
-    tag: "Full-team acceleration",
+    label: "03 — Solo founders",
+    headline: "You're doing all the jobs. Draft covers the PM one.",
+    body: "Product, engineering, GTM — it's all you. Context loss hits hardest when you're switching between all three in the same day. Draft keeps your product brain intact across every Claude session so when you're back in PM mode, you're not starting from scratch.",
+    tag: "Full-stack founder",
   },
 ];
 
@@ -90,7 +90,7 @@ export default function ForWho() {
           maxWidth: "500px",
         }}
       >
-        Built for the builders who ship.
+        Built for the product mind behind the code.
       </h2>
 
       {/* Cards grid */}

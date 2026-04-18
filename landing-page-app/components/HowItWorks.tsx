@@ -6,19 +6,22 @@ const steps = [
   {
     step: "01",
     title: "Install the plugin",
-    body: "One command from your terminal: claude plugin install draft. Or clone directly from GitHub. Free, open source, no sign-up required.",
-    code: "claude plugin install draft",
+    body: "Two commands from your terminal. Works on Claude Code and Codex CLI. Free, open source, no sign-up required.",
+    code: [
+      "/plugin marketplace add idodekerobo/draft-cli-plugin",
+      "/plugin install draft",
+    ],
   },
   {
     step: "02",
     title: "Run /setup",
     body: "Draft walks you through a short interview — what you're building, your priorities, your role. Takes 5 minutes. Writes structured context files to your workspace.",
-    code: "/setup",
+    code: ["/draft:setup"],
   },
   {
     step: "03",
     title: "Build with context",
-    body: "Every Claude Code session now opens with your full PM brain loaded. Ask Draft anything — it already knows your product, your roadmap, and what you decided last week.",
+    body: "Every session now opens with your full PM brain loaded. Ask Draft anything — it already knows your product, your roadmap, and what you decided last week.",
     code: null,
   },
 ];
@@ -183,28 +186,33 @@ export default function HowItWorks() {
             </p>
 
             {s.code && (
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  padding: "0.3rem 0.7rem",
-                  background: "rgba(200,148,59,0.07)",
-                  border: "1px solid rgba(200,148,59,0.2)",
-                  borderRadius: "6px",
-                }}
-              >
-                <span style={{ color: "var(--color-accent)", opacity: 0.6, fontSize: "0.6rem" }}>$</span>
-                <span
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: "0.7rem",
-                    color: "var(--color-accent)",
-                    letterSpacing: "0.02em",
-                  }}
-                >
-                  {s.code}
-                </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                {s.code.map((cmd) => (
+                  <div
+                    key={cmd}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                      padding: "0.3rem 0.7rem",
+                      background: "rgba(200,148,59,0.07)",
+                      border: "1px solid rgba(200,148,59,0.2)",
+                      borderRadius: "6px",
+                    }}
+                  >
+                    <span style={{ color: "var(--color-accent)", opacity: 0.6, fontSize: "0.6rem" }}>$</span>
+                    <span
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "0.7rem",
+                        color: "var(--color-accent)",
+                        letterSpacing: "0.02em",
+                      }}
+                    >
+                      {cmd}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

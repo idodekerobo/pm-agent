@@ -13,7 +13,8 @@
       "WebFetch(domain:app.posthog.com)",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:longform.asmartbear.com)",
-      "WebFetch(domain:developers.openai.com)"
+      "WebFetch(domain:developers.openai.com)",
+      "WebFetch(domain:cursor.com)"
     ]
   }
 }

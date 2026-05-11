@@ -74,7 +74,13 @@ From the materials, extract:
 
 ### 3. Generate tailored questions
 
-Start from the Interview Template in `research/customer-development.md`. Reframe each question using the person's specific context before the call — never read them verbatim.
+Start from the `## Interview Template` section in `research/customer-development.md`. Reframe each question using the person's specific context before the call — never read them verbatim.
+
+**Pre-question checklist — run this before writing a single question:**
+
+1. **Check hypothesis status first.** Read `## Hypotheses Table` in `research/customer-development.md`. List only the hypotheses with status `Untested` or `Partially Confirmed` — these are the only ones worth directly probing. For `Confirmed` hypotheses: one tight confirmation question max; don't build exploratory questions around them.
+2. **Write the baseline question before routing.** Q2 is always a tool-stack establishment question: *"What AI tools are you actually using for your PM work — not the product you're building, but how you do the job itself?"* This is a routing gate, not a hypothesis probe. Write it before any hypothesis-specific question — the answer determines which branch of the routing table applies for everything that follows.
+3. **Map every remaining question to an open hypothesis or open question.** For each question slot, name the hypothesis it tests and any condition on when to ask it (e.g., "if AI-active → H4 probe; if AI-light → H2/H10 probe"). Also check `## Open Questions (tracker)` for any 🔴 unanswered questions this person could address. If a question doesn't map to either, move it to "If extra time."
 
 **Question routing by profile — which questions to prioritize:**
 

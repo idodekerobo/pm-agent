@@ -14,7 +14,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:longform.asmartbear.com)",
       "WebFetch(domain:developers.openai.com)",
-      "WebFetch(domain:cursor.com)"
+      "WebFetch(domain:cursor.com)",
+      "WebFetch(domain:openai.github.io)",
+      "WebFetch(domain:www.google.com)",
+      "WebFetch(domain:docs.anthropic.com)"
     ]
   }
 }

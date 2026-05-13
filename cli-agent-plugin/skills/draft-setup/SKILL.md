@@ -17,13 +17,227 @@ The goal is **derived context, not transcribed answers** — synthesize what the
 
 ## Before starting
 
-Check whether context already exists:
+### Profile detection (first-time users only)
+
+Check whether a profile is already configured:
+
+```bash
+python3 -c "
+from pathlib import Path
+active_file = Path.home() / '.draft' / 'active-profile'
+if active_file.exists() and active_file.read_text().strip():
+    print('has_profile')
+else:
+    print('no_profile')
+"
+```
+
+- **If `has_profile`**: skip this section and go directly to the context check below.
+- **If `no_profile`** (first-time user): ask for a profile name before the interview:
+
+  Use the **AskUserQuestion** tool to ask:
+  > "What should we call this workspace? (Default: `<cwd-slug>` — based on your current directory)"
+
+  Derive the CWD slug first, then ask:
+  ```bash
+  python3 -c "
+  import os, re
+  cwd = os.path.basename(os.getcwd())
+  slug = cwd.lower()
+  slug = re.sub(r'[\s_]+', '-', slug)
+  slug = re.sub(r'[^a-z0-9-]', '', slug)
+  slug = slug[:40].strip('-') or 'default'
+  print(slug)
+  "
+  ```
+
+  Wait for the user's response. If they accept the default, use the CWD slug. Otherwise use their typed name (apply the same slug transformation).
+
+  Then create the profile directory and set active-profile:
+  ```bash
+  python3 - <<'PYEOF'
+  import shutil
+  from pathlib import Path
+
+  name = "<chosen-slug>"
+  draft_global = Path.home() / ".draft"
+  base = draft_global / "workspaces" / name
+  personal = draft_global / "personal"
+  old_ws = draft_global / "workspace"
+
+  # Detect whether an old single-workspace exists to migrate from.
+  # Guard: treat symlinks as manual setups — do not auto-migrate.
+  migrating = old_ws.exists() and not old_ws.is_symlink()
+
+  # ── Create workspace directory structure ──────────────────────────────────
+  # Always create the standard dirs first. Migration will populate them;
+  # net-new users get blank stubs below.
+  for subdir in [
+      base / "context" / "company" / "log",
+      base / "context" / "product" / "log",
+      base / "context" / "team" / "log",
+      base / "context" / "priorities" / "log",
+      base / "context" / "decisions",
+      base / "docs",
+      base / "config",
+  ]:
+      subdir.mkdir(parents=True, exist_ok=True)
+
+  if migrating:
+      # ── Migrate from old ~/.draft/workspace/ ──────────────────────────────
+      migrated = []
+
+      # Context index files + log entries for all dims present in old workspace
+      old_ctx = old_ws / "context"
+      if old_ctx.exists():
+          for dim_dir in old_ctx.iterdir():
+              if not dim_dir.is_dir():
+                  continue
+              dim = dim_dir.name
+              new_dim = base / "context" / dim
+              new_dim.mkdir(parents=True, exist_ok=True)
+              idx = dim_dir / "index.md"
+              if idx.exists():
+                  shutil.copy2(idx, new_dim / "index.md")
+                  migrated.append(f"context/{dim}/index.md")
+              log_dir = dim_dir / "log"
+              if log_dir.exists():
+                  new_log = new_dim / "log"
+                  new_log.mkdir(parents=True, exist_ok=True)
+                  for f in log_dir.iterdir():
+                      if f.is_file():
+                          shutil.copy2(f, new_log / f.name)
+                  migrated.append(f"context/{dim}/log/ ({len(list(log_dir.iterdir()))} entries)")
+          tensions = old_ctx / "tensions.md"
+          if tensions.exists():
+              shutil.copy2(tensions, base / "context" / "tensions.md")
+              migrated.append("context/tensions.md")
+
+      # Decisions
+      old_decisions = old_ws / "context" / "decisions"
+      if old_decisions.exists():
+          new_decisions = base / "context" / "decisions"
+          for f in old_decisions.iterdir():
+              if f.is_file():
+                  shutil.copy2(f, new_decisions / f.name)
+          migrated.append(f"context/decisions/ ({len(list(old_decisions.iterdir()))} files)")
+
+      # Research
+      old_research = old_ws / "context" / "research"
+      if old_research.exists():
+          new_research = base / "context" / "research"
+          new_research.mkdir(parents=True, exist_ok=True)
+          for f in old_research.iterdir():
+              if f.is_file():
+                  shutil.copy2(f, new_research / f.name)
+          migrated.append(f"context/research/ ({len(list(old_research.iterdir()))} files)")
+
+      # Docs — recursive, skip .DS_Store and .gitkeep
+      old_docs = old_ws / "docs"
+      if old_docs.exists():
+          for item in old_docs.rglob("*"):
+              if item.is_file() and item.name not in (".DS_Store", ".gitkeep"):
+                  rel = item.relative_to(old_docs)
+                  dest = base / "docs" / rel
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(item, dest)
+          migrated.append("docs/")
+
+      # Config (collaboration.md, local.md — preserves team sharing setup)
+      old_config = old_ws / "config"
+      if old_config.exists():
+          for f in old_config.iterdir():
+              if f.is_file():
+                  shutil.copy2(f, base / "config" / f.name)
+          migrated.append("config/")
+
+      # Integration skills (.claude/skills/)
+      old_skills = old_ws / ".claude" / "skills"
+      if old_skills.exists():
+          new_skills = base / ".claude" / "skills"
+          shutil.copytree(old_skills, new_skills, dirs_exist_ok=True)
+          migrated.append(".claude/skills/")
+
+      # Brainstorm sessions
+      old_brainstorm = old_ws / "brainstorm-sessions"
+      if old_brainstorm.exists():
+          new_brainstorm = base / "brainstorm-sessions"
+          shutil.copytree(old_brainstorm, new_brainstorm, dirs_exist_ok=True)
+          migrated.append("brainstorm-sessions/")
+
+      print(f"Migrated from ~/.draft/workspace/ to profile '{name}':")
+      for item in migrated:
+          print(f"  ✓ {item}")
+
+  else:
+      # ── Net-new user: create blank context stubs ───────────────────────────
+      for dim in ["company", "product", "team", "priorities"]:
+          idx = base / "context" / dim / "index.md"
+          idx.write_text(f"---\nname: {dim}\ndescription: >\n  No information recorded yet.\nlast_updated: \"\"\nsource: \"\"\n---\n")
+      (base / "context" / "tensions.md").write_text(
+          "# Tensions\n\nActive contradictions and inconsistencies noticed across context dimensions.\n"
+      )
+      (base / "docs" / ".gitkeep").touch()
+      print(f"Profile '{name}' created (fresh workspace).")
+
+  # ── Global personal layer (~/.draft/personal/) ────────────────────────────
+  # Priority: migrate real content from old workspace if available.
+  # Only write blank stubs if there is truly nothing to migrate.
+  personal.mkdir(parents=True, exist_ok=True)
+  (personal / "user").mkdir(parents=True, exist_ok=True)
+  (personal / "wip").mkdir(parents=True, exist_ok=True)
+
+  def has_real_content(path):
+      if not path.exists(): return False
+      text = path.read_text()
+      return "No information recorded yet" not in text and len(text.strip()) > 100
+
+  old_personal = old_ws / "personal" if migrating else None
+  old_mem = old_personal / "memory.md" if old_personal else None
+  old_user = old_personal / "user" / "index.md" if old_personal else None
+
+  mem_dest = personal / "memory.md"
+  user_dest = personal / "user" / "index.md"
+
+  if old_mem and has_real_content(old_mem) and not has_real_content(mem_dest):
+      shutil.copy2(old_mem, mem_dest)
+      print("  ✓ personal/memory.md migrated to ~/.draft/personal/")
+  elif not mem_dest.exists():
+      mem_dest.write_text(
+          "---\nname: memory\ndescription: Vocabulary, working preferences, and non-obvious patterns.\nlast_updated: \"\"\nsource: \"\"\n---\n\n## Vocabulary\n\n## Preferences\n\n## Goals\n\n## Patterns\n"
+      )
+
+  if old_user and has_real_content(old_user) and not has_real_content(user_dest):
+      shutil.copy2(old_user, user_dest)
+      print("  ✓ personal/user/index.md migrated to ~/.draft/personal/")
+  elif not user_dest.exists():
+      user_dest.write_text(
+          "---\nname: user\ndescription: >\n  No information recorded yet.\nlast_updated: \"\"\nsource: \"\"\n---\n"
+      )
+
+  # ── Write active-profile ───────────────────────────────────────────────────
+  (draft_global / "active-profile").write_text(name + "\n")
+  print(f"\nProfile '{name}' is now active.")
+  print(f"Path: ~/.draft/workspaces/{name}/")
+  PYEOF
+  ```
+
+  Update `DRAFT_WORKSPACE` for this session:
+  ```bash
+  export DRAFT_WORKSPACE="$HOME/.draft/workspaces/<chosen-slug>"
+  ```
+
+---
+
+### Context check
+
+Check whether context already exists in the current workspace:
 
 ```bash
 python3 -c "
 import os
 from pathlib import Path
-ws = os.environ.get('DRAFT_WORKSPACE', os.path.expanduser('~/.draft/workspace'))
+ws = os.environ.get('DRAFT_WORKSPACE', os.path.expanduser('~/.draft/workspaces/default'))
 files = list(Path(ws, 'context').glob('*/index.md'))
 has_content = any(
     '---' in Path(f).read_text() and 'No information recorded yet' not in Path(f).read_text()
@@ -46,7 +260,7 @@ Before asking Q1, deliver this orientation. Keep it warm but brief — don't pad
 >
 > A few things to know before we start:
 >
-> **Your workspace** lives at `~/.draft/workspace`. Everything Draft learns about your product, team, and priorities is stored there as plain markdown files — you can read, edit, or version-control them like any other file.
+> **Your workspace** lives at `~/.draft/workspaces/<profile-name>/`. Everything Draft learns about your product, team, and priorities is stored there as plain markdown files — you can read, edit, or version-control them like any other file. You can have multiple named workspaces for different projects or clients — run `/draft:profiles` to manage them.
 >
 > **How updates happen:** Draft writes to your workspace after this setup interview, and keeps it fresh as you work. Whenever you share a decision, a shift in priorities, or a team change, Draft will update the relevant files automatically. You can also say `update [company / product / team / priorities]` at any point to trigger an explicit refresh.
 >
@@ -55,19 +269,21 @@ Before asking Q1, deliver this orientation. Keep it warm but brief — don't pad
 > Here's the layout:
 >
 > ```
-> ~/.draft/workspace/
-> ├── context/
-> │   ├── company/        ← what you're building, business model, stage
-> │   ├── product/        ← product state, target user, key bets, roadmap
-> │   ├── priorities/     ← active sprint, top priorities, blockers
-> │   ├── team/           ← structure, who does what, capacity
-> │   └── decisions/      ← key decisions with status (active/superseded/parked)
-> ├── personal/           ← your layer (never shared with team)
-> │   ├── user/           ← your role and working style
-> │   ├── memory.md       ← vocabulary, preferences, recurring patterns
-> │   └── wip/            ← drafts not ready to share
-> ├── config/             ← collaboration config (created when you set up team sharing)
-> └── docs/               ← written artifacts (analyses, PRDs, strategies) — named YYYYMMDDHHMMSS_descriptive-slug.md
+> ~/.draft/
+> ├── workspaces/
+> │   └── <profile-name>/       ← your active workspace
+> │       ├── context/
+> │       │   ├── company/      ← what you're building, business model, stage
+> │       │   ├── product/      ← product state, target user, key bets, roadmap
+> │       │   ├── priorities/   ← active sprint, top priorities, blockers
+> │       │   ├── team/         ← structure, who does what, capacity
+> │       │   └── decisions/    ← key decisions with status (active/superseded/parked)
+> │       ├── config/           ← collaboration config (created when you set up team sharing)
+> │       └── docs/             ← written artifacts (analyses, PRDs, strategies)
+> └── personal/                 ← your global layer (shared across all profiles, never shared with team)
+>     ├── user/                 ← your role and working style
+>     ├── memory.md             ← vocabulary, preferences, recurring patterns
+>     └── wip/                  ← drafts not ready to share
 > ```
 >
 > **How Draft works:** Draft uses three specialized agents:
@@ -148,9 +364,8 @@ Listen for: project management (Linear, Jira, Notion), communication (Slack, ema
 
 ### Q5.5 — Team collaboration
 
-Ask:
-> "Do you want to use Draft together with your team? This lets you share your
-> context layer and keep it fresh across multiple people."
+Use the **AskUserQuestion** tool to ask:
+> "Do you want to use Draft together with your team? This lets you share your context layer and keep it fresh across multiple people."
 
 If **yes**: Say "Let's set that up." → invoke `/draft:setup-collab` inline (call it as a skill before proceeding to Q6).
 
@@ -186,12 +401,15 @@ Do not pass raw answers to @draft-learner. Before writing, derive:
 
 Pass the synthesized content as a single, structured message. Instruct @draft-learner to write:
 
-- `context/company/index.md`
-- `context/product/index.md`
-- `context/team/index.md`
-- `context/priorities/index.md`
-- `personal/user/index.md`
-- `personal/memory.md`
+**Context files** (under `$DRAFT_WORKSPACE/context/`):
+- `$DRAFT_WORKSPACE/context/company/index.md`
+- `$DRAFT_WORKSPACE/context/product/index.md`
+- `$DRAFT_WORKSPACE/context/team/index.md`
+- `$DRAFT_WORKSPACE/context/priorities/index.md`
+
+**Personal files** (under `~/.draft/personal/` — global layer, NOT inside `$DRAFT_WORKSPACE`):
+- `~/.draft/personal/user/index.md`
+- `~/.draft/personal/memory.md`
 
 Each index file must have complete frontmatter:
 - `name`: dimension name

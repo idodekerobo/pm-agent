@@ -17,7 +17,8 @@
       "WebFetch(domain:cursor.com)",
       "WebFetch(domain:openai.github.io)",
       "WebFetch(domain:www.google.com)",
-      "WebFetch(domain:docs.anthropic.com)"
+      "WebFetch(domain:docs.anthropic.com)",
+      "Skill(plan-eng-review)"
     ]
   }
 }

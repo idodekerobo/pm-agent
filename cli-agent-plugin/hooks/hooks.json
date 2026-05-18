@@ -13,6 +13,16 @@
           }
         ]
       }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${HOME}/.draft/background/on-session-end.sh\""
+          }
+        ]
+      }
     ]
   }
 }

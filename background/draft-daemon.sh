@@ -5,7 +5,7 @@
 # Event loop: polls pending/ for session-end job files, processes them.
 #
 # Phase 0: validate + log jobs. Synthesis added in Phase 1.
-# Phase 1: route to synthesize.sh → team-staging/ → curator approve → GitHub
+# Phase 1: route to synthesize.sh → proposals/ → curator approve → GitHub
 # Phase 2+: granola_poll_loop, slack_poll_loop added here
 #
 # Logs: structured JSON to ~/.draft/background/logs/daemon.log
@@ -79,13 +79,23 @@ print(d.get('session_id', 'unknown'))
 
     _log "info" "job $job_name: profile=$job_profile session_id=$job_session_id"
 
-    # Phase 1 will replace this block with:
-    #   bash "$DRAFT_BACKGROUND/synthesize.sh" "$job_file"
-    _log "info" "phase-0: synthesis deferred — job $job_name logged and removed"
-
-    rm -f "$job_file"
-    _log "info" "job $job_name complete"
-    return 0
+    # Phase 1: route to synthesize.sh → proposals/ → curator approves → GitHub
+    if [ -x "$DRAFT_BACKGROUND/synthesize.sh" ]; then
+        if bash "$DRAFT_BACKGROUND/synthesize.sh" "$job_file"; then
+            rm -f "$job_file"
+            _log "info" "job $job_name complete"
+            return 0
+        else
+            _log "error" "synthesize.sh failed for $job_name — quarantining to failed/"
+            mv "$job_file" "$DRAFT_FAILED/$job_name"
+            return 1
+        fi
+    else
+        # synthesize.sh not installed — phase-0 fallback
+        _log "warn" "synthesize.sh not found — phase-0 fallback (job logged and removed)"
+        rm -f "$job_file"
+        return 0
+    fi
 }
 
 # ── Main event loop ────────────────────────────────────────────────────────────

@@ -1,0 +1,204 @@
+#!/bin/bash
+# synthesizers/session.sh — Session transcript source adapter
+#
+# Analyzes a Claude Code session transcript and produces a context update
+# document for proposals/. Handles all session-specific logic:
+# transcript reading, 50k truncation, context-aware prompt building.
+#
+# See synthesizers/README.md for full contract.
+#
+# Usage: bash synthesizers/session.sh <job_file>
+#   job_file — JSON job written by on-session-end.sh
+
+set -uo pipefail
+
+JOB_FILE="$1"
+
+DRAFT_BACKGROUND="$HOME/.draft/background"
+# shellcheck source=../config.sh
+source "$DRAFT_BACKGROUND/config.sh"
+
+_log() {
+    printf '[session.sh] %s\n' "$*" >&2
+}
+
+# ── Read job fields ────────────────────────────────────────────────────────────
+SESSION_ID=$(python3 -c "
+import json, sys
+d = json.load(open('$JOB_FILE'))
+print(d.get('session_id', 'unknown'))
+" 2>/dev/null || echo "unknown")
+
+TRANSCRIPT_PATH=$(python3 -c "
+import json, sys
+d = json.load(open('$JOB_FILE'))
+print(d.get('transcript_path', ''))
+" 2>/dev/null || echo "")
+
+JOB_TIMESTAMP=$(python3 -c "
+import json, sys
+d = json.load(open('$JOB_FILE'))
+print(d.get('timestamp', ''))
+" 2>/dev/null || echo "")
+
+SESSION_SHORT="${SESSION_ID:0:8}"
+
+# ── Validate transcript ────────────────────────────────────────────────────────
+if [ -z "$TRANSCRIPT_PATH" ]; then
+    _log "ERROR: transcript_path missing from job file"
+    exit 1
+fi
+
+if [ ! -f "$TRANSCRIPT_PATH" ]; then
+    _log "ERROR: transcript not found: $TRANSCRIPT_PATH"
+    exit 1
+fi
+
+TRANSCRIPT_SIZE=$(wc -c < "$TRANSCRIPT_PATH" | tr -d ' ')
+_log "transcript: $TRANSCRIPT_PATH ($TRANSCRIPT_SIZE bytes)"
+
+# ── Truncate transcript to 50k chars (keep most recent) ───────────────────────
+TRANSCRIPT_TRUNCATED_PATH=$(mktemp /tmp/draft-transcript-XXXXXX.jsonl)
+python3 - <<PYEOF
+import sys
+
+path = '$TRANSCRIPT_PATH'
+limit = 50000
+
+with open(path, 'r', errors='replace') as f:
+    content = f.read()
+
+truncated = False
+if len(content) > limit:
+    content = content[-limit:]
+    truncated = True
+
+with open('$TRANSCRIPT_TRUNCATED_PATH', 'w') as f:
+    f.write(content)
+
+if truncated:
+    sys.stderr.write('[session.sh] transcript truncated to 50k chars\n')
+PYEOF
+
+# ── Create temp files ──────────────────────────────────────────────────────────
+PROMPT_FILE=$(mktemp /tmp/draft-prompt-XXXXXX.txt)
+OUTPUT_FILE=$(mktemp /tmp/draft-synthesis-XXXXXX.md)
+
+_cleanup() {
+    rm -f "$PROMPT_FILE" "$OUTPUT_FILE" "$TRANSCRIPT_TRUNCATED_PATH"
+}
+trap _cleanup EXIT
+
+# ── Build synthesis prompt ─────────────────────────────────────────────────────
+CURRENT_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+cat > "$PROMPT_FILE" <<PROMPT
+# Draft Synthesis Task — Session Transcript
+
+You are a context synthesis agent for Draft, a shared team context layer for AI sessions.
+
+## Session metadata
+session_id: ${SESSION_ID}
+profile: ${DRAFT_ACTIVE_PROFILE}
+timestamp: ${JOB_TIMESTAMP}
+
+## Files to read
+1. Session transcript (truncated to 50k chars, most recent): ${TRANSCRIPT_TRUNCATED_PATH}
+2. Existing workspace context (to know what's already captured):
+   - ${DRAFT_WORKSPACE}/context/product/index.md
+   - ${DRAFT_WORKSPACE}/context/priorities/index.md
+   - ${DRAFT_WORKSPACE}/context/company/index.md
+   - ${DRAFT_WORKSPACE}/context/team/index.md
+
+Read these files before writing your synthesis.
+
+## Your task
+Analyze the session transcript. Extract only what would help a teammate
+start their next AI session with better shared context.
+
+**SIGNAL — capture:**
+- Architectural or design decisions (and the reasoning)
+- Product direction changes or new constraints
+- Key technical patterns or approaches established
+- Team-relevant facts learned (about the codebase, users, processes)
+
+**NOISE — skip:**
+- Debugging sessions or one-off error fixes
+- Exploratory work that led nowhere
+- Implementation minutiae (variable names, formatting, etc.)
+- Anything already captured in the existing context files above
+
+**Specificity rule:** "Decided to use separate-clone pattern for GitHub
+publishing to avoid git init in the Draft workspace" = SIGNAL.
+"Made some technical decisions" = NOISE.
+
+**If nothing team-relevant happened:** write the document with empty context_updates.
+
+## Output format
+Write ONLY the following structure to: ${OUTPUT_FILE}
+
+Replace the bracketed sections with real content. Use ONLY files that exist in
+context/ (product, priorities, company, team). The action must be "append" or "overwrite".
+
+---
+session_id: ${SESSION_ID}
+input_source: session
+synthesized_by: claude-code
+timestamp: ${CURRENT_TS}
+profile: ${DRAFT_ACTIVE_PROFILE}
+context_updates:
+  - file: context/product/index.md
+    action: append
+    content: |
+      [one or more specific lines to add]
+---
+
+## Synthesis preview
+
+### context/product/index.md — append
+[same content as above, formatted as readable markdown]
+
+## STRICT RULES
+- Do NOT ask questions. Do NOT seek clarification. If ambiguous, omit.
+- Do NOT copy raw transcript excerpts. Write synthesized insights only.
+- Do NOT invent information not present in the transcript.
+- Write ONLY the document above to ${OUTPUT_FILE}. No preamble. No commentary.
+- After writing the file, type /exit to end the session.
+PROMPT
+
+_log "prompt written ($( wc -c < "$PROMPT_FILE" ) bytes), calling intelligence adapter"
+
+# ── Call intelligence adapter ──────────────────────────────────────────────────
+INTELLIGENCE="${DRAFT_SESSION_INTELLIGENCE:-claude-code}"
+INTELLIGENCE_SCRIPT="$DRAFT_BACKGROUND/intelligence/${INTELLIGENCE}.sh"
+
+if [ ! -x "$INTELLIGENCE_SCRIPT" ]; then
+    _log "ERROR: intelligence adapter not found or not executable: $INTELLIGENCE_SCRIPT"
+    exit 1
+fi
+
+bash "$INTELLIGENCE_SCRIPT" "$PROMPT_FILE" "$OUTPUT_FILE"
+INTEL_EXIT=$?
+
+if [ $INTEL_EXIT -ne 0 ]; then
+    _log "ERROR: intelligence adapter exited $INTEL_EXIT"
+    exit 1
+fi
+
+# ── Validate and output ────────────────────────────────────────────────────────
+if [ ! -f "$OUTPUT_FILE" ] || [ ! -s "$OUTPUT_FILE" ]; then
+    _log "ERROR: intelligence adapter returned success but output_file is empty or missing"
+    exit 1
+fi
+
+# Basic frontmatter validation — must start with ---
+FIRST_LINE=$(head -1 "$OUTPUT_FILE")
+if [ "$FIRST_LINE" != "---" ]; then
+    _log "WARN: output does not start with YAML frontmatter (---) — passing through anyway"
+fi
+
+_log "synthesis complete ($(wc -c < "$OUTPUT_FILE") bytes)"
+
+# Output to stdout — synthesize.sh writes this to proposals/
+cat "$OUTPUT_FILE"
+exit 0

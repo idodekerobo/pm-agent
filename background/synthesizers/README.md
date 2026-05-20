@@ -58,13 +58,32 @@ context_updates:
     action: append
     content: |
       Decided to use separate-clone pattern for GitHub publishing...
+  - file: context/tensions.md
+    action: tension
+    content: |
+      ### Target user contradiction
+      - **Observed:** 2026-05-17
+      - **Signal:** Session says "targeting music directors" but context/product/index.md says "targeting composers"
+      - **Status:** unresolved
+      - **Resolution:**
 ---
 
 ## Synthesis preview
 
 ### context/product/index.md — append
 Decided to use separate-clone pattern for GitHub publishing...
+
+### context/tensions.md — tension
+Target user contradiction: session says "targeting music directors" but product/index.md says "targeting composers"
 ```
+
+### Action types
+
+| Action | Meaning | Handler behaviour |
+|---|---|---|
+| `append` | New information that complements existing context | Appended to `file` |
+| `tension` | New info contradicts existing context | Always appended to `context/tensions.md` regardless of `file` field. The `file` field is metadata only — it describes which dimension the contradiction relates to. |
+| `overwrite` | Full file replacement | Replaces `file` contents. **Do not use in synthesis prompts** — reserved for curator-triggered compaction only. |
 
 ### Exit codes
 - `exit 0` — success; synthesize.sh writes stdout to proposals/

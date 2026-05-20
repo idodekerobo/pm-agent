@@ -116,8 +116,10 @@ timestamp: ${JOB_TIMESTAMP}
 1. Session transcript (truncated to 50k chars, most recent): ${TRANSCRIPT_TRUNCATED_PATH}
 2. Existing workspace context (to know what's already captured):
 ${CONTEXT_FILES_LIST}
+   - ${DRAFT_WORKSPACE}/context/tensions.md
 
-Read these files before writing your synthesis.
+Read these files before writing your synthesis. Reading tensions.md tells you what
+contradictions are already flagged — do not create duplicate tension entries.
 
 ## Your task
 Analyze the session transcript. Extract only what would help a teammate
@@ -139,13 +141,30 @@ start their next AI session with better shared context.
 publishing to avoid git init in the Draft workspace" = SIGNAL.
 "Made some technical decisions" = NOISE.
 
+**CONTRADICTIONS — use action: tension:**
+When new information directly contradicts something already in a context file, do NOT
+append both versions or overwrite. Route it as a tension entry:
+  - file: context/tensions.md
+    action: tension
+    content: |
+      ### [short name for the contradiction]
+      - **Observed:** [YYYY-MM-DD]
+      - **Signal:** Session says "[new value]" but [context/file] says "[existing value]"
+      - **Status:** unresolved
+      - **Resolution:**
+Do NOT update the dimension file — the contradiction stays visible until the curator resolves it.
+Only create a tension if it is not already present in context/tensions.md.
+
 **If nothing team-relevant happened:** write the document with empty context_updates.
 
 ## Output format
 Write ONLY the following structure to: ${OUTPUT_FILE}
 
 Replace the bracketed sections with real content. Use ONLY files that exist in
-context/ (${CONTEXT_DIMS}). The action must be "append" or "overwrite".
+context/ (${CONTEXT_DIMS}). Three actions are allowed:
+- "append"   — new information that complements existing context (default for all synthesis)
+- "tension"  — new info contradicts existing context; always set file: context/tensions.md
+- "overwrite" — do NOT use in synthesis; reserved for curator-triggered compaction only
 
 ---
 session_id: ${SESSION_ID}
@@ -169,6 +188,7 @@ context_updates:
 - Do NOT ask questions. Do NOT seek clarification. If ambiguous, omit.
 - Do NOT copy raw transcript excerpts. Write synthesized insights only.
 - Do NOT invent information not present in the transcript.
+- For contradictions: ALWAYS use action: tension with file: context/tensions.md. Never overwrite to resolve a contradiction — that is the curator's decision, not the synthesizer's.
 - Write ONLY the document above to ${OUTPUT_FILE}. No preamble. No commentary.
 - After writing the file, type /exit to end the session.
 PROMPT

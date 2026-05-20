@@ -173,7 +173,15 @@ for u in updates:
 
     os.makedirs(os.path.dirname(target_file), exist_ok=True)
 
-    if action == 'overwrite':
+    if action == 'tension':
+        # Tension entries always route to context/tensions.md regardless of the file field.
+        # The file field is metadata describing which dimension the contradiction relates to.
+        tensions_file = os.path.join(workspace, 'context', 'tensions.md')
+        os.makedirs(os.path.dirname(tensions_file), exist_ok=True)
+        with open(tensions_file, 'a') as f:
+            f.write('\n' + content + '\n')
+        sys.stderr.write(f"applied tension → context/tensions.md (contradicts {u['file']})\n")
+    elif action == 'overwrite':
         with open(target_file, 'w') as f:
             f.write(content + '\n')
         sys.stderr.write(f"applied overwrite: {u['file']}\n")

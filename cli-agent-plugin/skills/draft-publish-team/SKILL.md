@@ -71,6 +71,7 @@ Check for `.md` files in `$DRAFT_WORKSPACE/proposals/`.
 
 4. **Applying a proposal:** Parse the YAML frontmatter `context_updates` and apply each update:
    - `action: append` → append `content` to the end of `$DRAFT_WORKSPACE/<file>`
+   - `action: tension` → append `content` to `$DRAFT_WORKSPACE/context/tensions.md` regardless of the `file:` field value (the `file:` field describes which dimension the contradiction relates to, not where to write)
    - `action: overwrite` → replace the file contents with `content`
    - Create the target file if it doesn't exist
    - Log each applied update

@@ -38,6 +38,9 @@ _SCRIPTS=(
     "start.sh"
     "stop.sh"
     "uninstall.sh"
+    "synthesize.sh"
+    "commit-to-team-context.sh"
+    "load-team.sh"
 )
 
 _MISSING=()
@@ -56,6 +59,24 @@ if [ ${#_MISSING[@]} -eq 0 ]; then
 else
     echo "[Draft Daemon] WARNING: ${#_MISSING[@]} script(s) missing — daemon may not function correctly" >&2
 fi
+
+# ── 2b. Copy synthesizers/ and intelligence/ subdirectories ────────────────────
+for subdir in "synthesizers" "intelligence"; do
+    if [ -d "$SCRIPT_DIR/$subdir" ]; then
+        mkdir -p "$DRAFT_BACKGROUND/$subdir"
+        for script in "$SCRIPT_DIR/$subdir"/*.sh; do
+            [ -f "$script" ] || continue
+            dest="$DRAFT_BACKGROUND/$subdir/$(basename "$script")"
+            cp "$script" "$dest"
+            chmod +x "$dest"
+        done
+        # Copy README if present
+        [ -f "$SCRIPT_DIR/$subdir/README.md" ] && cp "$SCRIPT_DIR/$subdir/README.md" "$DRAFT_BACKGROUND/$subdir/README.md"
+        echo "[Draft Daemon] Installed $subdir/ to $DRAFT_BACKGROUND/$subdir"
+    else
+        echo "[Draft Daemon] NOTE: $subdir/ not found in $SCRIPT_DIR — synthesis adapters not installed" >&2
+    fi
+done
 
 # ── 3. Dependency checks ───────────────────────────────────────────────────────
 echo ""

@@ -39,6 +39,53 @@ Hard stop.
 
 ---
 
+## Step 1.5: Apply pending synthesis proposals from proposals/
+
+Check for `.md` files in `$DRAFT_WORKSPACE/proposals/`.
+
+**If proposals/ is empty or doesn't exist:** skip to Step 2.
+
+**If proposals/ has files:**
+
+1. List the files:
+   ```bash
+   ls "$DRAFT_WORKSPACE/proposals/"*.md 2>/dev/null
+   ```
+
+2. For each `.md` file, read and display it to the user:
+   ```
+   Pending synthesis proposals:
+   ─────────────────────────────────────────────────────
+   File: 20260517T024408Z-853ea41f.md
+   Session: 853ea41f | Source: session | Synthesized by: claude-code
+
+   [markdown body content — the human-readable preview section]
+   ─────────────────────────────────────────────────────
+   ```
+
+3. Ask the user: "Apply all synthesis proposals to context before publishing? [Y/n/skip-all]"
+   - `Y` or Enter → apply all
+   - `n` → show each proposal individually and ask per-file (y/skip/delete)
+   - `skip-all` → skip proposals/ entirely for this publish (files stay for next time)
+   - `delete-all` → delete all staging files without applying
+
+4. **Applying a proposal:** Parse the YAML frontmatter `context_updates` and apply each update:
+   - `action: append` → append `content` to the end of `$DRAFT_WORKSPACE/<file>`
+   - `action: overwrite` → replace the file contents with `content`
+   - Create the target file if it doesn't exist
+   - Log each applied update
+
+5. After applying: note the session_id, synthesized_by, and input_source from each file's
+   frontmatter — you will need these for Step 4 CHANGES.jsonl entries.
+
+6. **After successful push (Step 4):** delete applied proposals/ files:
+   ```bash
+   rm "$DRAFT_WORKSPACE/proposals/<applied_file>.md"
+   ```
+   Only delete files that were successfully applied AND pushed.
+
+---
+
 ## Step 2: Collect changes
 
 Read all files in `$DRAFT_WORKSPACE/context/*/log/` with modification timestamps newer than `config/local.json:last_published`.
@@ -132,12 +179,28 @@ Build `CHANGES.jsonl`:
    ```bash
    id=$(echo -n "${ts}${author}${dimension}${file}" | sha256sum | cut -c1-8)
    ```
-3. Append new entries (one JSON object per line).
+3. Append new entries (one JSON object per line). Two entry types:
+
+   **Manual publish (from log/ entries):**
+   ```jsonl
+   {"id":"[computed]","ts":"[ISO8601]","type":"manual-publish","author":"[gh_username]","dimension":"[dim]","summary":"...","file":"context/[dim]/index.md","log_entry":"..."}
+   ```
+
+   **Daemon synthesis (from proposals/ proposals applied in Step 1.5):**
+   For each applied synthesis file, compute ID the same way (sha256 of ts+author+source+session_id):
+   ```bash
+   id=$(echo -n "${ts}${gh_username}${input_source}${session_id}" | sha256sum | cut -c1-8)
+   ```
+   ```jsonl
+   {"id":"[computed]","ts":"[ISO8601]","type":"daemon-synthesis","source":"[input_source]","session_id":"[session_id]","synthesized_by":"[synthesized_by]","approved_by":"[gh_username]","files":["context/product/index.md",...]}
+   ```
+
 4. Write back to `$SUBDIR_PATH/CHANGES.jsonl`.
 
-Generate semantic commit message:
+Generate semantic commit message. If synthesis proposals were applied, note them:
 ```
-"[N] context updates: [comma-joined dimension list]"
+"[N] context updates: [dimension list]"                   # manual only
+"[N] context updates + [M] synthesis proposals applied"   # with synthesis
 ```
 
 Stage and commit:

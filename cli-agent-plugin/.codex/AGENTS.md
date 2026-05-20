@@ -98,6 +98,8 @@ If yes to any: spawn draft-learner before responding.
 - Company changes → `company/index.md` + `company/log/`
 - Vocabulary, preferences, patterns → `personal/memory.md`
 
+**Log entries are non-negotiable for all context/ changes.** Always explicitly instruct draft-learner to write a log entry alongside every index.md update. The log entry is the only audit trail for manual changes — index.md is rewritten to current state and preserves no history itself. Daemon synthesis will NOT retroactively create log entries for changes already in the file. A change without a log entry is invisible to CHANGES.jsonl.
+
 **After draft-learner completes, confirm to the user in one line.** Keep it brief. Only surface it if something actually changed.
 
 ---

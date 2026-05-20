@@ -53,11 +53,13 @@ Signal words: "pivoting", "the bet is now", "ICP is", "we're targeting", "change
 
 **Company info** — structural company changes only
 Signal words: "raised", "new investor", "pivoting the company", "rebranding", "acquired", "partnership signed", "new co-founder"
-→ Destination: `context/company/index.md` + log (structural changes only — skip log for minor updates)
+→ Destination: `context/company/index.md` + log
+→ **Always write a log entry.** Capital raises, headcount changes, pivots, partnerships, vision changes — all require a log entry. There are no "minor" company updates. If it's worth updating the index, it's worth logging.
 
 **Team change** — someone joined, left, or changed roles
 Signal words: "hired", "quit", "left", "joined", "now owns", "taking over", "contractor starting", "role change"
-→ Destination: `context/team/index.md` + log (structural changes only)
+→ Destination: `context/team/index.md` + log
+→ **Always write a log entry.** Any change to team composition or ownership is structural by definition.
 
 **Preference / Vocabulary / Pattern** — working style, terminology, recurring habits
 Signal words: "I prefer", "from now on", "we call it", "our word for", "I always", "don't do X", "the term we use"
@@ -95,7 +97,7 @@ Pass a complete, self-contained brief. Do not pass raw user words — synthesize
 1. **What was learned** — the synthesized content (what happened, what changed, why if known)
 2. **Classification** — which type it is
 3. **Destination(s)** — exact file paths to update, with log entries noted where required
-4. **Log entry needed?** — yes for `product/`, `priorities/`, structural `company/` or `team/` changes; no for `personal/memory.md` or `user/`
+4. **Log entry needed?** — yes for `product/`, `priorities/`, `company/`, and `team/` changes — **always, no exceptions**. A log entry is the only audit trail for manual changes. Without it, the change is invisible to CHANGES.jsonl and every future surface that reads it. No for `personal/memory.md` or `user/`.
 5. **Source** — `user conversation | /learn`
 6. **Today's date** — for `last_updated` and log timestamps
 

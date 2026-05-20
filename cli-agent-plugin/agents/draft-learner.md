@@ -80,9 +80,11 @@ References: context/decisions/{slug}.md | (other context files or external links
 |-----------|-----------|
 | `product/` | Every update — product thinking evolves constantly; the arc matters |
 | `priorities/` | Every update — knowing what was dropped is as useful as what was added |
-| `company/` | Structural changes only: pivot, fundraise, reorg, name change |
-| `team/` | Structural changes only: hire, departure, role change, reorg |
+| `company/` | Every meaningful update — no exceptions. Capital raises, team changes, pivots, partnerships, rebranding. If it's worth updating the index, it requires a log entry. |
+| `team/` | Every meaningful update — no exceptions. Hires, departures, role changes, reorgs. |
 | `user/` (now `personal/user/`) | No log — personal layer |
+
+**Critical:** The log entry is the only audit trail for manual changes. `index.md` is rewritten to current state — history is not preserved in the file itself. If there is no log entry, the change is invisible to CHANGES.jsonl and every future surface that reads it. Daemon synthesis will NOT retroactively create log entries for changes already in the file. Write the log entry at the same time as the index update, always.
 
 ---
 

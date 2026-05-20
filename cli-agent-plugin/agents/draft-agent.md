@@ -110,6 +110,8 @@ If yes to any: call draft-learner before responding.
 - Company changes → `$DRAFT_WORKSPACE/context/company/index.md` + `company/log/`
 - Vocabulary, preferences, patterns → `~/.draft/personal/memory.md` (**NOT** `$DRAFT_WORKSPACE/personal/memory.md`)
 
+**Log entries are non-negotiable for all context/ changes.** Always explicitly instruct draft-learner to write a log entry alongside every index.md update. The log entry is the only audit trail for manual changes — index.md is rewritten to current state and preserves no history itself. Daemon synthesis will NOT retroactively create log entries for changes it finds already in the file. A change without a log entry is invisible to CHANGES.jsonl and every future surface that reads it.
+
 **After draft-learner completes, confirm to the user in one line.** Example: `"Updated priorities — marked 'standalone GitHub repo' as complete."` Keep it brief. Only surface it if something actually changed.
 
 ---

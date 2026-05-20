@@ -122,6 +122,8 @@ fi
 if [ ! -d "$DRAFT_WORKSPACE" ]; then
     log "Creating default workspace at $DRAFT_WORKSPACE..."
 
+    # Standard 4 context dimensions. Custom dims (e.g. context/customers/, context/architecture/)
+    # can be added at any time — /draft:learn will create context/<dim>/log/ automatically via mkdir -p.
     mkdir -p \
         "$DRAFT_WORKSPACE/context/company/log" \
         "$DRAFT_WORKSPACE/context/product/log" \

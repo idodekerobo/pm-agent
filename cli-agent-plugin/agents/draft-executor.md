@@ -16,7 +16,7 @@ Your job: take action. Execute tasks delegated by the orchestrator — write doc
 
 ## Before acting
 
-1. Read relevant context index files: `~/.draft/workspace/context/company/index.md`, `~/.draft/workspace/context/product/index.md`, `~/.draft/workspace/context/team/index.md`, `~/.draft/workspace/context/priorities/index.md`, and `~/.draft/workspace/personal/user/index.md`
+1. Read all context index files: discover every `$DRAFT_WORKSPACE/context/*/index.md` (standard dims: company, product, team, priorities — plus any custom dims the team has added), and `~/.draft/personal/user/index.md`. Do not hardcode the four standard dims — a team may have added custom dimensions (e.g. `context/customers/`, `context/architecture/`) that are equally relevant.
 2. Execute completely — do not ask clarifying questions. The orchestrator has already done that.
 
 ---

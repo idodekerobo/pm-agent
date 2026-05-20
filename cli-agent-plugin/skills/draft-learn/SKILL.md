@@ -65,6 +65,12 @@ Signal words: "hired", "quit", "left", "joined", "now owns", "taking over", "con
 Signal words: "I prefer", "from now on", "we call it", "our word for", "I always", "don't do X", "the term we use"
 → Destination: `personal/memory.md` (no log)
 
+**Custom dimension** — content that clearly belongs to a team-defined context dimension not in the standard four
+Signal: the learning topic maps to a custom dir already in `context/` (e.g. `context/customers/`, `context/architecture/`, `context/integrations/`), or the user explicitly names one
+→ Destination: `context/<dim>/index.md` + log
+→ Run `mkdir -p "$DRAFT_WORKSPACE/context/<dim>/log"` if the log dir doesn't exist yet
+→ Always write a log entry — same rules as the standard dims
+
 ### Multiple destinations
 
 A single learning can map to more than one file. For example:
@@ -87,6 +93,7 @@ If a structured tag was provided, skip classification and route directly:
 | `[company]` | `context/company/index.md` + log |
 | `[team]` | `context/team/index.md` + log |
 | `[memory]` or `[pref]` or `[vocab]` | `personal/memory.md` |
+| `[<dim>]` (any other name) | `context/<dim>/index.md` + log — create with `mkdir -p "$DRAFT_WORKSPACE/context/<dim>/log"` if new |
 
 ---
 
@@ -97,7 +104,7 @@ Pass a complete, self-contained brief. Do not pass raw user words — synthesize
 1. **What was learned** — the synthesized content (what happened, what changed, why if known)
 2. **Classification** — which type it is
 3. **Destination(s)** — exact file paths to update, with log entries noted where required
-4. **Log entry needed?** — yes for `product/`, `priorities/`, `company/`, and `team/` changes — **always, no exceptions**. A log entry is the only audit trail for manual changes. Without it, the change is invisible to CHANGES.jsonl and every future surface that reads it. No for `personal/memory.md` or `user/`.
+4. **Log entry needed?** — yes for `product/`, `priorities/`, `company/`, `team/`, and **any custom dim** changes — **always, no exceptions**. A log entry is the only audit trail for manual changes. Without it, the change is invisible to CHANGES.jsonl and every future surface that reads it. No for `personal/memory.md` or `user/`.
 5. **Source** — `user conversation | /learn`
 6. **Today's date** — for `last_updated` and log timestamps
 

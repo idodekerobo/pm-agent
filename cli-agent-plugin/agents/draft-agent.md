@@ -108,6 +108,7 @@ If yes to any: call draft-learner before responding.
 - Product scope / roadmap / strategy changes → `$DRAFT_WORKSPACE/context/product/index.md` + `product/log/`
 - Team structure changes → `$DRAFT_WORKSPACE/context/team/index.md` + `team/log/`
 - Company changes → `$DRAFT_WORKSPACE/context/company/index.md` + `company/log/`
+- **Custom dimensions** — if the content belongs to a custom dim the team has added (e.g. `context/customers/`, `context/architecture/`, `context/integrations/`), write to `$DRAFT_WORKSPACE/context/<dim>/index.md` + `<dim>/log/`. Run `mkdir -p "$DRAFT_WORKSPACE/context/<dim>/log"` if the log dir doesn't exist yet. Always write a log entry.
 - Vocabulary, preferences, patterns → `~/.draft/personal/memory.md` (**NOT** `$DRAFT_WORKSPACE/personal/memory.md`)
 
 **Log entries are non-negotiable for all context/ changes.** Always explicitly instruct draft-learner to write a log entry alongside every index.md update. The log entry is the only audit trail for manual changes — index.md is rewritten to current state and preserves no history itself. Daemon synthesis will NOT retroactively create log entries for changes it finds already in the file. A change without a log entry is invisible to CHANGES.jsonl and every future surface that reads it.

@@ -92,6 +92,16 @@ trap _cleanup EXIT
 # ── Build synthesis prompt ─────────────────────────────────────────────────────
 CURRENT_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
+# ── Discover context files dynamically ─────────────────────────────────────────
+# Enumerates all context/*/index.md files — not just the standard four.
+# Teams may add custom dimensions (e.g. context/customers/, context/decisions/).
+CONTEXT_FILES_LIST=$(find "${DRAFT_WORKSPACE}/context" -maxdepth 2 -name "index.md" 2>/dev/null | sort | sed 's/^/   - /')
+CONTEXT_DIMS=$(find "${DRAFT_WORKSPACE}/context" -maxdepth 2 -name "index.md" 2>/dev/null | sort | while IFS= read -r f; do basename "$(dirname "$f")"; done | paste -sd ', ')
+if [ -z "$CONTEXT_FILES_LIST" ]; then
+    CONTEXT_FILES_LIST="   (no context files found — workspace may not be initialized)"
+    CONTEXT_DIMS="(none found)"
+fi
+
 cat > "$PROMPT_FILE" <<PROMPT
 # Draft Synthesis Task — Session Transcript
 
@@ -105,10 +115,7 @@ timestamp: ${JOB_TIMESTAMP}
 ## Files to read
 1. Session transcript (truncated to 50k chars, most recent): ${TRANSCRIPT_TRUNCATED_PATH}
 2. Existing workspace context (to know what's already captured):
-   - ${DRAFT_WORKSPACE}/context/product/index.md
-   - ${DRAFT_WORKSPACE}/context/priorities/index.md
-   - ${DRAFT_WORKSPACE}/context/company/index.md
-   - ${DRAFT_WORKSPACE}/context/team/index.md
+${CONTEXT_FILES_LIST}
 
 Read these files before writing your synthesis.
 
@@ -138,7 +145,7 @@ publishing to avoid git init in the Draft workspace" = SIGNAL.
 Write ONLY the following structure to: ${OUTPUT_FILE}
 
 Replace the bracketed sections with real content. Use ONLY files that exist in
-context/ (product, priorities, company, team). The action must be "append" or "overwrite".
+context/ (${CONTEXT_DIMS}). The action must be "append" or "overwrite".
 
 ---
 session_id: ${SESSION_ID}

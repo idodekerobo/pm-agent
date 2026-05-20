@@ -67,22 +67,31 @@ Check for `.md` files in `$DRAFT_WORKSPACE/proposals/`.
    - `Y` or Enter → apply all
    - `n` → show each proposal individually and ask per-file (y/skip/delete)
    - `skip-all` → skip proposals/ entirely for this publish (files stay for next time)
-   - `delete-all` → delete all staging files without applying
+   - `delete-all` → archive all proposals to `proposals/rejected/` without applying
 
 4. **Applying a proposal:** Parse the YAML frontmatter `context_updates` and apply each update:
    - `action: append` → append `content` to the end of `$DRAFT_WORKSPACE/<file>`
    - `action: overwrite` → replace the file contents with `content`
    - Create the target file if it doesn't exist
    - Log each applied update
+   - Per-file `delete` → archive to `proposals/rejected/` (do not apply):
+     ```bash
+     mv "$DRAFT_WORKSPACE/proposals/<file>.md" "$DRAFT_WORKSPACE/proposals/rejected/<file>.md"
+     ```
 
 5. After applying: note the session_id, synthesized_by, and input_source from each file's
    frontmatter — you will need these for Step 4 CHANGES.jsonl entries.
 
-6. **After successful push (Step 4):** delete applied proposals/ files:
+6. **After successful push (Step 4):** archive applied proposals/ files to `accepted/`:
    ```bash
-   rm "$DRAFT_WORKSPACE/proposals/<applied_file>.md"
+   mkdir -p "$DRAFT_WORKSPACE/proposals/accepted" "$DRAFT_WORKSPACE/proposals/rejected"
+   mv "$DRAFT_WORKSPACE/proposals/<applied_file>.md" "$DRAFT_WORKSPACE/proposals/accepted/<applied_file>.md"
    ```
-   Only delete files that were successfully applied AND pushed.
+   Only archive files that were successfully applied AND pushed.
+   For `delete-all`: archive all pending files to `rejected/` instead:
+   ```bash
+   mv "$DRAFT_WORKSPACE/proposals/"*.md "$DRAFT_WORKSPACE/proposals/rejected/"
+   ```
 
 ---
 

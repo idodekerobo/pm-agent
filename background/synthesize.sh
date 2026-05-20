@@ -111,7 +111,7 @@ fi
 # Profile-specific proposals dir. Curator reviews these before running /publish-team.
 WORKSPACE="$HOME/.draft/workspaces/${PROFILE}"
 STAGING_DIR="${WORKSPACE}/proposals"
-mkdir -p "$STAGING_DIR"
+mkdir -p "$STAGING_DIR" "$STAGING_DIR/accepted" "$STAGING_DIR/rejected"
 
 TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
 STAGING_FILE="${STAGING_DIR}/${TIMESTAMP}-${SESSION_SHORT}.md"

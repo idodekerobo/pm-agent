@@ -102,6 +102,9 @@ print(d.get('session_id', 'unknown'))
 _log "info" "draft daemon starting (pid=$$, profile=$DRAFT_ACTIVE_PROFILE, pending_poll=${DRAFT_PENDING_POLL}s)"
 
 LOOP_COUNT=0
+LAST_GRANOLA_POLL=0   # epoch seconds; 0 = never polled this session
+# LAST_SLACK_CAPTURE=0  # Phase 3
+# LAST_SLACK_ANALYSIS=0 # Phase 3
 
 while true; do
 
@@ -112,14 +115,27 @@ while true; do
         _process_job "$job_file" || _log "warn" "job handler returned error for $(basename "$job_file")"
     done
 
+    # -- Phase 2: Granola poller -----------------------------------------------
+    # Runs granola-poller.sh asynchronously on DRAFT_GRANOLA_POLL interval.
+    # The poller manages its own state (background/state/granola.json) and
+    # writes proposals directly — it does not go through the pending/ queue.
+    # Async (&) so a slow synthesis call never blocks job queue processing.
+    if [ -x "$DRAFT_BACKGROUND/granola-poller.sh" ]; then
+        _NOW=$(date +%s)
+        if [ $((_NOW - LAST_GRANOLA_POLL)) -ge "$DRAFT_GRANOLA_POLL" ]; then
+            _log "info" "granola: starting poll (interval=${DRAFT_GRANOLA_POLL}s mode=${DRAFT_GRANOLA_MODE})"
+            bash "$DRAFT_BACKGROUND/granola-poller.sh" >> "$DRAFT_LOGS/daemon.log" 2>&1 &
+            LAST_GRANOLA_POLL=$_NOW
+        fi
+    fi
+
+    # -- Phase 3+: slack poller will be called here ---------------------------
+
     # -- Periodic log trim (every 1000 loops) ----------------------------------
     LOOP_COUNT=$((LOOP_COUNT + 1))
     if [ $((LOOP_COUNT % 1000)) -eq 0 ]; then
         _trim_log
     fi
-
-    # -- Phase 2+: granola_poll_loop() will be called here --------------------
-    # -- Phase 3+: slack_poll_loop() will be called here ----------------------
 
     sleep "$DRAFT_PENDING_POLL"
 done

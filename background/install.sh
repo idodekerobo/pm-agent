@@ -26,8 +26,16 @@ mkdir -p \
     "$DRAFT_BACKGROUND" \
     "$DRAFT_BACKGROUND/pending" \
     "$DRAFT_BACKGROUND/failed" \
-    "$DRAFT_BACKGROUND/logs"
+    "$DRAFT_BACKGROUND/logs" \
+    "$DRAFT_BACKGROUND/state"
 echo "[Draft Daemon] Created directory structure at $DRAFT_BACKGROUND"
+
+# Seed state files if not already present (preserve existing state across reinstalls)
+if [ ! -f "$DRAFT_BACKGROUND/state/granola.json" ]; then
+    printf '{"last_checked_at":null,"processed_meeting_ids":[]}\n' \
+        > "$DRAFT_BACKGROUND/state/granola.json"
+    echo "[Draft Daemon] Seeded state/granola.json"
+fi
 
 # ── 2. Copy scripts ────────────────────────────────────────────────────────────
 _SCRIPTS=(
@@ -41,6 +49,7 @@ _SCRIPTS=(
     "synthesize.sh"
     "commit-to-team-context.sh"
     "load-team.sh"
+    "granola-poller.sh"
 )
 
 _MISSING=()

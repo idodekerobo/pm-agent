@@ -153,7 +153,7 @@ PYEOF
 SYNTH_OUTPUT=$(mktemp /tmp/draft-granola-output-XXXXXX.md)
 trap 'rm -f "$CONTEXT_FILE" "$SYNTH_OUTPUT"' EXIT
 
-bash "$SYNTHESIZER" "$CONTEXT_FILE" > "$SYNTH_OUTPUT" 2>&1
+bash "$SYNTHESIZER" "$CONTEXT_FILE" > "$SYNTH_OUTPUT" 2>>"$DRAFT_LOGS/daemon.log"
 SYNTH_EXIT=$?
 
 if [ $SYNTH_EXIT -ne 0 ]; then

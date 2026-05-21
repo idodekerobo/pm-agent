@@ -124,7 +124,7 @@ while true; do
         _NOW=$(date +%s)
         if [ $((_NOW - LAST_GRANOLA_POLL)) -ge "$DRAFT_GRANOLA_POLL" ]; then
             _log "info" "granola: starting poll (interval=${DRAFT_GRANOLA_POLL}s mode=${DRAFT_GRANOLA_MODE})"
-            bash "$DRAFT_BACKGROUND/granola-poller.sh" >> "$DRAFT_LOGS/daemon.log" 2>&1 &
+            bash "$DRAFT_BACKGROUND/integrations/granola/granola-poller.sh" >> "$DRAFT_LOGS/daemon.log" 2>&1 &
             LAST_GRANOLA_POLL=$_NOW
         fi
     fi

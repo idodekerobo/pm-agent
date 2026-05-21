@@ -49,7 +49,6 @@ _SCRIPTS=(
     "synthesize.sh"
     "commit-to-team-context.sh"
     "load-team.sh"
-    "granola-poller.sh"
 )
 
 _MISSING=()
@@ -85,6 +84,22 @@ for subdir in "synthesizers" "intelligence"; do
     else
         echo "[Draft Daemon] NOTE: $subdir/ not found in $SCRIPT_DIR — synthesis adapters not installed" >&2
     fi
+done
+
+# ── 2c. Copy integrations/ subdirectories ─────────────────────────────────────
+# Each integration (granola, slack, ...) has its own subdir with shell + TS code.
+for integ_src in "$SCRIPT_DIR/integrations"/*/; do
+    [ -d "$integ_src" ] || continue
+    integ_name=$(basename "$integ_src")
+    integ_dst="$DRAFT_BACKGROUND/integrations/$integ_name"
+    mkdir -p "$integ_dst"
+    # Copy shell scripts
+    for script in "$integ_src"*.sh; do
+        [ -f "$script" ] || continue
+        cp "$script" "$integ_dst/$(basename "$script")"
+        chmod +x "$integ_dst/$(basename "$script")"
+    done
+    echo "[Draft Daemon] Installed integrations/$integ_name/ to $integ_dst"
 done
 
 # ── 3. Dependency checks ───────────────────────────────────────────────────────

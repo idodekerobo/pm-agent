@@ -109,28 +109,14 @@ Granola MCP uses HTTP transport + browser OAuth. The `claude mcp add` command re
 the server. Authentication happens in a new session via `/mcp` → Authenticate.
 There is no API key for MCP — OAuth only.
 
-### 3a. Choose install scope
+### 3a. Register via claude CLI (global scope)
 
-Use the **AskUserQuestion** tool:
-> "Where should the Granola MCP server be registered?
->
-> (1) Global — available in all Claude Code sessions across all projects (recommended)
->     The Draft daemon runs synthesis outside any project directory, so global scope
->     ensures MCP tools are always available.
->
-> (2) Project-only — registered for this project directory only
->     The daemon may not find it during background synthesis."
-
-- **(1) Global** → use `--scope user` flag → store as `MCP_SCOPE_FLAG="--scope user"`
-- **(2) Project-only** → no scope flag → store as `MCP_SCOPE_FLAG=""`
-
-### 3b. Register via claude CLI
+The Draft daemon runs synthesis sessions from outside any project directory, so the
+Granola MCP must be registered globally (`--scope user`) to be available during synthesis.
 
 ```bash
-claude mcp add $MCP_SCOPE_FLAG granola --transport http https://mcp.granola.ai/mcp
+claude mcp add --scope user granola --transport http https://mcp.granola.ai/mcp
 ```
-
-(substitute `$MCP_SCOPE_FLAG` with the actual value — omit entirely if empty)
 
 Capture output. If non-zero exit:
 - Print the error
@@ -138,7 +124,7 @@ Capture output. If non-zero exit:
   `claude mcp add --scope user granola --transport http https://mcp.granola.ai/mcp`"
 - Hard stop.
 
-### 3c. Verify registration
+### 3b. Verify registration
 
 ```bash
 claude mcp list 2>/dev/null | grep -i granola && echo "verified" || echo "not_found"
@@ -146,7 +132,7 @@ claude mcp list 2>/dev/null | grep -i granola && echo "verified" || echo "not_fo
 
 If not found: warn "MCP registered but not showing in `claude mcp list` — check manually." Continue.
 
-### 3d. Save mode to secrets.json
+### 3c. Save mode to secrets.json
 
 ```bash
 python3 - <<'PYEOF'
@@ -170,14 +156,14 @@ print('wrote:' + str(secrets_path))
 PYEOF
 ```
 
-### 3e. Confirm
+### 3d. Confirm
 
-Print (substituting actual scope — "global" or "this project only"):
+Print:
 ```
 ✓ Granola MCP registered.
 
   Server: https://mcp.granola.ai/mcp (HTTP transport)
-  Scope:  [global (recommended) | this project only]
+  Scope:  global (available in all sessions)
   Mode saved to: config/secrets.json
 
 Two more steps required before synthesis will work:

@@ -55,6 +55,15 @@ v = d.get('last_checked_at')
 print(v if v else '')
 " 2>/dev/null || echo "")
 
+# Formatted as a bullet list for prompt injection; empty string if none
+PROCESSED_IDS_LIST=$(python3 -c "
+import json
+d = json.load(open('$CONTEXT_FILE'))
+ids = d.get('processed_meeting_ids', [])
+if ids:
+    print('\n'.join(f'  - {i}' for i in ids))
+" 2>/dev/null || echo "")
+
 MODE=$(python3 -c "
 import json
 d = json.load(open('$CONTEXT_FILE'))
@@ -138,9 +147,13 @@ Also read context/tensions.md if it exists — do not add content that contradic
 | \`list_meeting_folders\` | Folders you're a member of with ID, title, description, note count (paid plans only) |
 | \`get_account_info\` | Email and active workspace for the connected Granola account |
 
+**Already-processed meeting IDs — skip these entirely:**
+${PROCESSED_IDS_LIST:-  (none — first run)}
+
 **Step 1 — Fetch meetings via Granola MCP**
-1. Call \`list_meetings\` to find meetings since ${LAST_CHECKED_AT:-24 hours ago}.
+1. Call \`list_meetings\` to find recent meetings (use time_range "this_week" or "today").
 2. For each meeting returned:
+   - Skip if its ID is in the already-processed list above
    - Skip any meeting that ended less than 30 minutes ago (transcript may be incomplete)
    - Call \`get_meetings\` with the meeting ID to fetch full content including notes
    - If you need verbatim quotes or more granular detail, also call \`get_meeting_transcript\`
@@ -182,6 +195,8 @@ input_source: granola
 synthesized_by: ${INTELLIGENCE}
 timestamp: ${CURRENT_TS}
 profile: ${PROFILE}
+meeting_ids:
+  - [id of each meeting you synthesized — from the meeting ID returned by list_meetings/get_meetings]
 context_updates:
   - file: context/product/index.md
     action: append

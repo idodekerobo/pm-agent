@@ -108,7 +108,9 @@ print(t)
 esac
 
 # ── Helper: update state file ─────────────────────────────────────────────────
+# Usage: _update_state [newline-separated meeting IDs to append]
 _update_state() {
+    local new_ids="${1:-}"
     python3 - <<PYEOF
 import json
 
@@ -119,6 +121,13 @@ except Exception:
     state = {"processed_meeting_ids": []}
 
 state["last_checked_at"] = "$CURRENT_TS"
+
+# Append any new meeting IDs — avoid duplicates
+new_ids_str = """$new_ids"""
+for mid in new_ids_str.strip().splitlines():
+    mid = mid.strip()
+    if mid and mid not in state["processed_meeting_ids"]:
+        state["processed_meeting_ids"].append(mid)
 
 with open("$STATE_FILE", "w") as f:
     json.dump(state, f, indent=2)
@@ -136,13 +145,21 @@ CURRENT_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 python3 - <<PYEOF
 import json
 
+try:
+    with open("$STATE_FILE") as f:
+        state = json.load(f)
+    processed_ids = state.get("processed_meeting_ids", [])
+except Exception:
+    processed_ids = []
+
 context = {
     "type": "granola",
     "mode": "$DRAFT_GRANOLA_MODE",
     "profile": "$DRAFT_ACTIVE_PROFILE",
     "timestamp": "$CURRENT_TS",
     "last_checked_at": "$LAST_CHECKED_AT" if "$LAST_CHECKED_AT" else None,
-    "state_file": "$STATE_FILE"
+    "state_file": "$STATE_FILE",
+    "processed_meeting_ids": processed_ids
 }
 
 with open("$CONTEXT_FILE", "w") as f:
@@ -186,6 +203,30 @@ STAGING_FILE="${STAGING_DIR}/${TIMESTAMP}-granola.md"
 cp "$SYNTH_OUTPUT" "$STAGING_FILE"
 _log "info" "staged at $STAGING_FILE"
 
-_update_state
-_log "info" "poll complete — state updated (last_checked_at=$CURRENT_TS)"
+# Extract meeting IDs from the proposal YAML so we can mark them as processed
+NEW_MEETING_IDS=$(python3 - <<PYEOF
+import re, sys
+
+try:
+    content = open("$SYNTH_OUTPUT").read()
+    # Extract YAML frontmatter
+    m = re.search(r'^---\n(.+?)\n---', content, re.DOTALL)
+    if not m:
+        sys.exit(0)
+    front = m.group(1)
+    # Extract meeting_ids list
+    ids_block = re.search(r'^meeting_ids:\s*\n((?:[ \t]+-[ \t]+\S+\n?)+)', front, re.MULTILINE)
+    if not ids_block:
+        sys.exit(0)
+    for line in ids_block.group(1).splitlines():
+        mid = re.sub(r'^[ \t]+-[ \t]+', '', line).strip()
+        if mid and not mid.startswith('['):
+            print(mid)
+except Exception:
+    pass
+PYEOF
+)
+
+_update_state "$NEW_MEETING_IDS"
+_log "info" "poll complete — state updated (last_checked_at=$CURRENT_TS, new_ids=$(echo "$NEW_MEETING_IDS" | grep -c . || echo 0))"
 exit 0

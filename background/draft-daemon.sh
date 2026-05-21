@@ -120,7 +120,7 @@ while true; do
     # The poller manages its own state (background/state/granola.json) and
     # writes proposals directly — it does not go through the pending/ queue.
     # Async (&) so a slow synthesis call never blocks job queue processing.
-    if [ -x "$DRAFT_BACKGROUND/granola-poller.sh" ]; then
+    if [ -x "$DRAFT_BACKGROUND/integrations/granola/granola-poller.sh" ]; then
         _NOW=$(date +%s)
         if [ $((_NOW - LAST_GRANOLA_POLL)) -ge "$DRAFT_GRANOLA_POLL" ]; then
             _log "info" "granola: starting poll (interval=${DRAFT_GRANOLA_POLL}s mode=${DRAFT_GRANOLA_MODE})"

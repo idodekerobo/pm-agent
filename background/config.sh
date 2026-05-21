@@ -40,12 +40,12 @@ DRAFT_LOCAL="$DRAFT_CONFIG/local.json"       # Gate B creds (GitHub token)
 # All intervals are in seconds. Override via environment variable.
 #
 # DRAFT_PENDING_POLL   — how often to check pending/ queue          (default: 5s)
-# DRAFT_GRANOLA_POLL   — how often to check for new Granola txcpts  (default: 5min)
+# DRAFT_GRANOLA_POLL   — how often to check for new Granola txcpts  (default: 15min)
 # DRAFT_SLACK_CAPTURE  — how often to poll Slack REST API           (default: 5min)
 # DRAFT_SLACK_ANALYSIS — how often to run Slack synthesis batch     (default: 4hr)
 
 DRAFT_PENDING_POLL="${DRAFT_PENDING_POLL:-5}"
-DRAFT_GRANOLA_POLL="${DRAFT_GRANOLA_POLL:-300}"
+DRAFT_GRANOLA_POLL="${DRAFT_GRANOLA_POLL:-900}"
 DRAFT_SLACK_CAPTURE="${DRAFT_SLACK_CAPTURE:-300}"
 DRAFT_SLACK_ANALYSIS="${DRAFT_SLACK_ANALYSIS:-14400}"
 

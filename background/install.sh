@@ -99,6 +99,11 @@ for integ_src in "$SCRIPT_DIR/integrations"/*/; do
         cp "$script" "$integ_dst/$(basename "$script")"
         chmod +x "$integ_dst/$(basename "$script")"
     done
+    # Copy TypeScript and config files (bun projects)
+    for f in "$integ_src"*.ts "$integ_src"*.json; do
+        [ -f "$f" ] || continue
+        cp "$f" "$integ_dst/$(basename "$f")"
+    done
     echo "[Draft Daemon] Installed integrations/$integ_name/ to $integ_dst"
 done
 
@@ -132,6 +137,36 @@ if [ "$_DEPS_OK" = true ]; then
     echo "[Draft Daemon] All dependencies satisfied"
 fi
 
+# ── 3b. Build daemon PATH for LaunchAgent ─────────────────────────────────────
+# LaunchAgent runs with launchd's minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin).
+# Binaries installed via Homebrew, nvm, bun, or ~/.local/ are NOT in that PATH,
+# so direct calls to claude/tmux/python3/bun from daemon bash would silently fail.
+# Detect each required binary now (while running in the user's full shell env)
+# and build an explicit PATH string to embed in the plist.
+echo ""
+echo "[Draft Daemon] Building daemon PATH..."
+_BIN_DIRS=("/usr/bin" "/bin" "/usr/sbin" "/sbin")
+for _cmd in claude tmux python3 bun; do
+    _bin_path=$(command -v "$_cmd" 2>/dev/null || echo "")
+    if [ -n "$_bin_path" ]; then
+        _bin_dir=$(dirname "$_bin_path")
+        _already=false
+        for _d in "${_BIN_DIRS[@]}"; do
+            [ "$_d" = "$_bin_dir" ] && _already=true && break
+        done
+        if [ "$_already" = false ]; then
+            _BIN_DIRS+=("$_bin_dir")
+            echo "[Draft Daemon]   + $_bin_dir  (for $_cmd)"
+        fi
+    fi
+done
+# Join array with ':'
+_DAEMON_PATH=""
+for _d in "${_BIN_DIRS[@]}"; do
+    _DAEMON_PATH="${_DAEMON_PATH:+${_DAEMON_PATH}:}${_d}"
+done
+echo "[Draft Daemon] Daemon PATH: $_DAEMON_PATH"
+
 # ── 4. Write LaunchAgent plist ─────────────────────────────────────────────────
 # plist uses absolute paths (no shell variable expansion at plist read time).
 mkdir -p "$HOME/Library/LaunchAgents"
@@ -148,6 +183,13 @@ cat > "$PLIST_PATH" <<PLIST
         <string>/bin/bash</string>
         <string>${DRAFT_BACKGROUND}/draft-daemon.sh</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>${_DAEMON_PATH}</string>
+        <key>HOME</key>
+        <string>${HOME}</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>

@@ -124,11 +124,22 @@ Also read context/tensions.md if it exists — do not add content that contradic
 
 ## Your task
 
+**Available Granola MCP tools**
+| Tool | What it returns |
+|------|----------------|
+| \`query_granola_meetings\` | Natural language search across all meeting content |
+| \`list_meetings\` | Meeting ID, title, date, attendees (+ shared notes on paid plans) |
+| \`get_meetings\` | Full meeting content: ID, title, date, attendees, private notes, enhanced notes |
+| \`get_meeting_transcript\` | Raw transcript for a specific meeting ID (paid plans only) |
+| \`list_meeting_folders\` | Folders you're a member of with ID, title, description, note count (paid plans only) |
+| \`get_account_info\` | Email and active workspace for the connected Granola account |
+
 **Step 1 — Fetch meetings via Granola MCP**
-Use the Granola MCP tool \`list_meetings\` to find meetings since ${LAST_CHECKED_AT:-24 hours ago}.
-For each meeting returned:
-  - Skip any meeting that ended less than 30 minutes ago (transcript may be incomplete)
-  - Use \`get_meeting_transcript\` to fetch the full transcript
+1. Call \`list_meetings\` to find meetings since ${LAST_CHECKED_AT:-24 hours ago}.
+2. For each meeting returned:
+   - Skip any meeting that ended less than 30 minutes ago (transcript may be incomplete)
+   - Call \`get_meetings\` with the meeting ID to fetch full content including notes
+   - If you need verbatim quotes or more granular detail, also call \`get_meeting_transcript\`
 
 **Step 2 — Synthesize context updates**
 For each fetched transcript, extract only what would help a teammate start their

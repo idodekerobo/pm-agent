@@ -86,7 +86,11 @@ fi
 
 # ── Build prompt + call intelligence ──────────────────────────────────────────
 PROMPT_FILE=$(mktemp /tmp/draft-granola-prompt-XXXXXX.txt)
-OUTPUT_FILE=$(mktemp /tmp/draft-granola-synthesis-XXXXXX.md)
+# Output file must live inside the workspace — Claude Code's Write tool restricts
+# writes to paths within the CWD (~/.draft/workspaces/<profile>/) even with
+# --dangerously-skip-permissions. /tmp/ is outside that boundary.
+mkdir -p "$DRAFT_WORKSPACE/tmp"
+OUTPUT_FILE=$(mktemp "$DRAFT_WORKSPACE/tmp/granola-synthesis-XXXXXX.md")
 
 _cleanup() { rm -f "$PROMPT_FILE" "$OUTPUT_FILE"; }
 trap _cleanup EXIT

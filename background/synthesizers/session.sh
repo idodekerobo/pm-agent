@@ -82,7 +82,8 @@ PYEOF
 
 # ── Create temp files ──────────────────────────────────────────────────────────
 PROMPT_FILE=$(mktemp /tmp/draft-prompt-XXXXXX.txt)
-OUTPUT_FILE=$(mktemp /tmp/draft-synthesis-XXXXXX.md)
+mkdir -p "$DRAFT_WORKSPACE/tmp"
+OUTPUT_FILE=$(mktemp "$DRAFT_WORKSPACE/tmp/synthesis-XXXXXX.md")
 
 _cleanup() {
     rm -f "$PROMPT_FILE" "$OUTPUT_FILE" "$TRANSCRIPT_TRUNCATED_PATH"

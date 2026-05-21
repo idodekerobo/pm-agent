@@ -49,8 +49,64 @@ DRAFT_GRANOLA_POLL="${DRAFT_GRANOLA_POLL:-300}"
 DRAFT_SLACK_CAPTURE="${DRAFT_SLACK_CAPTURE:-300}"
 DRAFT_SLACK_ANALYSIS="${DRAFT_SLACK_ANALYSIS:-14400}"
 
+# ── Per-source intelligence config ─────────────────────────────────────────────
+# Which intelligence adapter each source uses for synthesis.
+# All default to "claude-code". Override via environment variable.
+#
+# Valid values today: "claude-code" (tmux TUI, full tool access, no per-token cost)
+# Future values:      "claude-api" (stateless curl, faster/cheaper for short transcripts)
+#                     "codex"      (codex exec, alternative CLI agent)
+#                     "openai-api" (stateless curl, OpenAI)
+#
+# DRAFT_SESSION_INTELLIGENCE — session transcript synthesis (Phase 1)
+# DRAFT_GRANOLA_INTELLIGENCE — Granola meeting synthesis    (Phase 2)
+# DRAFT_SLACK_INTELLIGENCE   — Slack message batch synthesis (Phase 3)
+
+DRAFT_SESSION_INTELLIGENCE="${DRAFT_SESSION_INTELLIGENCE:-claude-code}"
+DRAFT_GRANOLA_INTELLIGENCE="${DRAFT_GRANOLA_INTELLIGENCE:-claude-code}"
+DRAFT_SLACK_INTELLIGENCE="${DRAFT_SLACK_INTELLIGENCE:-claude-code}"
+
+# ── Granola integration mode ───────────────────────────────────────────────────
+# Controls how the Granola synthesizer fetches meeting transcripts.
+#
+# "mcp" (default) — Claude Code uses its connected Granola MCP tools to fetch
+#                   and synthesize in a single agent call. No REST token needed.
+#                   Requires: Granola MCP added to ~/.claude/settings.json
+#                   Set up via: /draft:connect granola (Claude Code slash command)
+#
+# "api"           — Daemon fetches transcripts directly via Granola REST API.
+#                   Synthesis is then passed as text to the intelligence adapter.
+#                   Requires: granola_api_token in config/secrets.json
+#                   Set up via: /draft:connect granola (choose API option)
+#
+# The "mcp" path is recommended when claude-code is the intelligence adapter —
+# Claude fetches and synthesizes in one step, no bash REST plumbing needed.
+# Switch to "api" if you want a lighter intelligence adapter (e.g. claude-api)
+# that receives transcript text as input rather than calling MCP tools itself.
+
+DRAFT_GRANOLA_MODE="${DRAFT_GRANOLA_MODE:-mcp}"
+
+# If granola_mode is saved in secrets.json (written by /draft:connect), use it.
+# This lets the skill persist the user's MCP vs API choice across daemon restarts.
+# Precedence: env var override > secrets.json > default ("mcp")
+if [ -z "${DRAFT_GRANOLA_MODE_OVERRIDE+x}" ] && [ -f "$DRAFT_SECRETS" ]; then
+    _secrets_granola_mode=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$DRAFT_SECRETS'))
+    v = d.get('granola_mode', '')
+    if v in ('mcp', 'api'): print(v)
+except: pass
+" 2>/dev/null || echo "")
+    if [ -n "$_secrets_granola_mode" ]; then
+        DRAFT_GRANOLA_MODE="$_secrets_granola_mode"
+    fi
+fi
+
 # ── Exports ────────────────────────────────────────────────────────────────────
 export DRAFT_GLOBAL DRAFT_ACTIVE_PROFILE DRAFT_WORKSPACE
 export DRAFT_BACKGROUND DRAFT_PENDING DRAFT_FAILED DRAFT_LOGS DRAFT_STAGING
 export DRAFT_CONFIG DRAFT_SECRETS DRAFT_LOCAL
 export DRAFT_PENDING_POLL DRAFT_GRANOLA_POLL DRAFT_SLACK_CAPTURE DRAFT_SLACK_ANALYSIS
+export DRAFT_SESSION_INTELLIGENCE DRAFT_GRANOLA_INTELLIGENCE DRAFT_SLACK_INTELLIGENCE
+export DRAFT_GRANOLA_MODE

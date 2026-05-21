@@ -67,9 +67,19 @@ exec claude --dangerously-skip-permissions
 LAUNCH
 chmod +x "$LAUNCH_SCRIPT"
 
+# ── Trace log path ─────────────────────────────────────────────────────────────
+# Written on every run. Named by session so multiple concurrent synths don't clobber.
+# Read with: cat ~/.draft/background/logs/synth-trace-<session>.log
+TRACE_LOG="$DRAFT_LOGS/synth-trace-${TMUX_SESSION}.log"
+
 # ── Cleanup on exit ────────────────────────────────────────────────────────────
+# Capture full pane history BEFORE killing — once killed, pane is gone.
 _cleanup() {
-    tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+    if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+        tmux capture-pane -t "$TMUX_SESSION" -p -S -5000 2>/dev/null > "$TRACE_LOG" || true
+        _log "trace saved → $TRACE_LOG"
+        tmux kill-session -t "$TMUX_SESSION" 2>/dev/null || true
+    fi
     rm -f "$LAUNCH_SCRIPT"
 }
 trap _cleanup EXIT

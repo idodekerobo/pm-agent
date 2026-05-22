@@ -107,6 +107,14 @@ for integ_src in "$SCRIPT_DIR/integrations"/*/; do
     echo "[Draft Daemon] Installed integrations/$integ_name/ to $integ_dst"
 done
 
+# Seed Slack captures dir + state file (inside integrations/slack/ — data persists across reinstalls)
+SLACK_CAPTURES_DIR="$DRAFT_BACKGROUND/integrations/slack/captures"
+if [ ! -f "$SLACK_CAPTURES_DIR/state.json" ]; then
+    mkdir -p "$SLACK_CAPTURES_DIR"
+    printf '{}\n' > "$SLACK_CAPTURES_DIR/state.json"
+    echo "[Draft Daemon] Seeded integrations/slack/captures/state.json"
+fi
+
 # ── 3. Dependency checks ───────────────────────────────────────────────────────
 echo ""
 echo "[Draft Daemon] Checking dependencies..."
@@ -131,6 +139,13 @@ if command -v python3 &>/dev/null; then
 else
     echo "[Draft Daemon]   python3 .. NOT FOUND — daemon requires python3 for JSON parsing" >&2
     _DEPS_OK=false
+fi
+
+if command -v bun &>/dev/null; then
+    echo "[Draft Daemon]   bun    ... ok ($(bun --version))"
+else
+    echo "[Draft Daemon]   bun    ... NOT FOUND — Slack capture unavailable (install: https://bun.sh)" >&2
+    # Non-blocking: daemon runs without bun; Slack is disabled until bun is installed
 fi
 
 if [ "$_DEPS_OK" = true ]; then

@@ -103,10 +103,36 @@ except: pass
     fi
 fi
 
+# ── Slack integration config ───────────────────────────────────────────────────
+# DRAFT_SLACK_MODE          — "passive" (capture all) or "tagged" (!draft only)
+# DRAFT_SLACK_ANALYSIS_WINDOW — how many hours back to synthesize per run
+# DRAFT_SLACK_CAPTURE_PID  — PID file for the long-running capture process
+
+DRAFT_SLACK_MODE="${DRAFT_SLACK_MODE:-passive}"
+DRAFT_SLACK_ANALYSIS_WINDOW="${DRAFT_SLACK_ANALYSIS_WINDOW:-8}"
+DRAFT_SLACK_CAPTURE_PID="$DRAFT_BACKGROUND/integrations/slack/capture.pid"
+
+# If slack_capture_mode is saved in secrets.json (written by /draft:connect slack),
+# use it. Precedence: env var override > secrets.json > default ("passive")
+if [ -z "${DRAFT_SLACK_MODE_OVERRIDE+x}" ] && [ -f "$DRAFT_SECRETS" ]; then
+    _secrets_slack_mode=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$DRAFT_SECRETS'))
+    v = d.get('slack_capture_mode', '')
+    if v in ('passive', 'tagged'): print(v)
+except: pass
+" 2>/dev/null || echo "")
+    if [ -n "$_secrets_slack_mode" ]; then
+        DRAFT_SLACK_MODE="$_secrets_slack_mode"
+    fi
+fi
+
 # ── Exports ────────────────────────────────────────────────────────────────────
 export DRAFT_GLOBAL DRAFT_ACTIVE_PROFILE DRAFT_WORKSPACE
 export DRAFT_BACKGROUND DRAFT_PENDING DRAFT_FAILED DRAFT_LOGS DRAFT_STAGING
 export DRAFT_CONFIG DRAFT_SECRETS DRAFT_LOCAL
 export DRAFT_PENDING_POLL DRAFT_GRANOLA_POLL DRAFT_SLACK_CAPTURE DRAFT_SLACK_ANALYSIS
+export DRAFT_SLACK_MODE DRAFT_SLACK_ANALYSIS_WINDOW DRAFT_SLACK_CAPTURE_PID
 export DRAFT_SESSION_INTELLIGENCE DRAFT_GRANOLA_INTELLIGENCE DRAFT_SLACK_INTELLIGENCE
 export DRAFT_GRANOLA_MODE

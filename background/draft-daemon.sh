@@ -102,9 +102,10 @@ print(d.get('session_id', 'unknown'))
 _log "info" "draft daemon starting (pid=$$, profile=$DRAFT_ACTIVE_PROFILE, pending_poll=${DRAFT_PENDING_POLL}s)"
 
 LOOP_COUNT=0
-LAST_GRANOLA_POLL=0   # epoch seconds; 0 = never polled this session
-# LAST_SLACK_CAPTURE=0  # Phase 3
-# LAST_SLACK_ANALYSIS=0 # Phase 3
+LAST_GRANOLA_POLL=0     # epoch seconds; 0 = never polled this session
+LAST_SLACK_MANAGER=0    # process health check every 60s
+LAST_SLACK_ANALYSIS=0   # synthesis batch every DRAFT_SLACK_ANALYSIS seconds
+SLACK_MANAGER_INTERVAL=60
 
 while true; do
 
@@ -129,7 +130,26 @@ while true; do
         fi
     fi
 
-    # -- Phase 3+: slack poller will be called here ---------------------------
+    # -- Phase 3: Slack manager (process health check every 60s) ---------------
+    # Ensures slack-capture.ts is running if Slack is configured.
+    if [ -x "$DRAFT_BACKGROUND/integrations/slack/slack-manager.sh" ]; then
+        _NOW=$(date +%s)
+        if [ $((_NOW - LAST_SLACK_MANAGER)) -ge "$SLACK_MANAGER_INTERVAL" ]; then
+            bash "$DRAFT_BACKGROUND/integrations/slack/slack-manager.sh" >> "$DRAFT_LOGS/daemon.log" 2>&1
+            LAST_SLACK_MANAGER=$_NOW
+        fi
+    fi
+
+    # -- Phase 3: Slack analyzer (synthesis every DRAFT_SLACK_ANALYSIS seconds) -
+    # Reads captured Slack messages, reconstructs threads, synthesizes proposals.
+    if [ -x "$DRAFT_BACKGROUND/integrations/slack/slack-analyzer.sh" ]; then
+        _NOW=$(date +%s)
+        if [ $((_NOW - LAST_SLACK_ANALYSIS)) -ge "$DRAFT_SLACK_ANALYSIS" ]; then
+            _log "info" "slack: starting analysis (interval=${DRAFT_SLACK_ANALYSIS}s)"
+            bash "$DRAFT_BACKGROUND/integrations/slack/slack-analyzer.sh" >> "$DRAFT_LOGS/daemon.log" 2>&1 &
+            LAST_SLACK_ANALYSIS=$_NOW
+        fi
+    fi
 
     # -- Periodic log trim (every 1000 loops) ----------------------------------
     LOOP_COUNT=$((LOOP_COUNT + 1))

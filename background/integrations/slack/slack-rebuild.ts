@@ -216,6 +216,7 @@ function main(): void {
     '',
     `**Channel ID:** ${CHANNEL_ID}`,
     `**Period:** ${period} (last ${HOURS}h)`,
+    `**Reconstructed at:** ${new Date().toISOString()}`,
     `**Participants:** ${participants}`,
     `**Messages:** ${messages.length}  |  **Filtered (empty):** ${filteredCount}`,
     '',

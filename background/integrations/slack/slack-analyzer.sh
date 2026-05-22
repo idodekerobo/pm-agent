@@ -155,13 +155,35 @@ if grep -q "context_updates: \[\]" "$SYNTH_OUTPUT" 2>/dev/null; then
 fi
 
 # ── Write to proposals/ ────────────────────────────────────────────────────────
+# If the LLM set replaces_proposal, overwrite that file. Otherwise create new.
 
 STAGING_DIR="$DRAFT_WORKSPACE/proposals"
 mkdir -p "$STAGING_DIR"
 
-TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-STAGING_FILE="${STAGING_DIR}/${TIMESTAMP}-slack.md"
+REPLACES=$(python3 -c "
+import re, sys
+try:
+    content = open('$SYNTH_OUTPUT').read()
+    m = re.search(r'^---\n(.+?)\n---', content, re.DOTALL)
+    if not m:
+        sys.exit(0)
+    r = re.search(r'^replaces_proposal:\s*(\S+)', m.group(1), re.MULTILINE)
+    if r:
+        print(r.group(1))
+except Exception:
+    pass
+" 2>/dev/null || echo "")
 
-cp "$SYNTH_OUTPUT" "$STAGING_FILE"
-_log "info" "staged at $STAGING_FILE"
+if [ -n "$REPLACES" ] && [ -f "$STAGING_DIR/$REPLACES" ]; then
+    cp "$SYNTH_OUTPUT" "$STAGING_DIR/$REPLACES"
+    _log "info" "overwrote existing proposal: $REPLACES"
+else
+    if [ -n "$REPLACES" ]; then
+        _log "warn" "replaces_proposal '$REPLACES' not found in proposals/ — creating new instead"
+    fi
+    TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+    STAGING_FILE="${STAGING_DIR}/${TIMESTAMP}-slack.md"
+    cp "$SYNTH_OUTPUT" "$STAGING_FILE"
+    _log "info" "staged at $STAGING_FILE"
+fi
 exit 0

@@ -121,6 +121,56 @@ print('\n'.join(lines))
 " 2>/dev/null || echo "  (no roles configured)")
 fi
 
+# ── Read pending proposals ────────────────────────────────────────────────────
+# Inject unreviewed proposals so the LLM can skip already-captured content
+# or overwrite a proposal if recent messages update the picture.
+
+PROPOSALS_CONTENT=""
+PROPOSALS_DIR="${DRAFT_WORKSPACE}/proposals"
+MAX_PER_PROPOSAL=3000
+
+if [ -d "$PROPOSALS_DIR" ]; then
+    while IFS= read -r pfile; do
+        [ -z "$pfile" ] && continue
+        PNAME=$(basename "$pfile")
+        PCONTENT=$(head -c "$MAX_PER_PROPOSAL" "$pfile" 2>/dev/null || echo "(unreadable)")
+        PROPOSALS_CONTENT="${PROPOSALS_CONTENT}
+### ${PNAME}
+${PCONTENT}
+"
+    done < <(find "$PROPOSALS_DIR" -maxdepth 1 -name "*.md" 2>/dev/null | sort)
+fi
+
+if [ -z "$PROPOSALS_CONTENT" ]; then
+    PROPOSALS_CONTENT="(none)"
+fi
+
+# Derive last synthesis timestamp from the most recent proposal's frontmatter.
+# This tells the LLM how long ago it last ran, so it can reason about the gap.
+LAST_SYNTHESIS_TS="(no prior synthesis)"
+if [ -d "$PROPOSALS_DIR" ]; then
+    _latest_proposal=$(find "$PROPOSALS_DIR" -maxdepth 1 -name "*.md" 2>/dev/null | sort | tail -1)
+    if [ -n "$_latest_proposal" ]; then
+        _ts=$(python3 -c "
+import re, sys
+try:
+    content = open('$_latest_proposal').read()
+    m = re.search(r'^---\n(.+?)\n---', content, re.DOTALL)
+    if m:
+        t = re.search(r'^timestamp:\s*(\S+)', m.group(1), re.MULTILINE)
+        if t:
+            print(t.group(1))
+            sys.exit(0)
+except Exception:
+    pass
+print('')
+" 2>/dev/null || echo "")
+        if [ -n "$_ts" ]; then
+            LAST_SYNTHESIS_TS="$_ts"
+        fi
+    fi
+fi
+
 # ── Create temp files ─────────────────────────────────────────────────────────
 
 PROMPT_FILE=$(mktemp /tmp/draft-slack-prompt-XXXXXX.txt)
@@ -140,7 +190,8 @@ You are a context synthesis agent for Draft, a shared team context layer for AI 
 
 ## Analysis period
 Last ${ANALYSIS_WINDOW} hours of Slack activity.
-Synthesized at: ${CURRENT_TS}
+Current time: ${CURRENT_TS}
+Last synthesis: ${LAST_SYNTHESIS_TS}
 Profile: ${PROFILE}
 
 ## Team roles
@@ -161,6 +212,21 @@ ${CONTEXT_CONTENT}
 Already flagged contradictions — do NOT create duplicate tension entries.
 (Included in context/tensions.md above)
 
+## Pending proposals (synthesized but not yet reviewed)
+These proposals have been generated from earlier Slack or Granola runs but not yet
+applied to the workspace. Do NOT re-capture anything already covered here.
+
+If recent Slack messages update or supersede a pending proposal — new resolution on
+the same decision, a direction that has since changed, more specificity on an action
+item — you may OVERWRITE that proposal instead of creating a new one. To overwrite,
+include this field at the top of your YAML frontmatter:
+  replaces_proposal: <exact filename, e.g. 20260522T004806Z-slack.md>
+
+If you have nothing to add beyond what is already in the workspace context or pending
+proposals, output the document with empty context_updates.
+
+${PROPOSALS_CONTENT}
+
 ## Your task
 Extract only what would help a teammate start their next AI session with better context.
 
@@ -175,6 +241,7 @@ Extract only what would help a teammate start their next AI session with better 
 - Logistics, scheduling, casual chat
 - Questions without resolution
 - Anything already in the workspace context above
+- Anything already captured (or superseded) by a pending proposal
 - Duplicate tensions already in tensions.md
 
 **Specificity rule:** "Founder decided to shift target user to music directors (Slack #product 2026-05-21)" = SIGNAL.
@@ -191,15 +258,17 @@ When Slack content directly contradicts existing context, route it as a tension:
       - **Status:** unresolved
       - **Resolution:**
 
-**If nothing team-relevant in the Slack content:** write the document with empty context_updates.
-
 ## Output format
-Write ONLY the following structure. Three actions allowed:
+Write ONLY the following structure. Three actions allowed for context_updates:
 - "append"   — new info that complements existing context (default)
 - "tension"  — contradiction with existing context; always file: context/tensions.md
-- "overwrite" — DO NOT USE in synthesis
+- "overwrite" — DO NOT USE in context_updates
+
+The optional top-level field replaces_proposal names an existing proposal file to
+overwrite rather than creating a new one. Omit it when creating a fresh proposal.
 
 ---
+replaces_proposal: 20260522T004806Z-slack.md   # optional — omit if creating new
 input_source: slack
 synthesized_by: ${DRAFT_SLACK_INTELLIGENCE:-claude-api}
 timestamp: ${CURRENT_TS}
@@ -221,6 +290,7 @@ context_updates:
 - Do NOT copy raw Slack messages verbatim. Write synthesized insights only.
 - Do NOT invent information not present in the messages.
 - For contradictions: ALWAYS use action: tension with file: context/tensions.md.
+- replaces_proposal must be an exact filename from the pending proposals list above.
 - Write ONLY the document above to stdout. No preamble. No commentary.
 PROMPT
 

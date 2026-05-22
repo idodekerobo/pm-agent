@@ -25,12 +25,8 @@ Read the file at `${CLAUDE_PLUGIN_ROOT}/skills/draft-connect/granola/SKILL.md`
 and execute it from Step 0.
 
 **`/draft:connect slack`**
-Not yet available. Print:
-```
-Slack integration is coming in Phase 3.
-Run /draft:connect to see what's available now.
-```
-Stop.
+Read the file at `${CLAUDE_PLUGIN_ROOT}/skills/draft-connect/slack/SKILL.md`
+and execute it from Step 0.
 
 **No argument — `/draft:connect`**
 Continue to Step 2 (status display).
@@ -81,6 +77,22 @@ else:
     granola_status = 'not configured'
 
 print(f'granola:{granola_status}')
+# ── Slack ─────────────────────────────────────────────────────────────────────
+slack_status = 'not configured'
+slack_mode = ''
+if secrets_path.exists():
+    try:
+        d = json.loads(secrets_path.read_text())
+        bot = d.get('slack_bot_token', '')
+        app = d.get('slack_app_token', '')
+        channels = d.get('slack_allowlist_channels', [])
+        mode = d.get('slack_capture_mode', 'passive')
+        if bot and app:
+            slack_status = f"connected ({mode}, {len(channels)} channel{'s' if len(channels) != 1 else ''})"
+            slack_mode = mode
+    except:
+        pass
+print(f'slack:{slack_status}')
 "
 ```
 
@@ -90,7 +102,7 @@ Print a status table using the output above:
 Draft Integrations
 
   granola   [connected (MCP) | connected (API) | not configured]
-  slack     not configured  (Phase 3)
+  slack     [connected (passive, 2 channels) | not configured]
 
 Run /draft:connect <name> to set up an integration.
 ```

@@ -14,8 +14,8 @@ Source adapters are responsible for:
 ```
 synthesizers/
   session.sh     # Claude Code session transcripts
-  granola.sh     # TODO Phase 2: Granola meeting transcripts
-  slack.sh       # TODO Phase 3: Slack message batches
+  granola.sh     # Granola meeting transcripts
+  slack.sh       # Slack message batches
 ```
 
 ## Interface

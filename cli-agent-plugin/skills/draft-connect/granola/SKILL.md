@@ -31,7 +31,7 @@ Store as `ACTIVE_WORKSPACE`.
 Confirm daemon is installed:
 
 ```bash
-ls ~/.draft/background/granola-poller.sh 2>/dev/null && echo "installed" || echo "not installed"
+ls ~/.draft/background/integrations/granola/granola-poller.sh 2>/dev/null && echo "installed" || echo "not installed"
 ```
 
 If not installed: "The Draft daemon isn't installed. Run `bash <plugin_root>/background/install.sh` first, then re-run `/draft:connect granola`." Hard stop.
@@ -175,7 +175,7 @@ Two more steps required before synthesis will work:
      A browser window will open — sign in to Granola to complete OAuth.
 
   3. After authenticating, the daemon picks up Granola on the next poll (~5 min).
-     Test immediately with: bash ~/.draft/background/granola-poller.sh
+     Test immediately with: bash ~/.draft/background/integrations/granola/granola-poller.sh
 
 The OAuth token is stored by Claude Code and reused across sessions — one-time auth only.
 ```
@@ -248,7 +248,7 @@ Print:
   Mode: api
 
 The daemon will fetch Granola transcripts on the next poll cycle (~5 min).
-Test now: DRAFT_GRANOLA_MODE=api bash ~/.draft/background/granola-poller.sh
+Test now: DRAFT_GRANOLA_MODE=api bash ~/.draft/background/integrations/granola/granola-poller.sh
 
 Restart the daemon to pick up the new mode:
   bash ~/.draft/background/stop.sh && bash ~/.draft/background/start.sh

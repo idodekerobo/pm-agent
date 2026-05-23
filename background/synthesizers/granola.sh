@@ -178,6 +178,20 @@ next AI session with better shared context.
 confirming transcripts are not stored locally" = SIGNAL.
 "Discussed technical options" = NOISE.
 
+**CONTRADICTIONS — use action: tension:**
+When new information from the meeting directly contradicts something already in a context file,
+do NOT append both versions or overwrite. Route it as a tension entry:
+  - file: context/tensions.md
+    action: tension
+    content: |
+      ### [short name for the contradiction]
+      - **Observed:** [YYYY-MM-DD]
+      - **Signal:** Meeting says "[new value]" but [context/file] says "[existing value]"
+      - **Status:** unresolved
+      - **Resolution:**
+Do NOT update the dimension file — the contradiction stays visible until the curator resolves it.
+Only create a tension if it is not already present in context/tensions.md.
+
 **If no new meetings, or no team-relevant content:** write the document with
 empty context_updates: [].
 
@@ -186,9 +200,10 @@ empty context_updates: [].
 Write ONLY the following structure to: ${OUTPUT_FILE}
 
 Use ONLY context dimensions that exist in context/ (${CONTEXT_DIMS}).
-Action must be "append", "tension", or "overwrite" (overwrite reserved for compaction only).
-Use "tension" when new meeting content directly contradicts existing context — route
-the tension entry to context/tensions.md, not the dimension file.
+Three actions are allowed:
+- "append"    — new information that complements existing context (default for all synthesis)
+- "tension"   — new info contradicts existing context; always set file: context/tensions.md
+- "overwrite" — DO NOT USE in synthesis; reserved for /draft:compact only
 
 ---
 input_source: granola
@@ -213,6 +228,7 @@ context_updates:
 - Do NOT ask questions. Do NOT seek clarification. If ambiguous, omit.
 - Do NOT copy raw transcript text. Write synthesized insights only.
 - Do NOT invent information not present in the transcript.
+- For contradictions: ALWAYS use action: tension with file: context/tensions.md. Never overwrite to resolve a contradiction — that is the curator's decision, not the synthesizer's.
 - Write ONLY the document above to ${OUTPUT_FILE}. No preamble. No commentary.
 - After writing the file, type /exit to end the session.
 PROMPT
@@ -346,8 +362,10 @@ last_checked_at: ${LAST_CHECKED_AT:-never}
 ## Existing workspace context
 Read these files before synthesizing so you know what's already captured:
 ${CONTEXT_FILES_LIST}
+   - ${DRAFT_WORKSPACE}/context/tensions.md
 
-Also read context/tensions.md if it exists.
+Read tensions.md before synthesizing — do not add content that contradicts existing context
+without routing it as a tension. Do not create duplicate tension entries.
 
 ## Meeting transcripts to synthesize
 
@@ -355,12 +373,48 @@ ${TRANSCRIPT_CONTENT}
 
 ## Your task
 Extract only what would help a teammate start their next AI session with better
-shared context. Signal vs. noise rules same as session synthesis.
+shared context.
+
+**SIGNAL — capture:**
+- Product or architecture decisions made or discussed
+- Action items with clear owners (especially ones affecting the product/team)
+- Direction changes, new constraints, or validated/invalidated assumptions
+- Team-relevant facts learned about users, customers, competitors, or the market
+
+**NOISE — skip:**
+- Small talk, scheduling discussion, logistics
+- Items already captured in the existing context files above
+- Speculative ideas with no decision or action
+- Implementation minutiae
+
+**Specificity rule:** "Decided to drop Granola API polling in favor of MCP after
+confirming transcripts are not stored locally" = SIGNAL.
+"Discussed technical options" = NOISE.
+
+**CONTRADICTIONS — use action: tension:**
+When new information from the meeting directly contradicts something already in a context file,
+do NOT append both versions or overwrite. Route it as a tension entry:
+  - file: context/tensions.md
+    action: tension
+    content: |
+      ### [short name for the contradiction]
+      - **Observed:** [YYYY-MM-DD]
+      - **Signal:** Meeting says "[new value]" but [context/file] says "[existing value]"
+      - **Status:** unresolved
+      - **Resolution:**
+Do NOT update the dimension file — the contradiction stays visible until the curator resolves it.
+Only create a tension if it is not already present in context/tensions.md.
 
 **If no team-relevant content:** write the document with empty context_updates: [].
 
 ## Output format
 Write ONLY to: ${OUTPUT_FILE}
+
+Use ONLY context dimensions that exist in context/ (${CONTEXT_DIMS}).
+Three actions are allowed:
+- "append"    — new information that complements existing context (default for all synthesis)
+- "tension"   — new info contradicts existing context; always set file: context/tensions.md
+- "overwrite" — DO NOT USE in synthesis; reserved for /draft:compact only
 
 ---
 input_source: granola
@@ -381,7 +435,9 @@ context_updates:
 ## STRICT RULES
 - Do NOT ask questions. Do NOT seek clarification. If ambiguous, omit.
 - Do NOT copy raw transcript text. Write synthesized insights only.
-- Write ONLY the document above to ${OUTPUT_FILE}. No preamble.
+- Do NOT invent information not present in the transcripts.
+- For contradictions: ALWAYS use action: tension with file: context/tensions.md. Never overwrite to resolve a contradiction — that is the curator's decision, not the synthesizer's.
+- Write ONLY the document above to ${OUTPUT_FILE}. No preamble. No commentary.
 - After writing the file, type /exit to end the session.
 PROMPT
 

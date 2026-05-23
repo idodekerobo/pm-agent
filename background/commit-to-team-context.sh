@@ -112,6 +112,7 @@ import sys, re, os
 
 staging = open('$STAGING_FILE').read()
 workspace = '$WORKSPACE'
+input_source = '$INPUT_SOURCE'
 
 # Extract YAML frontmatter
 parts = staging.split('---')
@@ -182,6 +183,15 @@ for u in updates:
             f.write('\n' + content + '\n')
         sys.stderr.write(f"applied tension → context/tensions.md (contradicts {u['file']})\n")
     elif action == 'overwrite':
+        # Guard: overwrite is reserved for /draft:compact only — reject from all synthesizers.
+        # Synthesis sources (session, granola, slack) must use 'append' or 'tension' only.
+        allowed_overwrite_sources = ['compact']
+        if input_source not in allowed_overwrite_sources:
+            sys.stderr.write(
+                f"ERROR: action: overwrite rejected — source '{input_source}' is not permitted to overwrite.\n"
+                f"  Synthesizers must use 'append' or 'tension'. 'overwrite' is reserved for /draft:compact only.\n"
+            )
+            sys.exit(1)
         with open(target_file, 'w') as f:
             f.write(content + '\n')
         sys.stderr.write(f"applied overwrite: {u['file']}\n")

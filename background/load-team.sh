@@ -165,6 +165,12 @@ if [ -f "$SOURCE_PATH/config/collaboration.json" ]; then
     cp "$SOURCE_PATH/config/collaboration.json" "$WORKSPACE/config/collaboration.json"
 fi
 
+# ── Write loaded notification ──────────────────────────────────────────────────
+# inject-context.sh reads this and instructs the model to surface it to the user.
+mkdir -p "$WORKSPACE/notifications"
+printf 'Team context refreshed from the shared repo at %s.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    > "$WORKSPACE/notifications/load-team-loaded.txt"
+
 # ── Update last_loaded timestamp ───────────────────────────────────────────────
 NEW_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 

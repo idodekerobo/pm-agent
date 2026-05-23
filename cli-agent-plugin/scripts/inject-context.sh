@@ -180,17 +180,28 @@ if [ -f "$LAST_CHECK" ]; then
     fi
 fi
 
-# ── Load-team warning (P1-UX-1) ───────────────────────────────────────────────
-# load-team.sh writes this file when it detects unpublished local changes and
-# skips the overwrite. Surface it here so the user sees it at session start.
-# Cleared after reading — load-team.sh will write a fresh one next session if
-# unpublished changes still exist.
+# ── Load-team notifications ────────────────────────────────────────────────────
+# load-team.sh writes one of two files depending on what happened at session start.
+# Both are cleared after reading — written fresh each session as needed.
+
+# Success: new team context was pulled from the shared repo.
+_LOAD_OK="$DRAFT_WORKSPACE/notifications/load-team-loaded.txt"
+if [ -f "$_LOAD_OK" ]; then
+    echo ""
+    echo "## Team Context Refreshed"
+    cat "$_LOAD_OK"
+    echo "Please mention to the user at the start of this conversation that their team context was just refreshed from the shared repo."
+    rm -f "$_LOAD_OK"
+fi
+
+# Warning: unpublished local changes detected — overwrite was skipped.
 _LOAD_WARN="$DRAFT_WORKSPACE/notifications/load-team-warning.txt"
 if [ -f "$_LOAD_WARN" ]; then
     echo ""
     echo "## ⚠️ Draft Warning — Unpublished Local Changes"
     echo ""
     cat "$_LOAD_WARN"
+    echo "Please alert the user to this at the start of this conversation."
     rm -f "$_LOAD_WARN"
 fi
 

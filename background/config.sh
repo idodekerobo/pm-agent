@@ -54,9 +54,9 @@ DRAFT_SLACK_ANALYSIS="${DRAFT_SLACK_ANALYSIS:-14400}"
 # All default to "claude-code". Override via environment variable.
 #
 # Valid values today: "claude-code" (tmux TUI, full tool access, no per-token cost)
-# Future values:      "claude-api" (stateless curl, faster/cheaper for short transcripts)
-#                     "codex"      (codex exec, alternative CLI agent)
-#                     "openai-api" (stateless curl, OpenAI)
+#                     "codex"      (future: codex exec — validate headless behavior first)
+# Deferred:           "claude-api", "openai-api" — stateless adapters need a real agent
+#                     harness before they're production-ready
 #
 # DRAFT_SESSION_INTELLIGENCE — session transcript synthesis (Phase 1)
 # DRAFT_GRANOLA_INTELLIGENCE — Granola meeting synthesis    (Phase 2)
@@ -81,8 +81,8 @@ DRAFT_SLACK_INTELLIGENCE="${DRAFT_SLACK_INTELLIGENCE:-claude-code}"
 #
 # The "mcp" path is recommended when claude-code is the intelligence adapter —
 # Claude fetches and synthesizes in one step, no bash REST plumbing needed.
-# Switch to "api" if you want a lighter intelligence adapter (e.g. claude-api)
-# that receives transcript text as input rather than calling MCP tools itself.
+# The "api" path is available for future stateless adapters that receive
+# transcript text as input rather than calling MCP tools themselves.
 
 DRAFT_GRANOLA_MODE="${DRAFT_GRANOLA_MODE:-mcp}"
 

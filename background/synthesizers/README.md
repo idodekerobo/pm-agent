@@ -101,7 +101,7 @@ its own intelligence config var — use the one for your source, not a generic o
 |---|---|---|
 | `session.sh` | `DRAFT_SESSION_INTELLIGENCE` | `claude-code` |
 | `granola.sh` | `DRAFT_GRANOLA_INTELLIGENCE` | `claude-code` |
-| `slack.sh` | `DRAFT_SLACK_INTELLIGENCE` | `claude-api` |
+| `slack.sh` | `DRAFT_SLACK_INTELLIGENCE` | `claude-code` |
 
 All three vars are exported by `config.sh`. Override via environment variable.
 

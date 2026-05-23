@@ -3,7 +3,7 @@
 #
 # Receives a context JSON file with paths to reconstructed channel markdown files.
 # Reads reconstructed content + current workspace context inline into the prompt.
-# Calls the intelligence adapter (default: claude-api, stateless).
+# Calls the intelligence adapter (default: claude-code).
 # Outputs: YAML frontmatter proposal to stdout (for writing to proposals/).
 #
 # See synthesizers/README.md for full contract.
@@ -62,8 +62,8 @@ if [ -z "$CONTEXT_FILES_LIST" ]; then
     CONTEXT_DIMS="(none found)"
 fi
 
-# ── Build inline channel content (for stateless claude-api adapter) ────────────
-# All content embedded in prompt — claude-api cannot read files via tools.
+# ── Build inline channel content ──────────────────────────────────────────────
+# Content embedded in prompt so the intelligence adapter has full context inline.
 
 CHANNEL_CONTENT=""
 MAX_PER_CHANNEL=20000  # chars
@@ -270,7 +270,7 @@ overwrite rather than creating a new one. Omit it when creating a fresh proposal
 ---
 replaces_proposal: 20260522T004806Z-slack.md   # optional — omit if creating new
 input_source: slack
-synthesized_by: ${DRAFT_SLACK_INTELLIGENCE:-claude-api}
+synthesized_by: ${DRAFT_SLACK_INTELLIGENCE:-claude-code}
 timestamp: ${CURRENT_TS}
 profile: ${PROFILE}
 context_updates:
@@ -298,7 +298,7 @@ _log "prompt written ($(wc -c < "$PROMPT_FILE") bytes), calling intelligence ada
 
 # ── Call intelligence adapter ─────────────────────────────────────────────────
 
-INTELLIGENCE="${DRAFT_SLACK_INTELLIGENCE:-claude-api}"
+INTELLIGENCE="${DRAFT_SLACK_INTELLIGENCE:-claude-code}"
 INTELLIGENCE_SCRIPT="$DRAFT_BACKGROUND/intelligence/${INTELLIGENCE}.sh"
 
 if [ ! -x "$INTELLIGENCE_SCRIPT" ]; then

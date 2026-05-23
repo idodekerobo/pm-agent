@@ -94,12 +94,28 @@ All log lines go to stderr. synthesize.sh captures them to background/logs/.
 
 ## Calling the intelligence adapter
 
-Source adapters call intelligence adapters to execute the LLM. The intelligence
-adapter is selected by the `DRAFT_SESSION_INTELLIGENCE` env var (default: claude-code).
+Source adapters call intelligence adapters to execute the LLM. Each source has
+its own intelligence config var — use the one for your source, not a generic one:
+
+| Source adapter | Intelligence var | Default |
+|---|---|---|
+| `session.sh` | `DRAFT_SESSION_INTELLIGENCE` | `claude-code` |
+| `granola.sh` | `DRAFT_GRANOLA_INTELLIGENCE` | `claude-code` |
+| `slack.sh` | `DRAFT_SLACK_INTELLIGENCE` | `claude-api` |
+
+All three vars are exported by `config.sh`. Override via environment variable.
+
+Valid values: `claude-code` (tmux TUI, full tool access), `claude-api` (stateless curl, faster/cheaper), `codex` (future).
 
 ```bash
-INTELLIGENCE="${DRAFT_SESSION_INTELLIGENCE:-claude-code}"
+# Use the var for YOUR source — not DRAFT_SESSION_INTELLIGENCE
+INTELLIGENCE="${DRAFT_GRANOLA_INTELLIGENCE:-claude-code}"
 INTELLIGENCE_SCRIPT="$DRAFT_BACKGROUND/intelligence/${INTELLIGENCE}.sh"
+
+if [ ! -x "$INTELLIGENCE_SCRIPT" ]; then
+    _log "ERROR: intelligence adapter not found: $INTELLIGENCE_SCRIPT"
+    exit 1
+fi
 
 bash "$INTELLIGENCE_SCRIPT" "$PROMPT_FILE" "$OUTPUT_FILE"
 ```
@@ -111,8 +127,9 @@ See `intelligence/README.md` for the intelligence adapter contract.
 1. Create `synthesizers/<source>.sh`
 2. Source `config.sh` for paths and env vars
 3. Accept `$1` as job file path
-4. Build a prompt file containing all synthesis instructions
-5. Create a temp output file path
-6. Call `intelligence/${DRAFT_SESSION_INTELLIGENCE}.sh "$PROMPT_FILE" "$OUTPUT_FILE"`
-7. On success: `cat "$OUTPUT_FILE"` to stdout, exit 0
-8. On failure: log to stderr, exit 1
+4. Add a `DRAFT_<SOURCE>_INTELLIGENCE` var to `config.sh` (follow the existing pattern)
+5. Build a prompt file containing all synthesis instructions
+6. Create a temp output file path at `$DRAFT_WORKSPACE/tmp/<source>-output-XXXX.md` (not /tmp/ — Claude Code cannot write there)
+7. Call `intelligence/${DRAFT_<SOURCE>_INTELLIGENCE}.sh "$PROMPT_FILE" "$OUTPUT_FILE"`
+8. On success: `cat "$OUTPUT_FILE"` to stdout, exit 0
+9. On failure: log to stderr, exit 1

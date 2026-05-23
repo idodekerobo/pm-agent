@@ -11,9 +11,9 @@ and write the synthesis result to the output file.
 
 ```
 intelligence/
-  claude-code.sh   # Phase 1: Claude Code TUI via tmux (full agent loop)
-  claude-api.sh    # future: Anthropic API via curl (stateless, fast)
-  codex.sh         # future: OpenAI Codex CLI (validate if tmux needed)
+  claude-code.sh   # SHIPPED: Claude Code TUI via tmux (full agent loop, no per-token cost)
+  claude-api.sh    # SHIPPED: claude -p headless mode (stateless, fast — used by Slack adapter)
+  codex.sh         # future: OpenAI Codex CLI (validate if tmux needed first)
   openai-api.sh    # future: OpenAI API via curl
 ```
 
@@ -75,6 +75,27 @@ When `❯` is detected AND output_file does not exist, Claude is asking a questi
 Future: capture pane content, write question to `~/.draft/background/pending-questions/`,
 poll for answer file, send answer via send-keys, resume. Python rewrite recommended
 for this — TmuxSession class + ClaudeCodeAdapter class.
+
+## Phase 2/3: claude-api.sh (headless `claude -p`)
+
+The stateless adapter for high-volume, short-input sources (Slack batch synthesis).
+
+**Why `claude -p`, not tmux:**
+- No session state needed — reconstructed Slack markdown is the complete input
+- No file-reading tools required — source adapter embeds all content in the prompt
+- Fast startup, no tmux overhead, exits when done
+- Suitable when the intelligence adapter only needs to read one input and produce one output
+
+**Key constraint:** All content (transcript, context files, instructions) must be embedded inline in the prompt file. The `claude -p` process cannot use Read/Write tools to access the filesystem — it only sees what is passed as the prompt argument.
+
+**When to use `claude-api` vs `claude-code`:**
+| | `claude-code` | `claude-api` |
+|---|---|---|
+| Input | File paths (adapter reads files itself) | Inline content (source adapter embeds everything) |
+| Tools | Full Read/Write/Grep/subagents | None |
+| Cost | Claude subscription (no per-token) | Claude subscription via `claude -p` |
+| Startup | ~5s (tmux + TUI init) | ~1s |
+| Best for | Session transcripts, Granola (complex, long) | Slack batches (short reconstructed markdown) |
 
 ## Adding a new intelligence adapter
 

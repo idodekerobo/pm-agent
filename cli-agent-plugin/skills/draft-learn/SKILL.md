@@ -1,13 +1,32 @@
 ---
 name: draft-learn
 description: >
-  Saves something you learned, decided, or want to remember to your Draft workspace.
-  Supports free-form input, structured tags, or a short conversational flow when
-  invoked with no arguments. Automatically routes the learning to the right context
-  file and writes a log entry when appropriate.
+  DEPRECATED — use /draft:synthesize instead. This skill is no longer the
+  recommended path for saving context. /draft:synthesize handles both explicit
+  single-item saves and full session transcript synthesis. Personal preferences
+  and vocabulary are saved automatically by the orchestrator during conversation.
 ---
 
-# /draft:learn — Save a Learning
+# /draft:learn — DEPRECATED
+
+This command has been replaced by `/draft:synthesize`.
+
+**What to use instead:**
+
+- **"We decided X" / "Drop Y from priorities" / "New target user is Z"** →
+  `/draft:synthesize we decided X` — stages a proposal immediately
+
+- **"Synthesize what I've done this session"** →
+  `/draft:synthesize` (no args) — reads the full transcript, stages all updates
+
+- **"From now on, always do X" / "We call this Y"** →
+  Just tell Draft in conversation — personal preferences are saved to `~/.draft/personal/memory.md` directly, no command needed
+
+- **Push proposals to your team** → `/draft:publish`
+
+---
+
+## Legacy behavior (preserved for reference)
 
 Persist something to the Draft workspace: a decision, a priority shift, a product direction change, a company update, a team change, or a preference.
 

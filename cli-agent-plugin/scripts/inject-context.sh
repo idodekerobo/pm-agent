@@ -180,6 +180,20 @@ if [ -f "$LAST_CHECK" ]; then
     fi
 fi
 
+# ── Load-team warning (P1-UX-1) ───────────────────────────────────────────────
+# load-team.sh writes this file when it detects unpublished local changes and
+# skips the overwrite. Surface it here so the user sees it at session start.
+# Cleared after reading — load-team.sh will write a fresh one next session if
+# unpublished changes still exist.
+_LOAD_WARN="$DRAFT_WORKSPACE/notifications/load-team-warning.txt"
+if [ -f "$_LOAD_WARN" ]; then
+    echo ""
+    echo "## ⚠️ Draft Warning — Unpublished Local Changes"
+    echo ""
+    cat "$_LOAD_WARN"
+    rm -f "$_LOAD_WARN"
+fi
+
 # Fire background update check — never blocks session start.
 # Writes fresh result to ~/.draft/last-update-check for the next session.
 if [ -f "$HOME/.draft/scripts/draft-update-check.sh" ]; then

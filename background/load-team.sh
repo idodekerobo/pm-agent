@@ -143,9 +143,15 @@ PYEOF
 )
 
 if [ "${HAS_UNPUBLISHED:-0}" = "1" ]; then
-    printf '[load-team] WARNING: unpublished local changes detected in context/.\n' >&2
-    printf '[load-team] Skipping shared context overwrite to protect your local edits.\n' >&2
-    printf '[load-team] Run /draft:publish-team first, then reload team context.\n' >&2
+    # Write a notification file for inject-context.sh to surface in the system prompt.
+    # stderr is not shown to the user in Claude Code session hooks — the notification
+    # file is the reliable path. inject-context.sh reads and clears it each session.
+    mkdir -p "$WORKSPACE/notifications"
+    cat > "$WORKSPACE/notifications/load-team-warning.txt" <<'MSG'
+load-team skipped: unpublished local changes detected in context/.
+Shared team context was NOT loaded — your local edits are protected.
+Run /draft:publish-team to push your changes, then reload will apply on next session start.
+MSG
     exit 0
 fi
 

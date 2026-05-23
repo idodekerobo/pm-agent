@@ -90,11 +90,63 @@ fi
 
 # ── Read last_loaded for change detection ──────────────────────────────────────
 LAST_LOADED=""
+LAST_PUBLISHED=""
 if [ -f "$LOCAL_CONFIG" ]; then
     LAST_LOADED=$(python3 -c "
 import json
-print(json.load(open('$LOCAL_CONFIG')).get('last_loaded', ''))
+print(json.load(open('$LOCAL_CONFIG')).get('last_loaded', '') or '')
 " 2>/dev/null || echo "")
+    LAST_PUBLISHED=$(python3 -c "
+import json
+print(json.load(open('$LOCAL_CONFIG')).get('last_published', '') or '')
+" 2>/dev/null || echo "")
+fi
+
+# ── Check for unpublished local changes ────────────────────────────────────────
+# Before overwriting, detect local log entries written after last_published.
+# If found: skip the overwrite and warn — never silently destroy local edits.
+# The user should run /draft:publish-team first, then reload.
+HAS_UNPUBLISHED=$(python3 - <<PYEOF
+import os, glob
+from datetime import datetime, timezone
+
+log_files = glob.glob('$WORKSPACE/context/*/log/*.md')
+last_pub_str = '$LAST_PUBLISHED'
+
+# No log files means no manual local changes to protect
+if not log_files:
+    print(0)
+    exit()
+
+# Never published + log entries exist = definitely unpublished changes
+if not last_pub_str:
+    print(1)
+    exit()
+
+try:
+    last_pub = datetime.fromisoformat(last_pub_str.replace('Z', '+00:00'))
+except Exception:
+    print(0)
+    exit()
+
+for f in log_files:
+    try:
+        mtime = datetime.fromtimestamp(os.path.getmtime(f), tz=timezone.utc)
+        if mtime > last_pub:
+            print(1)
+            exit()
+    except Exception:
+        continue
+
+print(0)
+PYEOF
+)
+
+if [ "${HAS_UNPUBLISHED:-0}" = "1" ]; then
+    printf '[load-team] WARNING: unpublished local changes detected in context/.\n' >&2
+    printf '[load-team] Skipping shared context overwrite to protect your local edits.\n' >&2
+    printf '[load-team] Run /draft:publish-team first, then reload team context.\n' >&2
+    exit 0
 fi
 
 # ── Copy context files ─────────────────────────────────────────────────────────

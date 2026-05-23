@@ -39,6 +39,36 @@ Hard stop.
 
 ---
 
+## Step 1.5: Check for unpublished local changes
+
+Before loading from the shared repo, check if the local workspace has changes that haven't been published yet. Loading will overwrite local context — silent overwrite of unpublished work is a data loss risk.
+
+**Check:** Scan `$DRAFT_WORKSPACE/context/*/log/` for log files with a modification time newer than `config/local.json:last_published`.
+- If `last_published` is `null`: any log entries present = unpublished changes.
+- If no log entries exist: no local changes to protect — proceed to Step 2.
+
+**If unpublished changes are found:** identify which dimensions have changes (which `context/<dim>/log/` dirs have new entries) and surface this to the user:
+
+```
+⚠️  Unpublished local changes detected in: product, priorities
+
+Loading will overwrite these with the shared team context.
+Your options:
+  [P] Publish first  — run /draft:publish-team, then reload
+  [C] Continue       — overwrite local changes and load anyway
+  [A] Abort          — exit without loading
+
+Choice [P/C/A]:
+```
+
+- `P` → hard stop: "Run /draft:publish-team to push your changes first, then re-run /draft:load-team."
+- `C` → proceed to Step 2 (user explicitly chose to overwrite)
+- `A` → hard stop: "Load cancelled. Your local context is unchanged."
+
+**If no unpublished changes:** proceed to Step 2 silently — no prompt needed.
+
+---
+
 ## Step 2: Clone and read CHANGES
 
 ```bash

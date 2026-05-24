@@ -13,7 +13,7 @@ Source adapters are responsible for:
 
 ```
 synthesizers/
-  session.sh     # Claude Code session transcripts
+  claude-code-session.sh     # Claude Code session transcripts
   granola.sh     # Granola meeting transcripts
   slack.sh       # Slack message batches
 ```
@@ -99,7 +99,7 @@ its own intelligence config var — use the one for your source, not a generic o
 
 | Source adapter | Intelligence var | Default |
 |---|---|---|
-| `session.sh` | `DRAFT_SESSION_INTELLIGENCE` | `claude-code` |
+| `claude-code-session.sh` | `DRAFT_SESSION_INTELLIGENCE` | `claude-code` |
 | `granola.sh` | `DRAFT_GRANOLA_INTELLIGENCE` | `claude-code` |
 | `slack.sh` | `DRAFT_SLACK_INTELLIGENCE` | `claude-code` |
 

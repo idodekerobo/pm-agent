@@ -21,7 +21,7 @@
 # Context file schema (from granola-poller.sh):
 #   { type, mode, profile, timestamp, last_checked_at, state_file }
 #
-# Output contract (same as session.sh — see synthesizers/README.md):
+# Output contract (same as claude-code-session.sh — see synthesizers/README.md):
 #   stdout → YAML frontmatter .md written to proposals/ by granola-poller.sh
 #   stderr → log lines
 #   exit 0 → success (including "no updates" case — poller handles empty output)

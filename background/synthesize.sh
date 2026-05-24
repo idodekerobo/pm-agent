@@ -56,7 +56,7 @@ _log "info" "synthesize: starting (session=$SESSION_SHORT profile=$PROFILE)"
 # ── Resolve source synthesizer ─────────────────────────────────────────────────
 # Default source is "session" (Claude Code session transcript).
 # Future: job file may encode a different source type (granola, slack).
-SOURCE="${DRAFT_SOURCE:-session}"
+SOURCE="${DRAFT_SOURCE:-claude-code-session}"
 SYNTHESIZER_SCRIPT="$DRAFT_BACKGROUND/synthesizers/${SOURCE}.sh"
 
 if [ ! -x "$SYNTHESIZER_SCRIPT" ]; then

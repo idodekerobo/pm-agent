@@ -1,5 +1,5 @@
 #!/bin/bash
-# synthesizers/session.sh — Session transcript source adapter
+# synthesizers/claude-code-session.sh — Session transcript source adapter
 #
 # Analyzes a Claude Code session transcript and produces a context update
 # document for proposals/. Handles all session-specific logic:
@@ -7,7 +7,7 @@
 #
 # See synthesizers/README.md for full contract.
 #
-# Usage: bash synthesizers/session.sh <job_file>
+# Usage: bash synthesizers/claude-code-session.sh <job_file>
 #   job_file — JSON job written by on-session-end.sh
 
 set -uo pipefail
@@ -19,7 +19,7 @@ DRAFT_BACKGROUND="$HOME/.draft/background"
 source "$DRAFT_BACKGROUND/config.sh"
 
 _log() {
-    printf '[session.sh] %s\n' "$*" >&2
+    printf '[claude-code-session.sh] %s\n' "$*" >&2
 }
 
 # ── Read job fields ────────────────────────────────────────────────────────────

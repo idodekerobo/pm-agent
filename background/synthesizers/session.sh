@@ -3,7 +3,7 @@
 #
 # Analyzes a Claude Code session transcript and produces a context update
 # document for proposals/. Handles all session-specific logic:
-# transcript reading, 50k truncation, context-aware prompt building.
+# transcript reading, context-aware prompt building.
 #
 # See synthesizers/README.md for full contract.
 #
@@ -57,36 +57,13 @@ fi
 TRANSCRIPT_SIZE=$(wc -c < "$TRANSCRIPT_PATH" | tr -d ' ')
 _log "transcript: $TRANSCRIPT_PATH ($TRANSCRIPT_SIZE bytes)"
 
-# ── Truncate transcript to 50k chars (keep most recent) ───────────────────────
-TRANSCRIPT_TRUNCATED_PATH=$(mktemp /tmp/draft-transcript-XXXXXX.jsonl)
-python3 - <<PYEOF
-import sys
-
-path = '$TRANSCRIPT_PATH'
-limit = 50000
-
-with open(path, 'r', errors='replace') as f:
-    content = f.read()
-
-truncated = False
-if len(content) > limit:
-    content = content[-limit:]
-    truncated = True
-
-with open('$TRANSCRIPT_TRUNCATED_PATH', 'w') as f:
-    f.write(content)
-
-if truncated:
-    sys.stderr.write('[session.sh] transcript truncated to 50k chars\n')
-PYEOF
-
 # ── Create temp files ──────────────────────────────────────────────────────────
 PROMPT_FILE=$(mktemp /tmp/draft-prompt-XXXXXX.txt)
 mkdir -p "$DRAFT_WORKSPACE/tmp"
 OUTPUT_FILE=$(mktemp "$DRAFT_WORKSPACE/tmp/synthesis-XXXXXX.md")
 
 _cleanup() {
-    rm -f "$PROMPT_FILE" "$OUTPUT_FILE" "$TRANSCRIPT_TRUNCATED_PATH"
+    rm -f "$PROMPT_FILE" "$OUTPUT_FILE"
 }
 trap _cleanup EXIT
 
@@ -114,7 +91,10 @@ profile: ${DRAFT_ACTIVE_PROFILE}
 timestamp: ${JOB_TIMESTAMP}
 
 ## Files to read
-1. Session transcript (truncated to 50k chars, most recent): ${TRANSCRIPT_TRUNCATED_PATH}
+1. Session transcript (full): ${TRANSCRIPT_PATH}
+   This file may be large. Read it using your Read tool with offset/limit parameters if needed.
+   Focus on: decisions made, product direction stated, blockers surfaced, feature scope changes.
+   You do NOT need to read every line — scan for signal, then go deeper where relevant.
 2. Existing workspace context (to know what's already captured):
 ${CONTEXT_FILES_LIST}
    - ${DRAFT_WORKSPACE}/context/tensions.md

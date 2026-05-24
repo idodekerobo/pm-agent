@@ -23,6 +23,31 @@ _log() {
     printf '[slack.sh] %s\n' "$*" >&2
 }
 
+# Extract the description field from a context index file's YAML frontmatter
+extract_description() {
+    local file="$1"
+    python3 - "$file" <<'PYEOF'
+import sys, re
+
+try:
+    content = open(sys.argv[1]).read()
+    match = re.search(r'^---\n(.*?)\n---', content, re.DOTALL)
+    if match:
+        fm = match.group(1)
+        # Handle block scalar: "description: >\n  indented text"
+        desc = re.search(r'description:\s*>\s*\n((?:[ \t]+.+\n?)+)', fm)
+        if desc:
+            lines = [l.strip() for l in desc.group(1).splitlines()]
+            print(' '.join(lines).strip())
+        else:
+            desc = re.search(r'description:\s*(.+)', fm)
+            if desc:
+                print(desc.group(1).strip())
+except Exception:
+    pass
+PYEOF
+}
+
 # ── Read context fields ────────────────────────────────────────────────────────
 
 PROFILE=$(python3 -c "
@@ -62,45 +87,39 @@ if [ -z "$CONTEXT_FILES_LIST" ]; then
     CONTEXT_DIMS="(none found)"
 fi
 
-# ── Build inline channel content ──────────────────────────────────────────────
-# Content embedded in prompt so the intelligence adapter has full context inline.
+# ── Build channel file list for prompt ──────────────────────────────────────
 
-CHANNEL_CONTENT=""
-MAX_PER_CHANNEL=20000  # chars
-
+CHANNEL_FILE_LIST=""
 while IFS= read -r rfile; do
     [ -z "$rfile" ] && continue
     [ ! -f "$rfile" ] && continue
-
-    CONTENT=$(head -c "$MAX_PER_CHANNEL" "$rfile" 2>/dev/null || echo "(unreadable)")
-    CHANNEL_CONTENT="${CHANNEL_CONTENT}
-
-=== $(basename "$(dirname "$rfile")") ===
-${CONTENT}"
+    CHANNEL_NAME=$(basename "$(dirname "$rfile")")
+    CHANNEL_FILE_LIST="${CHANNEL_FILE_LIST}- #${CHANNEL_NAME}: ${rfile}
+"
 done <<< "$RECONSTRUCTED_FILES"
 
-# ── Build inline context content ──────────────────────────────────────────────
+# ── Build context dimension summaries ──────────────────────────────────
 
-CONTEXT_CONTENT=""
-while IFS= read -r cfile; do
-    [ -z "$cfile" ] && continue
-    [ ! -f "$cfile" ] && continue
-    DIM=$(basename "$(dirname "$cfile")")
-    CONTENT=$(head -c 5000 "$cfile" 2>/dev/null || echo "(unreadable)")
-    CONTEXT_CONTENT="${CONTEXT_CONTENT}
+CONTEXT_DIMS_CONTENT=""
+for dim in priorities product team company; do
+    INDEX_FILE="$DRAFT_WORKSPACE/context/${dim}/index.md"
+    if [ -f "$INDEX_FILE" ]; then
+        DESC=$(extract_description "$INDEX_FILE")
+        CONTEXT_DIMS_CONTENT="${CONTEXT_DIMS_CONTENT}
+### ${dim}
+${DESC}
+Full file (read if needed): ${INDEX_FILE}
+"
+    fi
+done
 
---- context/${DIM}/index.md ---
-${CONTENT}"
-done <<< "$(find "${DRAFT_WORKSPACE}/context" -maxdepth 2 -name "index.md" 2>/dev/null | sort)"
+# ── Read tensions.md ─────────────────────────────────────────────────────────
 
-# Also include tensions.md
 TENSIONS_FILE="${DRAFT_WORKSPACE}/context/tensions.md"
 if [ -f "$TENSIONS_FILE" ]; then
-    TENSIONS_CONTENT=$(head -c 3000 "$TENSIONS_FILE" 2>/dev/null || echo "")
-    CONTEXT_CONTENT="${CONTEXT_CONTENT}
-
---- context/tensions.md ---
-${TENSIONS_CONTENT}"
+    TENSIONS_CONTENT=$(cat "$TENSIONS_FILE")
+else
+    TENSIONS_CONTENT="(no tensions file found)"
 fi
 
 # ── Read roles ─────────────────────────────────────────────────────────────────
@@ -198,19 +217,19 @@ Profile: ${PROFILE}
 Use these roles to weight messages (founder/lead decisions carry more weight):
 ${ROLES_CONTENT}
 
-## Slack channel content (chronological, thread-nested)
-Messages are in time order. Thread replies appear directly under their parent, indented with ↳.
-Empty messages (no text, no files, no reactions) are pre-filtered and will not appear.
-Messages from unknown senders are kept — they may be from departed teammates and still carry signal.
-${CHANNEL_CONTENT}
+## Slack channel files
+Each file contains today's messages for one channel, chronological with threads nested.
+Read each file using your Read tool. Use offset/limit on large files.
+Focus on messages containing decisions, blockers, shipped work, or open questions.
 
-## Current workspace context
-Everything below is already captured — do NOT re-capture it:
-${CONTEXT_CONTENT}
+${CHANNEL_FILE_LIST}
 
-## Existing tensions
-Already flagged contradictions — do NOT create duplicate tension entries.
-(Included in context/tensions.md above)
+## Workspace context
+Current state summaries — read the full file at the listed path only if the summary is insufficient.
+${CONTEXT_DIMS_CONTENT}
+
+## Active tensions
+${TENSIONS_CONTENT}
 
 ## Pending proposals (synthesized but not yet reviewed)
 These proposals have been generated from earlier Slack or Granola runs but not yet

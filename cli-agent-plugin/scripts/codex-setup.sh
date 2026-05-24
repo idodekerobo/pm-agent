@@ -10,7 +10,9 @@
 # What this does:
 #   1. Creates ~/.draft/personal/ (global layer) and ~/.draft/workspaces/default/ (profile workspace)
 #   2. Installs inject-context.sh to ~/.codex/hooks/draft/
+#   2b. Installs codex-session-end.sh to ~/.codex/hooks/draft/
 #   3. Registers the SessionStart hook in ~/.codex/hooks.json
+#   3b. Registers the Stop hook in ~/.codex/hooks.json
 #   4. Enables the codex_hooks feature flag in ~/.codex/config.toml
 #   5. Installs sub-agent TOML files to ~/.codex/agents/
 #   6. Writes pm-agent instructions to ~/.codex/AGENTS.md
@@ -170,6 +172,13 @@ install_file "scripts/inject-context.sh" "$CODEX_HOME/hooks/draft/inject-context
 chmod +x "$CODEX_HOME/hooks/draft/inject-context.sh"
 log "Hook script installed to $CODEX_HOME/hooks/draft/inject-context.sh"
 
+# ── 2b. Install codex-session-end hook script ──────────────────────────────────
+
+log "Installing codex-session-end hook script..."
+install_file "scripts/codex-session-end.sh" "$CODEX_HOME/hooks/draft/codex-session-end.sh"
+chmod +x "$CODEX_HOME/hooks/draft/codex-session-end.sh"
+log "Hook script installed to $CODEX_HOME/hooks/draft/codex-session-end.sh"
+
 # ── 3. Register SessionStart hook in ~/.codex/hooks.json ──────────────────────
 
 log "Registering SessionStart hook..."
@@ -216,6 +225,54 @@ session_hooks.append({
 hooks_path.parent.mkdir(parents=True, exist_ok=True)
 hooks_path.write_text(json.dumps(data, indent=2) + "\n")
 print("[Draft] Hook registered in ~/.codex/hooks.json")
+PYEOF
+
+# ── 3b. Register Stop hook in ~/.codex/hooks.json ─────────────────────────────
+
+log "Registering Stop hook..."
+
+python3 - <<PYEOF
+import json, sys
+from pathlib import Path
+
+hooks_path = Path("$CODEX_HOME/hooks.json")
+hook_command = "bash $CODEX_HOME/hooks/draft/codex-session-end.sh"
+
+if hooks_path.exists():
+    try:
+        data = json.loads(hooks_path.read_text())
+    except Exception:
+        data = {}
+else:
+    data = {}
+
+hooks = data.setdefault("hooks", {})
+stop_hooks = hooks.setdefault("Stop", [])
+
+already = any(
+    any(h.get("command") == hook_command for h in group.get("hooks", []))
+    for group in stop_hooks
+    if isinstance(group, dict)
+)
+
+if already:
+    print("[Draft] Stop hook already registered — skipping.")
+    sys.exit(0)
+
+stop_hooks.append({
+    "hooks": [
+        {
+            "type": "command",
+            "command": hook_command,
+            "timeout": 30,
+            "statusMessage": "Saving Draft session state"
+        }
+    ]
+})
+
+hooks_path.parent.mkdir(parents=True, exist_ok=True)
+hooks_path.write_text(json.dumps(data, indent=2) + "\n")
+print("[Draft] Stop hook registered in ~/.codex/hooks.json")
 PYEOF
 
 # ── 4. Enable hooks feature flag in ~/.codex/config.toml ──────────────────────

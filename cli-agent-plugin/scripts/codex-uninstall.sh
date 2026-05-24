@@ -3,7 +3,8 @@
 #
 # Reverses every step performed by codex-setup.sh:
 #   1. Removes the SessionStart hook entry from ~/.codex/hooks.json
-#   2. Removes the hook script at ~/.codex/hooks/draft/
+#   1b. Removes the Stop hook entry from ~/.codex/hooks.json
+#   2. Removes hook scripts at ~/.codex/hooks/draft/
 #   3. Removes sub-agent TOML files from ~/.codex/agents/
 #   4. Removes (or restores) ~/.codex/AGENTS.md
 #   5. Removes the draft:setup skill from ~/.agents/skills/setup/
@@ -74,16 +75,67 @@ else:
     print("[Draft uninstall] Hook removed from hooks.json.")
 PYEOF
 
+# ── 1b. Remove Stop hook from ~/.codex/hooks.json ─────────────────────────────
+
+log "Removing Stop hook from $CODEX_HOME/hooks.json..."
+
+python3 - <<PYEOF
+import json, sys
+from pathlib import Path
+
+hooks_path = Path("$CODEX_HOME/hooks.json")
+hook_command = "bash $CODEX_HOME/hooks/draft/codex-session-end.sh"
+
+if not hooks_path.exists():
+    print("[Draft uninstall] hooks.json not found — skipping.")
+    sys.exit(0)
+
+try:
+    data = json.loads(hooks_path.read_text())
+except Exception:
+    print("[Draft uninstall] hooks.json unreadable — skipping.")
+    sys.exit(0)
+
+hooks = data.get("hooks", {})
+stop_hooks = hooks.get("Stop", [])
+
+original_len = len(stop_hooks)
+filtered = [
+    group for group in stop_hooks
+    if not (
+        isinstance(group, dict) and
+        any(h.get("command") == hook_command for h in group.get("hooks", []))
+    )
+]
+
+if len(filtered) == original_len:
+    print("[Draft uninstall] Stop hook not found in hooks.json — skipping.")
+else:
+    hooks["Stop"] = filtered
+    if not filtered:
+        del hooks["Stop"]
+    if not hooks:
+        del data["hooks"]
+    hooks_path.write_text(json.dumps(data, indent=2) + "\n")
+    print("[Draft uninstall] Stop hook removed from hooks.json.")
+PYEOF
+
 # ── 2. Remove hook script ──────────────────────────────────────────────────────
 
 if [ -f "$CODEX_HOME/hooks/draft/inject-context.sh" ]; then
     rm -f "$CODEX_HOME/hooks/draft/inject-context.sh"
     log "Removed inject-context.sh"
-    rmdir "$CODEX_HOME/hooks/draft" 2>/dev/null && log "Removed empty hooks/draft/ directory" || true
-    rmdir "$CODEX_HOME/hooks" 2>/dev/null && log "Removed empty hooks/ directory" || true
 else
     warn "inject-context.sh not found — skipping."
 fi
+
+if [ -f "$CODEX_HOME/hooks/draft/codex-session-end.sh" ]; then
+    rm -f "$CODEX_HOME/hooks/draft/codex-session-end.sh"
+    log "Removed codex-session-end.sh"
+fi
+
+rmdir "$CODEX_HOME/hooks/draft" 2>/dev/null && log "Removed empty hooks/draft/ directory" || true
+rmdir "$CODEX_HOME/hooks" 2>/dev/null && log "Removed empty hooks/ directory" || true
 
 # ── 3. Remove sub-agent TOML files ────────────────────────────────────────────
 
@@ -157,7 +209,8 @@ log "Uninstall complete."
 echo ""
 echo "  What was removed:"
 echo "    ~/.codex/hooks/draft/inject-context.sh"
-echo "    ~/.codex/hooks.json  (Draft entry only)"
+echo "    ~/.codex/hooks/draft/codex-session-end.sh"
+echo "    ~/.codex/hooks.json  (Draft entries only)"
 echo "    ~/.codex/agents/draft-{researcher,executor,learner}.toml"
 echo "    ~/.codex/AGENTS.md"
 echo "    ~/.agents/skills/draft-setup/  (\$draft-setup skill)"
